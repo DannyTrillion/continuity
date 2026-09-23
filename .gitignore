@@ -7,3 +7,4 @@ outbox.json
 outbox.json.tmp
 blob-ledger.jsonl
 known-namespaces.json
+kb-seeded.json

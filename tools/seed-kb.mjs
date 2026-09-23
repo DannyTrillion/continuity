@@ -21,6 +21,8 @@
  * occasional job, not something that runs on boot.
  */
 
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readPage } from "../src/core/web.mjs";
 import { rememberMany, KB_NS, recall } from "../src/core/memory.mjs";
 import { chat } from "../src/core/llm.mjs";
@@ -87,9 +89,22 @@ async function extract(part, page) {
     .map((l) => `${l} [Walrus docs: ${page.url}]`);
 }
 
+/**
+ * What has already been written, so a re-run fills gaps instead of duplicating.
+ *
+ * Bulk writes fail individually and silently — 77 of 190 statements did not
+ * land on the first pass — and storage is append-only, so re-running blindly
+ * would double everything that did work. Keyed by a hash of the statement.
+ */
+const LEDGER = new URL("../kb-seeded.json", import.meta.url).pathname;
+const seeded = new Set(existsSync(LEDGER) ? JSON.parse(readFileSync(LEDGER, "utf8")) : []);
+const keyOf = (text) => createHash("sha256").update(text).digest("hex").slice(0, 16);
+const saveLedger = () => writeFileSync(LEDGER, JSON.stringify([...seeded]));
+
 const urls = process.argv.slice(2).length ? process.argv.slice(2) : CURATED;
 let facts = 0;
 let blobs = 0;
+let skipped = 0;
 
 for (const url of urls) {
   const page = await readPage(url);
@@ -103,21 +118,46 @@ for (const url of urls) {
   for (const [i, part] of parts.entries()) {
     try {
       const statements = await extract(part, page);
-      facts += statements.length;
-      for (const text of statements) console.log(`     • ${text.slice(0, 100)}`);
+
+      // The ledger starts empty on a machine that has already seeded, so ask
+      // the namespace itself before writing. Chunks land more or less together,
+      // so probing one statement tells us whether this chunk is already in.
+      if (statements.length && !seeded.has(keyOf(statements[0]))) {
+        const probe = await recall(KB_NS, statements[0], { limit: 3 });
+        if (probe.some((h) => h.text.trim() === statements[0].trim())) {
+          for (const t of statements) seeded.add(keyOf(t));
+          saveLedger();
+        }
+      }
+
+      const fresh = statements.filter((t) => !seeded.has(keyOf(t)));
+      skipped += statements.length - fresh.length;
+      facts += fresh.length;
+      if (!fresh.length) {
+        console.log(`  chunk ${i + 1}: nothing new`);
+        continue;
+      }
+      for (const text of fresh) console.log(`     • ${text.slice(0, 100)}`);
 
       // One batched call rather than one round trip per statement.
-      const written = await rememberMany(KB_NS, statements);
-      const ok = written.filter((w) => w.blobId).length;
-      blobs += ok;
-      console.log(`  chunk ${i + 1}: ${statements.length} statement(s), ${ok} stored`);
+      const written = await rememberMany(KB_NS, fresh);
+      const ok = written.filter((w) => w.blobId);
+      for (const w of ok) seeded.add(keyOf(w.text));
+      saveLedger();
+      blobs += ok.length;
+
+      const lost = written.length - ok.length;
+      console.log(
+        `  chunk ${i + 1}: ${fresh.length} statement(s), ${ok.length} stored` +
+          (lost ? ` — ${lost} did not land, will retry on the next run` : ""),
+      );
     } catch (err) {
       console.log(`  chunk ${i + 1}: FAILED — ${err.message.slice(0, 90)}`);
     }
   }
 }
 
-console.log(`\n${facts} statements extracted, ${blobs} blobs written to ${KB_NS}`);
+console.log(`\n${facts} new statement(s), ${blobs} stored, ${skipped} already present in ${KB_NS}`);
 const check = await recall(KB_NS, "publisher returns 403 when storing a blob", { limit: 3 });
 console.log(`spot check — "publisher 403" recalls ${check.length}:`);
 for (const h of check) console.log(`  • ${h.text.slice(0, 110)}`);

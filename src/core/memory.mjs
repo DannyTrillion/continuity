@@ -233,23 +233,55 @@ export async function rememberFact(namespace, text, { idempotencyKey, timeoutMs 
  *
  * Max 20 per call, so callers hand over whatever they have and it is split.
  */
-export async function rememberMany(namespace, texts, { timeoutMs = 300_000 } = {}) {
-  const items = texts.filter(Boolean).map((text) => ({ text, namespace }));
+export async function rememberMany(namespace, texts, { timeoutMs = 300_000, retries = 2 } = {}) {
   const out = [];
 
-  for (let i = 0; i < items.length; i += 20) {
-    const batch = items.slice(i, i + 20);
-    const res = await withRetry(
-      "rememberBulk",
-      () => memwal.rememberBulkAndWait(batch, { timeoutMs }),
-      { retries: 2, budgetMs: timeoutMs + 60_000 },
-    );
-    for (const r of res?.results ?? []) {
-      if (r.blob_id) {
-        rememberNamespace(r.namespace ?? namespace);
-        count("blobs");
+  for (let i = 0; i < texts.length; i += 20) {
+    let pending = texts.slice(i, i + 20).filter(Boolean);
+    const landed = new Map();
+
+    for (let attempt = 0; pending.length && attempt <= retries; attempt++) {
+      if (attempt) {
+        // The relayer's encryption backend goes away for seconds at a time.
+        // withRetry never sees this because the bulk call RESOLVES with the
+        // failures inside it rather than throwing, so the retry lives here.
+        const wait = 4000 * 2 ** (attempt - 1);
+        console.warn(`[memory] rememberBulk: retrying ${pending.length} item(s) in ${wait / 1000}s`);
+        await new Promise((r) => setTimeout(r, wait));
       }
-      out.push({ blobId: r.blob_id || null, status: r.status, error: r.error });
+
+      const batch = pending.map((text) => ({ text, namespace }));
+      const res = await withRetry(
+        "rememberBulk",
+        () => memwal.rememberBulkAndWait(batch, { timeoutMs }),
+        { retries: 1, budgetMs: timeoutMs + 60_000 },
+      );
+
+      const stillFailing = [];
+      const reasons = [];
+      for (const [n, r] of (res?.results ?? []).entries()) {
+        const text = batch[n]?.text;
+        if (r.blob_id) {
+          rememberNamespace(r.namespace ?? namespace);
+          count("blobs");
+          landed.set(text, { text, blobId: r.blob_id, status: r.status });
+        } else {
+          stillFailing.push(text);
+          reasons.push(`${r.status ?? "no blob"}${r.error ? ": " + r.error : ""}`);
+        }
+      }
+
+      if (stillFailing.length) {
+        console.warn(
+          `[memory] rememberBulk: ${stillFailing.length}/${batch.length} did not land — ` +
+            [...new Set(reasons)].join("; ").slice(0, 180),
+        );
+      }
+      pending = stillFailing;
+    }
+
+    for (const text of texts.slice(i, i + 20).filter(Boolean)) {
+      out.push(landed.get(text) ?? { text, blobId: null, status: "failed" });
     }
   }
   return out;
