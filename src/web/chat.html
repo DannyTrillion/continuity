@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Continuity — the assistant that remembers you</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#05070A; --glass:rgba(255,255,255,.055); --glass-2:rgba(255,255,255,.088);
+    --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.18);
+    --ink:#fff; --soft:#C9D3DF; --dim:#8695A6; --faint:#5A6674;
+    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.13);
+    --r:24px; --r-md:18px; --r-sm:13px;
+    --display:'Outfit',system-ui,sans-serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--void);color:var(--ink);font:15px/1.6 var(--sans);
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  /* The same ceramic/suede ground the landing page uses, so arriving here reads
+     as moving across one surface rather than loading a different site. */
+  .ground,.bloom,.grain{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .ground{background-image:url("/assets/texture.jpg");background-size:cover;
+    background-position:center;opacity:.9}
+  .bloom{background:
+    radial-gradient(1000px 560px at 82% -14%, rgba(90,169,255,.16), transparent 62%),
+    radial-gradient(700px 480px at 6% 104%, rgba(120,90,255,.11), transparent 60%),
+    radial-gradient(1200px 900px at 50% 48%, rgba(0,0,0,.3), transparent 72%)}
+  .grain{opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit}
+  ::selection{background:rgba(90,169,255,.3)}
+
+  .app{position:relative;z-index:1;height:100%;max-width:1240px;margin:0 auto;
+    padding:18px 20px 20px;display:flex;flex-direction:column;gap:16px;
+    animation:arrive .5s cubic-bezier(.22,.7,.28,1) both}
+  /* Picks up where the landing page's fade-out left off. */
+  @keyframes arrive{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  .top{animation:arrive .55s cubic-bezier(.22,.7,.28,1) .04s both}
+  .chat{animation:arrive .6s cubic-bezier(.22,.7,.28,1) .1s both}
+  .rail{animation:arrive .6s cubic-bezier(.22,.7,.28,1) .18s both}
+  @media (prefers-reduced-motion:reduce){
+    .app,.top,.chat,.rail{animation:none}
+  }
+
+  /* ── top ── */
+  .top{display:flex;align-items:center;gap:10px;flex:none}
+  .brand{display:flex;align-items:center;gap:10px;margin-right:auto;
+    transition:opacity .25s cubic-bezier(.22,.7,.28,1)}
+  .brand:hover{opacity:.72}
+  .brand b{font:500 17px var(--display);letter-spacing:.005em}
+  .brand span{font-size:13px;color:var(--faint);padding-left:10px;margin-left:2px;
+    border-left:1px solid var(--edge)}
+  .status{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;
+    background:var(--glass);border:1px solid var(--edge);font-size:12.5px;color:var(--dim);white-space:nowrap}
+  .ping{width:6px;height:6px;border-radius:50%;background:var(--faint);flex:none}
+  .ping.ok{background:var(--live);box-shadow:0 0 0 3px var(--live-ghost);animation:pulse 3s ease-in-out infinite}
+  .ping.bad{background:#FF6B5A;box-shadow:0 0 0 3px rgba(255,107,90,.15)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .white{padding:10px 20px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
+    font:600 13.5px var(--sans);cursor:pointer;transition:.18s}
+  .white:hover{transform:translateY(-1px);box-shadow:0 14px 32px -14px rgba(255,255,255,.55)}
+  .morewrap{position:relative;flex:none}
+  .more{width:38px;height:38px;border-radius:50%;border:1px solid var(--edge);background:var(--glass);
+    color:var(--dim);cursor:pointer;transition:.2s;line-height:1}
+  .more:hover{background:var(--glass-2);color:#fff}
+  .menu{position:absolute;top:46px;right:0;min-width:186px;padding:6px;z-index:40;
+    border:1px solid var(--edge-2);border-radius:var(--r-sm);background:rgba(12,16,22,.97);
+    backdrop-filter:blur(22px);box-shadow:0 26px 60px -22px rgba(0,0,0,.9);display:none;text-align:left}
+  .menu.on{display:block;animation:pop .16s ease both}
+  @keyframes pop{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+  .menu button{display:block;width:100%;text-align:left;padding:9px 12px;border:0;border-radius:9px;
+    background:none;color:var(--soft);font-size:13.5px;cursor:pointer}
+  .menu button:hover{background:var(--glass-2);color:#fff}
+
+  /* ── layout ── */
+  .layout{flex:1;min-height:0;display:grid;gap:16px;grid-template-columns:minmax(0,1fr) 322px}
+
+  .chat{display:flex;flex-direction:column;min-height:0;border:1px solid var(--edge);
+    border-radius:var(--r);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
+    overflow:hidden;position:relative;
+    background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.032) 42%);
+    box-shadow:0 40px 110px -46px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.08)}
+  /* a soft sheen at the top edge, so the panel catches light like real glass */
+  .chat::before{content:"";position:absolute;inset:0 0 auto;height:180px;pointer-events:none;
+    background:radial-gradient(70% 100% at 50% 0%, rgba(90,169,255,.09), transparent 70%)}
+  #log{flex:1;min-height:0;overflow-y:auto;padding:26px 26px 8px;
+    display:flex;flex-direction:column;gap:18px;scroll-behavior:smooth}
+  /* A flex spacer that eats leftover height, so a short conversation sits at
+     the bottom by the composer rather than stranded at the top. */
+  #log::before{content:"";margin-top:auto}
+  #log::-webkit-scrollbar{width:7px}
+  #log::-webkit-scrollbar-thumb{background:var(--edge-2);border-radius:7px}
+
+  .turn{display:flex;flex-direction:column;gap:7px;max-width:76%;
+    animation:rise .3s cubic-bezier(.2,.75,.3,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+  .turn.me{align-self:flex-end;align-items:flex-end}
+  .bubble{padding:13px 18px;border-radius:20px;white-space:pre-wrap;overflow-wrap:anywhere;
+    font-size:15px;line-height:1.62}
+  .me .bubble{background:#fff;color:#0A0D12;border-bottom-right-radius:7px;font-weight:450}
+  .bot .bubble{background:var(--glass-2);border:1px solid var(--edge);
+    border-bottom-left-radius:7px;color:var(--soft)}
+  .bubble code{font:13px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.4);
+    border:1px solid var(--edge);padding:1.5px 6px;border-radius:6px;color:var(--live)}
+  .me .bubble code{background:rgba(0,0,0,.07);border-color:rgba(0,0,0,.1);color:#0A4C8F}
+  .bubble b{color:#fff;font-weight:600}
+  .shot{display:block;margin-top:11px;border-radius:12px;overflow:hidden;border:1px solid var(--edge);
+    transition:border-color .22s,transform .22s}
+  .shot:hover{border-color:var(--live);transform:translateY(-1px)}
+  .shot img{display:block;width:100%;height:auto}
+  .bubble p{margin:0 0 7px}
+  .bubble p:last-child{margin-bottom:0}
+  .bubble ul,.bubble ol{margin:5px 0 9px;padding-left:20px}
+  .bubble li{margin:3px 0}
+  .bubble li::marker{color:var(--live)}
+  .me .bubble li::marker{color:#4A5866}
+  .bubble br+br{display:none}
+  .bubble pre{margin:8px 0;padding:12px 14px;border-radius:12px;background:rgba(0,0,0,.45);
+    border:1px solid var(--edge);overflow-x:auto}
+  .bubble pre code{background:none;border:0;padding:0;color:var(--soft);font-size:12.5px;line-height:1.55}
+  .me .bubble b{color:#000}
+
+  .recalled{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;
+    padding:5px 12px;border-radius:999px;background:var(--live-ghost);
+    border:1px solid rgba(90,169,255,.22);color:var(--live);font-size:11.5px;cursor:pointer;
+    transition:.2s}
+  .recalled:hover{background:rgba(90,169,255,.2)}
+  .recalled svg{flex:none}
+  .used{display:none;align-self:flex-start;max-width:100%;border:1px solid var(--edge);
+    border-radius:var(--r-sm);background:rgba(0,0,0,.26);padding:11px 14px}
+  .used.on{display:block;animation:rise .2s both}
+  .used p{margin:0;padding:5px 0;font-size:13.5px;color:var(--soft);border-top:1px solid var(--edge)}
+  .used p:first-of-type{border-top:0}
+  .used h5{margin:0 0 5px;font:500 10.5px var(--sans);letter-spacing:.12em;
+    text-transform:uppercase;color:var(--faint)}
+
+  .caret{display:inline-block;width:2px;height:1.02em;margin-left:2px;vertical-align:-2px;
+    background:var(--live);border-radius:1px;animation:blink 1.05s steps(2,start) infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  .dots{display:inline-flex;gap:5px;align-items:center;height:20px}
+  .dots i{width:6px;height:6px;border-radius:50%;background:var(--live);animation:bl 1.1s infinite}
+  .dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+  @keyframes bl{0%,72%,100%{opacity:.22;transform:translateY(0)}34%{opacity:1;transform:translateY(-3px)}}
+
+  /* welcome */
+  .welcome{margin:auto;text-align:center;max-width:46ch;padding:14px}
+  .orb{width:64px;height:64px;margin:0 auto 20px;border-radius:50%;position:relative;
+    background:radial-gradient(circle at 34% 30%, #fff, #5AA9FF 46%, #1B3F6B 100%);
+    box-shadow:0 0 44px rgba(90,169,255,.4)}
+  .orb::after{content:"";position:absolute;inset:-11px;border-radius:50%;
+    border:1px solid rgba(90,169,255,.28);animation:halo 3.4s ease-in-out infinite}
+  @keyframes halo{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.1);opacity:.25}}
+  .welcome h2{margin:0 0 10px;font:300 31px/1.18 var(--display);letter-spacing:-.02em}
+  .welcome h2 em{font-style:normal;font-weight:500;
+    background:linear-gradient(96deg,#fff 26%,var(--live) 128%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .welcome p{color:var(--dim);font-size:14.5px;margin:0 0 22px;line-height:1.6}
+  .seeds{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
+  .seed{padding:10px 16px;border-radius:999px;border:1px solid var(--edge);background:var(--glass);
+    color:var(--soft);font-size:13px;cursor:pointer;transition:.2s}
+  .seed:hover{border-color:var(--edge-2);color:#fff;background:var(--glass-2);transform:translateY(-2px)}
+
+  .composer{flex:none;display:flex;gap:11px;align-items:flex-end;padding:16px 18px 18px}
+  #input{flex:1;min-width:0;max-height:132px;padding:14px 20px;border-radius:22px;
+    border:1px solid var(--edge);background:rgba(0,0,0,.32);color:var(--ink);
+    font:inherit;font-size:15px;outline:none;resize:none;transition:.2s;line-height:1.5}
+  #input::placeholder{color:var(--faint)}
+  #input:focus{border-color:rgba(90,169,255,.45);background:rgba(0,0,0,.46)}
+  #send{width:48px;height:48px;border-radius:50%;border:0;background:#fff;color:#0A0D12;
+    cursor:pointer;flex:none;display:grid;place-items:center;transition:.18s}
+  #send:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 14px 30px -14px rgba(255,255,255,.6)}
+  #send:disabled{opacity:.3;cursor:default}
+
+  /* ── memory rail ── */
+  .rail{display:flex;flex-direction:column;min-height:0;border:1px solid var(--edge);
+    border-radius:var(--r);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
+    overflow:hidden;
+    background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.028) 46%);
+    box-shadow:0 30px 80px -44px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.07)}
+  .rail-h{flex:none;padding:18px 20px 14px}
+  .rail-h h2{margin:0;font:500 15px var(--display);letter-spacing:.005em}
+  .rail-h p{margin:4px 0 0;font-size:12.5px;color:var(--faint);line-height:1.5}
+  .list{flex:1;min-height:0;overflow-y:auto;padding:0 14px 8px;display:flex;
+    flex-direction:column;gap:9px}
+  .list::-webkit-scrollbar{width:6px}
+  .list::-webkit-scrollbar-thumb{background:var(--edge-2);border-radius:6px}
+  .memo{border:1px solid var(--edge);border-radius:var(--r-md);padding:12px 14px;
+    background:rgba(255,255,255,.028);font-size:13.5px;line-height:1.55;color:var(--soft);
+    transition:.22s;animation:rise .3s both}
+  .memo:hover{background:var(--glass-2);border-color:var(--edge-2)}
+  .memo time{display:block;margin-top:7px;font-size:11px;color:var(--faint)}
+  .memo.new{border-color:rgba(90,169,255,.4);animation:flash 1.6s ease both}
+  @keyframes flash{0%{background:var(--live-ghost);transform:translateX(-5px);opacity:0}
+    50%{background:var(--live-ghost)}100%{background:rgba(255,255,255,.028);transform:none;opacity:1}}
+  .nothing{padding:26px 16px;text-align:center;color:var(--faint);font-size:13px;line-height:1.6}
+
+  .proof{flex:none;border-top:1px solid var(--edge);padding:13px 18px;font-size:12.5px;color:var(--faint)}
+  .proof summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
+    color:var(--dim);transition:.2s}
+  .proof summary::-webkit-details-marker{display:none}
+  .proof summary:hover{color:var(--live)}
+  .proof summary b{font-weight:500;color:var(--soft)}
+  .proof-list{margin-top:10px;max-height:132px;overflow-y:auto}
+  .proof-list a{display:block;padding:6px 0;border-top:1px solid var(--edge);
+    font:11px ui-monospace,Menlo,monospace;color:var(--faint);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .proof-list a:hover{color:var(--live)}
+
+  /* ── link modal ── */
+  .scrim{position:fixed;inset:0;z-index:60;background:rgba(3,5,8,.72);
+    backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+    display:grid;place-items:center;padding:20px;opacity:0;pointer-events:none;transition:.24s}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .modal{width:min(430px,100%);border:1px solid var(--edge-2);border-radius:var(--r);
+    background:rgba(13,17,24,.97);padding:28px;text-align:center;
+    box-shadow:0 50px 120px -34px rgba(0,0,0,.95);transform:scale(.96);transition:.24s}
+  .scrim.on .modal{transform:scale(1)}
+  .modal h3{margin:0 0 7px;font:400 24px var(--display);letter-spacing:-.01em}
+  .modal .sub{margin:0 0 20px;color:var(--dim);font-size:13.5px;line-height:1.6}
+  .code{font:500 30px/1 ui-monospace,Menlo,monospace;letter-spacing:.26em;color:#fff;
+    padding:20px 0 20px 6px;background:rgba(0,0,0,.4);border:1px dashed var(--edge-2);
+    border-radius:var(--r-sm);cursor:pointer;user-select:all;transition:.2s;position:relative}
+  .code:hover{border-color:var(--live);color:var(--live)}
+  .copied{position:absolute;inset:0;display:grid;place-items:center;border-radius:var(--r-sm);
+    background:rgba(90,169,255,.14);color:var(--live);font:500 13px var(--sans);
+    letter-spacing:0;opacity:0;pointer-events:none;transition:.2s}
+  .copied.on{opacity:1}
+  #qr{margin:18px auto 0;width:136px;height:136px;background:#fff;padding:10px;
+    border-radius:14px;display:none}
+  #qr.on{display:block}
+  .steps{margin:18px 0 0;text-align:left;font-size:13px;color:var(--dim);line-height:1.75}
+  .steps li{margin-bottom:3px}
+  /* Five separate words, each in its own chip: far easier to read off a screen
+     and copy onto paper than one long hyphenated string. */
+  .words{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:18px 14px;
+    background:rgba(0,0,0,.4);border:1px dashed var(--edge-2);border-radius:var(--r-sm);
+    cursor:pointer;position:relative;transition:.2s}
+  .words:hover{border-color:var(--live)}
+  .words span{padding:7px 13px;border-radius:9px;background:rgba(255,255,255,.06);
+    border:1px solid var(--edge);color:#fff;font:500 14.5px ui-monospace,Menlo,monospace}
+  .words.loading{color:var(--faint);font:500 14px var(--sans);display:block}
+  .keyinput{width:100%;padding:14px 16px;border-radius:var(--r-sm);border:1px solid var(--edge-2);
+    background:rgba(0,0,0,.4);color:var(--ink);font:15px ui-monospace,Menlo,monospace;outline:none;
+    text-align:center;transition:.2s}
+  .keyinput:focus{border-color:var(--live)}
+  .keyinput::placeholder{color:var(--faint);font-family:var(--sans)}
+  .orline{display:flex;align-items:center;gap:12px;margin:18px 0 14px;color:var(--faint);font-size:11.5px}
+  .orline::before,.orline::after{content:"";flex:1;height:1px;background:var(--edge)}
+  .walletbtn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:13px;
+    border-radius:999px;border:1px solid var(--edge-2);background:var(--glass);color:var(--soft);
+    cursor:pointer;font:500 13.5px var(--sans);transition:.22s}
+  .walletbtn:hover:not(:disabled){background:var(--glass-2);color:#fff;border-color:var(--live)}
+  .walletbtn:disabled{opacity:.5;cursor:default}
+  .nudge{display:block;margin:12px 0 0;padding:11px 13px;border-radius:var(--r-md);cursor:pointer;
+    border:1px solid rgba(90,169,255,.3);background:var(--live-ghost);color:var(--live);
+    font:400 12.5px/1.5 var(--sans);text-align:left;transition:.22s}
+  .nudge:hover{background:rgba(90,169,255,.2)}
+  /* The rail is a summary now: a count and a way in. A scrolling list of every
+     memory crammed into a 320px column was unreadable once there were more than
+     a handful. */
+  .rail{align-self:start}
+  .rail-h{text-align:center;padding:26px 20px 22px}
+  .rail-h h2{margin:14px 0 5px;font:500 16px var(--display)}
+  .rail-h p{margin:0;font-size:12.5px;color:var(--faint);line-height:1.55}
+  .viewbtn{margin-top:16px;width:100%;padding:12px;border-radius:999px;cursor:pointer;
+    border:1px solid var(--edge-2);background:var(--glass);color:var(--ink);
+    font:500 13.5px var(--sans);transition:.22s}
+  .viewbtn:hover{background:var(--glass-2);border-color:var(--live);color:#fff}
+
+  /* One chip per surface. Connected ones are stated, the rest are the way in. */
+  .surfaces{display:flex;gap:6px;margin-top:12px}
+  .surfaces[hidden]{display:none}
+  .sf{flex:1;padding:8px 4px;border-radius:var(--r-sm);border:1px solid var(--edge);
+    background:rgba(0,0,0,.25);color:var(--faint);font:500 11px var(--sans);
+    cursor:pointer;transition:.22s;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .sf:hover{border-color:var(--edge-2);color:var(--soft)}
+  .sf.on{color:var(--live);border-color:rgba(90,169,255,.34);background:var(--live-ghost);cursor:default}
+  .sf .tick{font-size:9px;letter-spacing:.06em;opacity:.85}
+  .allset{margin-top:12px;padding:10px 12px;border-radius:var(--r-md);
+    border:1px solid rgba(90,169,255,.3);background:var(--live-ghost);color:var(--live);
+    font:400 12px/1.5 var(--sans);animation:rise .4s both}
+
+  .face{width:62px;height:62px;margin:0 auto;animation:float 4.6s ease-in-out infinite}
+  .face svg{width:100%;height:100%;display:block;
+    filter:drop-shadow(0 6px 22px rgba(90,169,255,.34))}
+  .face.big{width:78px;height:78px;margin-bottom:16px}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  /* Blink: squash the eyes briefly, on an off-beat so it reads as alive
+     rather than mechanical. */
+  .face .eyes,.face #eyes{transform-origin:center 28px;animation:blinkeye 5.2s infinite}
+  @keyframes blinkeye{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.08)}}
+  @media (prefers-reduced-motion:reduce){
+    .face{animation:none}.face .eyes,.face #eyes{animation:none}
+  }
+
+  .memmodal{width:min(480px,100%)}
+  .memlist{max-height:46vh;overflow-y:auto;margin-top:18px;display:flex;
+    flex-direction:column;gap:9px;text-align:left}
+  .memlist::-webkit-scrollbar{width:6px}
+  .memlist::-webkit-scrollbar-thumb{background:var(--edge-2);border-radius:6px}
+  .memlist .memo{border:1px solid var(--edge);border-radius:var(--r-md);padding:12px 14px;
+    background:rgba(255,255,255,.03);font-size:13.5px;line-height:1.55;color:var(--soft);
+    animation:rise .3s both}
+  .memlist .memo time{display:block;margin-top:6px;font-size:11px;color:var(--faint)}
+  .memlist .nothing{padding:20px;text-align:center;color:var(--faint);font-size:13px}
+  .close{margin-top:22px;width:100%;padding:12px;border-radius:999px;border:1px solid var(--edge-2);
+    background:var(--glass);color:var(--soft);cursor:pointer;font-size:13.5px}
+  .close:hover{background:var(--glass-2);color:#fff}
+
+  @media (max-width:980px){
+    body{overflow:auto}
+    .app{height:auto;min-height:100%}
+    .layout{grid-template-columns:minmax(0,1fr)}
+    .chat{min-height:66vh}
+    .rail{max-height:420px}
+    .brand span{display:none}
+    .status{display:none}
+    .turn{max-width:90%}
+  }
+</style>
+</head>
+<body>
+<div class="ground"></div><div class="bloom"></div><div class="grain"></div>
+<div class="app">
+
+  <header class="top">
+    <a class="brand" href="/" title="Back to the start">
+      <svg width="27" height="27" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="ccore" cx="35%" cy="30%" r="74%">
+            <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#9BD0FF"/>
+            <stop offset="100%" stop-color="#2E7ACB"/>
+          </radialGradient>
+          <linearGradient id="carc" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff"/><stop offset="100%" stop-color="#5AA9FF"/>
+          </linearGradient>
+        </defs>
+        <circle cx="16" cy="16" r="11" fill="none" stroke="#5AA9FF" stroke-width="1.5" opacity=".22"/>
+        <path d="M16 5a11 11 0 0 1 11 11" fill="none" stroke="url(#carc)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 27A11 11 0 0 1 5 16" fill="none" stroke="url(#carc)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4.1" fill="url(#ccore)"/>
+      </svg>
+      <b>Continuity</b>
+      <span id="tagline">remembers you everywhere</span>
+    </a>
+    <span class="status"><span class="ping" id="ping"></span><span id="pingtext">Connecting…</span></span>
+    <button class="white" id="linkbtn">Connect another app</button>
+    <div class="morewrap">
+      <button class="more" id="morebtn" aria-label="More options">⋯</button>
+      <div class="menu" id="menu">
+        <button id="savekey">Save your memory key</button>
+        <button id="restorekey">I have a key already</button>
+        <button id="showmem">Show everything you remember</button>
+        <button data-say="/forgetme">Stop remembering me</button>
+        <button id="newchat">Clear this conversation</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <main class="chat">
+      <div id="log">
+        <div class="welcome">
+          <div class="orb"></div>
+          <h2>I'll remember this<br><em>wherever you go.</em></h2>
+          <p>Tell me something about yourself. Come back tomorrow, or open me on Telegram — I'll still know who you are.</p>
+          <div class="seeds">
+            <button class="seed">I'm building a website and I'm stuck</button>
+            <button class="seed">What do you know about me?</button>
+            <button class="seed">I prefer short answers</button>
+          </div>
+        </div>
+      </div>
+      <form class="composer" id="form">
+        <textarea id="input" rows="1" placeholder="Tell me something…" aria-label="Message"></textarea>
+        <button id="send" type="submit" aria-label="Send">
+          <svg width="19" height="19" viewBox="0 0 19 19" fill="none">
+            <path d="M3 9.5h12M10 4.5l5 5-5 5" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </form>
+    </main>
+
+    <aside class="rail">
+      <div class="rail-h">
+        <div class="face" id="face" aria-hidden="true">
+          <svg viewBox="0 0 64 64">
+            <defs><radialGradient id="fg" cx="34%" cy="28%" r="76%">
+              <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#7CC0FF"/>
+              <stop offset="100%" stop-color="#1B4E85"/></radialGradient></defs>
+            <circle cx="32" cy="32" r="26" fill="url(#fg)"/>
+            <g id="eyes" fill="#0A2745">
+              <ellipse cx="23" cy="28" rx="3.1" ry="4"/>
+              <ellipse cx="41" cy="28" rx="3.1" ry="4"/>
+            </g>
+            <path d="M22 40c3.4 4.6 16.6 4.6 20 0" fill="none" stroke="#0A2745"
+              stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h2 id="memcount">Getting to know you</h2>
+        <p id="railsub">Tell me something and I'll hold on to it.</p>
+        <button class="viewbtn" id="viewmem" hidden>View what I remember</button>
+        <div class="surfaces" id="surfaces" hidden>
+          <button class="sf" data-surface="web">Web</button>
+          <button class="sf" data-surface="telegram">Telegram</button>
+          <button class="sf" data-surface="discord">Discord</button>
+        </div>
+      </div>
+      <details class="proof">
+        <summary>
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M6.5 1.2l4.3 2v3.4c0 2.6-1.8 4.4-4.3 5.2-2.5-.8-4.3-2.6-4.3-5.2V3.2l4.3-2z"
+              stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+          <span><b id="proofn">Saved permanently</b> on Walrus</span>
+        </summary>
+        <div class="proof-list" id="blobs"></div>
+      </details>
+    </aside>
+  </div>
+</div>
+
+<div class="scrim" id="scrim">
+  <div class="modal">
+    <h3>Use me somewhere else</h3>
+    <p class="sub" id="linkintro">Enter this code on Telegram or Discord and I'll know it's still you — everything I remember comes with you.</p>
+    <div class="code" id="codeval">······<span class="copied" id="copied">Copied</span></div>
+    <div id="qr"></div>
+    <ol class="steps">
+      <li>Open <b id="botname">the Telegram bot</b> — or scan the code above</li>
+      <li>Send <code>/link</code> followed by the code</li>
+      <li>That's it. Same memory, both places.</li>
+    </ol>
+    <button class="close" id="closelink">Done</button>
+  </div>
+</div>
+
+<div class="scrim" id="memscrim">
+  <div class="modal memmodal">
+    <div class="face big" id="face2" aria-hidden="true">
+      <svg viewBox="0 0 64 64">
+        <defs><radialGradient id="fg2" cx="34%" cy="28%" r="76%">
+          <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#7CC0FF"/>
+          <stop offset="100%" stop-color="#1B4E85"/></radialGradient></defs>
+        <circle cx="32" cy="32" r="26" fill="url(#fg2)"/>
+        <g class="eyes" fill="#0A2745">
+          <ellipse cx="23" cy="28" rx="3.1" ry="4"/>
+          <ellipse cx="41" cy="28" rx="3.1" ry="4"/>
+        </g>
+        <path d="M22 40c3.4 4.6 16.6 4.6 20 0" fill="none" stroke="#0A2745"
+          stroke-width="3" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h3 id="memtitle">Here's everything</h3>
+    <p class="sub" id="memsub">Everything below follows you to Telegram and Discord.</p>
+    <div class="memlist" id="memlist"></div>
+    <button class="close" id="memclose">Close</button>
+  </div>
+</div>
+
+<div class="scrim" id="keyscrim">
+  <div class="modal">
+    <h3 id="keytitle">Don't lose me</h3>
+    <p class="sub" id="keysub">Your memory lives in this browser. Save a key and you can pick it up anywhere — a new laptop, a cleared cache, a different browser.</p>
+
+    <div id="keysave" hidden>
+      <div class="words loading" id="phrase">making a key…<span class="copied" id="keycopied">Copied</span></div>
+      <p class="note">Write it down or put it in a password manager. I can't show it to you again, and I can't recover it for you.</p>
+    </div>
+
+    <div id="keyrestore" hidden>
+      <input id="phrasein" class="keyinput" placeholder="five words, separated by spaces" autocomplete="off" spellcheck="false">
+      <p class="note" id="keyerr"></p>
+    </div>
+
+    <div class="orline"><span>or</span></div>
+    <button class="walletbtn" id="walletbtn">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4.6A1.6 1.6 0 0 1 3.6 3h8.8A1.6 1.6 0 0 1 14 4.6v6.8a1.6 1.6 0 0 1-1.6 1.6H3.6A1.6 1.6 0 0 1 2 11.4V4.6Z" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="8" r="1.1" fill="currentColor"/></svg>
+      <span id="walletlabel">Use a Sui wallet instead</span>
+    </button>
+    <p class="note" id="walleterr"></p>
+
+    <button class="close" id="keyclose">Done</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+
+const userId = (() => {
+  let id = null;
+  try { id = localStorage.getItem("ws8-user"); } catch {}
+  if (!id) {
+    id = "web-" + (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2));
+    try { localStorage.setItem("ws8-user", id); } catch {}
+  }
+  return id;
+})();
+
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+/**
+ * Just enough Markdown for a chat reply: fenced code, bullet and numbered
+ * lists, bold and inline code. Everything is escaped FIRST and only these few
+ * constructs are re-enabled, so model output never becomes live HTML.
+ */
+function fmt(src) {
+  const blocks = [];
+  // Pull fenced code out first so its contents are never treated as markup.
+  let text = esc(src).replace(/```[a-z]*\n?([\s\S]*?)```/gi, (_, code) =>
+    `\u0000${blocks.push(`<pre><code>${code.replace(/\n$/, "")}</code></pre>`) - 1}\u0000`);
+
+  const inline = (t) => t
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
+    .replace(/(^|\s)\*([^*\n]+)\*/g, "$1<i>$2</i>");
+
+  const out = [];
+  let list = null; // "ul" | "ol"
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    const bullet = line.match(/^\s*[-*•]\s+(.*)$/);
+    const numbered = line.match(/^\s*\d+[.)]\s+(.*)$/);
+
+    if (bullet || numbered) {
+      const want = bullet ? "ul" : "ol";
+      if (list !== want) { closeList(); out.push(`<${want}>`); list = want; }
+      out.push(`<li>${inline((bullet || numbered)[1])}</li>`);
+    } else if (!line.trim()) {
+      closeList();
+      out.push("<br>");
+    } else {
+      closeList();
+      out.push(`<p>${inline(line.replace(/^#{1,6}\s*/, ""))}</p>`);
+    }
+  }
+  closeList();
+  return out.join("").replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[i]);
+}
+
+/* ── chat ── */
+const log = $("log");
+const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 90;
+function scroll(force) { if (force || atBottom()) log.scrollTop = log.scrollHeight; }
+
+function turn(who) {
+  log.querySelector(".welcome")?.remove();
+  const el = document.createElement("div");
+  el.className = "turn " + who;
+  log.appendChild(el);
+  return el;
+}
+function bubble(el, html) {
+  const b = document.createElement("div");
+  b.className = "bubble"; b.innerHTML = html;
+  el.appendChild(b); scroll(true);
+  return b;
+}
+
+/**
+ * Instead of a latency/cosine readout, one plain line: how many things it
+ * remembered, expandable to the actual memories. Same evidence, no jargon.
+ */
+function addRecalled(el, meta) {
+  const list = meta.trace ?? [];
+  if (!list.length) return;
+  const chip = document.createElement("button");
+  chip.className = "recalled";
+  chip.innerHTML =
+    `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.6"
+      stroke="currentColor" stroke-width="1.2"/><path d="M6 3.6V6l1.7 1.1" stroke="currentColor"
+      stroke-width="1.2" stroke-linecap="round"/></svg>
+     Remembered ${list.length} thing${list.length === 1 ? "" : "s"} about you`;
+  const box = document.createElement("div");
+  box.className = "used";
+  box.innerHTML = "<h5>what I used</h5>" + list.map((t) => `<p>${esc(secondPerson(t.text))}</p>`).join("");
+  chip.onclick = () => { box.classList.toggle("on"); scroll(); };
+  el.appendChild(chip); el.appendChild(box);
+}
+
+/** A screenshot the bot took, shown inline and clickable to open full size. */
+function attachImage(bubble, dataUrl, alt) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.className = "shot";
+  const img = document.createElement("img");
+  img.src = dataUrl;
+  img.alt = alt || "screenshot";
+  img.loading = "lazy";
+  img.onload = () => scroll(true);
+  a.appendChild(img);
+  bubble.appendChild(a);
+}
+
+let busy = false;
+
+/**
+ * Send a turn and render the reply as it streams.
+ *
+ * While tokens are arriving the text is shown raw with a cursor; Markdown is
+ * rendered once at the end. Rendering half-finished Markdown mid-stream makes
+ * lists and code fences flicker as they open and close.
+ */
+async function ask(text, { silent = false } = {}) {
+  if (busy || !text) return;
+  busy = true; $("send").disabled = true;
+  if (!silent) bubble(turn("me"), esc(text));
+  const t = turn("bot");
+  const b = bubble(t, '<span class="dots"><i></i><i></i><i></i></span>');
+
+  let acc = "";
+  let final = null;
+
+  try {
+    const res = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, text }),
+    });
+    if (!res.ok || !res.body) throw new Error("stream unavailable");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let cut;
+      while ((cut = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, cut);
+        buffer = buffer.slice(cut + 2);
+        if (!frame.startsWith("data:")) continue;
+        let event;
+        try { event = JSON.parse(frame.slice(5)); } catch { continue; }
+        if (event.t) {
+          acc += event.t;
+          b.innerHTML = esc(acc) + '<span class="caret"></span>';
+          scroll();
+        }
+        if (event.done) final = event;
+      }
+    }
+
+    const reply = final?.reply ?? acc;
+    b.innerHTML = fmt(reply || final?.error || "Something went wrong.");
+    if (final?.image) attachImage(b, final.image, reply);
+    if (final?.meta) addRecalled(t, final.meta);
+    scroll(true);
+    setTimeout(refreshAll, 2500);
+    setTimeout(refreshAll, 40000);
+    return final ?? { reply };
+  } catch {
+    // Fall back to the non-streaming endpoint rather than losing the turn.
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, text }),
+      }).then((r) => r.json());
+      b.innerHTML = fmt(res.reply ?? res.error ?? "Something went wrong.");
+      if (res.image) attachImage(b, res.image, res.reply);
+      addRecalled(t, res.meta ?? {});
+      scroll(true);
+      setTimeout(refreshAll, 2500);
+      return res;
+    } catch {
+      b.textContent = "I couldn't reach the server. Try again in a moment.";
+    }
+  } finally {
+    busy = false; $("send").disabled = false; $("input").focus();
+  }
+}
+
+const input = $("input");
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 132) + "px"; }
+input.addEventListener("input", autosize);
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); }
+});
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const v = input.value.trim(); if (!v) return;
+  input.value = ""; autosize(); ask(v);
+});
+log.addEventListener("click", (e) => { if (e.target.classList.contains("seed")) ask(e.target.textContent); });
+
+/* ── menu ── */
+$("morebtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  $("menu").classList.toggle("on");
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".morewrap")) $("menu").classList.remove("on");
+});
+$("menu").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-say]");
+  if (b) { ask(b.dataset.say); $("menu").classList.remove("on"); }
+});
+$("newchat").addEventListener("click", () => {
+  log.innerHTML = `<div class="welcome"><div class="orb"></div>
+    <h2>Still here.<br><em>Still remembering.</em></h2>
+    <p>Cleared the screen, not my memory. Everything you told me is still with me.</p></div>`;
+  $("menu").classList.remove("on");
+});
+
+/* ── linking ── */
+let botUser = "walrusmemory_bot";
+$("linkbtn").addEventListener("click", async () => {
+  $("scrim").classList.add("on");
+  const pending = ["telegram", "discord"].filter((c) => !connectedNow.includes(c));
+  $("linkintro").textContent = pending.length
+    ? `Enter this code on ${pending.map((c) => SURFACE_LABEL[c]).join(" or ")} and I'll know it's still you — everything I remember comes with you.`
+    : "You're already connected everywhere. Use this code to add another account if you want.";
+  $("codeval").firstChild.nodeValue = "······";
+  $("qr").classList.remove("on");
+  const res = await ask("/link", { silent: true });
+  const code = res?.reply?.match(/\b([A-Z0-9]{6})\b/)?.[1];
+  if (!code) return;
+  $("codeval").firstChild.nodeValue = code;
+  const deep = `https://t.me/${botUser}?start=${code}`;
+  $("botname").textContent = "@" + botUser;
+  // Scanning opens Telegram with the code already attached — no typing at all.
+  if (window.QRCode) {
+    $("qr").innerHTML = "";
+    new QRCode($("qr"), { text: deep, width: 116, height: 116, correctLevel: QRCode.CorrectLevel.M });
+    $("qr").classList.add("on");
+  }
+});
+$("closelink").addEventListener("click", () => $("scrim").classList.remove("on"));
+$("scrim").addEventListener("click", (e) => { if (e.target === $("scrim")) $("scrim").classList.remove("on"); });
+$("codeval").addEventListener("click", () => {
+  const c = $("codeval").firstChild.nodeValue.trim();
+  if (!c || c.startsWith("·")) return;
+  navigator.clipboard?.writeText(c).catch(() => {});
+  $("copied").classList.add("on");
+  setTimeout(() => $("copied").classList.remove("on"), 1100);
+});
+
+/**
+ * The extractor stores facts in the third person ("User runs Node 22 on a Mac")
+ * because that is how it reasons about them. Shown in a panel addressed to the
+ * person themselves, that reads like a case file — so it is rephrased for
+ * display only. The stored memory is untouched.
+ */
+const KEEP_S = new Set(["is", "was", "has", "does", "goes", "as", "always", "sometimes"]);
+function secondPerson(text) {
+  let t = String(text);
+  if (!/^(the\s+)?user\b/i.test(t)) return t;
+  t = t.replace(/^the\s+user/i, "User");
+  // Within a fact that opened with "User", later pronouns refer to them too.
+  const pronouns = (x) => x
+    .replace(/\btheir\b/gi, "your").replace(/\bthemselves\b/gi, "yourself")
+    .replace(/\bthem\b/gi, "you").replace(/\bthey\b/gi, "you");
+  if (/^User's\b/i.test(t)) return pronouns(t.replace(/^User's\b/i, "Your"));
+  if (/^User\s+is\b/i.test(t)) return pronouns(t.replace(/^User\s+is\b/i, "You're"));
+  if (/^User\s+was\b/i.test(t)) return pronouns(t.replace(/^User\s+was\b/i, "You were"));
+  if (/^User\s+has\b/i.test(t)) return pronouns(t.replace(/^User\s+has\b/i, "You have"));
+  // "User runs …" → "You run …": drop the third-person -s from the next verb.
+  return pronouns(t.replace(/^User\s+(\w+)/i, (m, verb) => {
+    const lower = verb.toLowerCase();
+    if (KEEP_S.has(lower) || !lower.endsWith("s") || lower.endsWith("ss")) return `You ${verb}`;
+    return `You ${verb.slice(0, -1)}`;
+  }));
+}
+
+/* ── keeping your memory: a phrase you can write down, or a wallet ── */
+
+const keyScrim = $("keyscrim");
+const openKeyModal = (mode) => {
+  const saving = mode === "save";
+  $("keytitle").textContent = saving ? "Don't lose me" : "Pick up where you left off";
+  $("keysub").textContent = saving
+    ? "Your memory lives in this browser. Save a key and you can pick it up anywhere — a new laptop, a cleared cache, a different browser."
+    : "Enter the key you saved, and I'll be myself again.";
+  $("keysave").hidden = !saving;
+  $("keyrestore").hidden = saving;
+  $("walletlabel").textContent = saving ? "Use a Sui wallet instead" : "Sign in with a Sui wallet";
+  $("keyerr").textContent = "";
+  $("walleterr").textContent = "";
+  keyScrim.classList.add("on");
+  if (!saving) setTimeout(() => $("phrasein").focus(), 120);
+};
+
+$("savekey").addEventListener("click", async () => {
+  $("menu").classList.remove("on");
+  openKeyModal("save");
+  currentPhrase = "";
+  $("phrase").className = "words loading";
+  $("phrase").textContent = "making a key…";
+  $("phrase").appendChild(copiedBadge);
+  try {
+    const r = await fetch("/api/key/issue", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    }).then((r) => r.json());
+    if (r.phrase) {
+      renderPhrase(r.phrase);
+      try { localStorage.setItem("ws8-keyed", "1"); } catch {}
+      $("nudge")?.remove();
+    } else {
+      showPhraseError();
+    }
+  } catch {
+    showPhraseError();
+  }
+});
+
+$("showmem").addEventListener("click", () => { $("menu").classList.remove("on"); openMemories(); });
+$("restorekey").addEventListener("click", () => { $("menu").classList.remove("on"); openKeyModal("restore"); });
+$("keyclose").addEventListener("click", () => keyScrim.classList.remove("on"));
+keyScrim.addEventListener("click", (e) => { if (e.target === keyScrim) keyScrim.classList.remove("on"); });
+
+let currentPhrase = "";
+const copiedBadge = $("keycopied");
+
+function renderPhrase(phrase) {
+  currentPhrase = phrase;
+  const box = $("phrase");
+  box.className = "words";
+  box.textContent = "";
+  for (const word of phrase.split("-")) {
+    const el = document.createElement("span");
+    el.textContent = word;
+    box.appendChild(el);
+  }
+  box.appendChild(copiedBadge);
+}
+
+function showPhraseError() {
+  currentPhrase = "";
+  $("phrase").className = "words loading";
+  $("phrase").textContent = "Couldn't make a key just now. Close this and try again.";
+  $("phrase").appendChild(copiedBadge);
+}
+
+$("phrase").addEventListener("click", () => {
+  if (!currentPhrase) return;
+  navigator.clipboard?.writeText(currentPhrase).catch(() => {});
+  copiedBadge.classList.add("on");
+  setTimeout(() => copiedBadge.classList.remove("on"), 1100);
+});
+
+/** Adopt a different identity: store it and reload so every panel refetches. */
+function becomeUser(newId) {
+  try { localStorage.setItem("ws8-user", newId); localStorage.setItem("ws8-keyed", "1"); } catch {}
+  location.reload();
+}
+
+$("phrasein").addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter") return;
+  const phrase = $("phrasein").value.trim();
+  if (!phrase) return;
+  $("keyerr").textContent = "checking…";
+  try {
+    const r = await fetch("/api/key/redeem", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phrase }),
+    }).then((r) => r.json());
+    if (r.ok) becomeUser(r.userId);
+    else $("keyerr").textContent = r.error ?? "That key doesn't match anything I've stored.";
+  } catch {
+    $("keyerr").textContent = "Couldn't reach the server.";
+  }
+});
+
+/**
+ * Sui wallets announce themselves through the Wallet Standard handshake, so
+ * they can be discovered without pulling in a wallet library.
+ */
+function suiWallets() {
+  const found = [];
+  const register = (wallet) => { found.push(wallet); return () => {}; };
+  const onRegister = (e) => { try { e.detail({ register }); } catch {} };
+  window.addEventListener("wallet-standard:register-wallet", onRegister);
+  window.dispatchEvent(new CustomEvent("wallet-standard:app-ready", { detail: { register } }));
+  window.removeEventListener("wallet-standard:register-wallet", onRegister);
+  return found.filter((w) => w.features?.["standard:connect"] && w.features?.["sui:signPersonalMessage"]);
+}
+
+$("walletbtn").addEventListener("click", async () => {
+  const btn = $("walletbtn");
+  const err = $("walleterr");
+  err.textContent = "";
+  const wallets = suiWallets();
+  if (!wallets.length) {
+    err.innerHTML = 'No Sui wallet found in this browser. <a href="https://slush.app" target="_blank" rel="noopener" style="color:var(--live)">Get Slush</a>, then try again.';
+    return;
+  }
+
+  btn.disabled = true;
+  $("walletlabel").textContent = "Check your wallet…";
+  try {
+    const wallet = wallets[0];
+    const { accounts } = await wallet.features["standard:connect"].connect();
+    const account = accounts?.[0];
+    if (!account) throw new Error("no account");
+
+    const { nonce, message } = await fetch("/api/wallet/challenge", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    }).then((r) => r.json());
+
+    const signed = await wallet.features["sui:signPersonalMessage"].signPersonalMessage({
+      message: new TextEncoder().encode(message),
+      account,
+    });
+
+    const out = await fetch("/api/wallet/verify", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nonce, message, signature: signed.signature }),
+    }).then((r) => r.json());
+
+    if (out.userId) becomeUser(out.userId);
+    else err.textContent = out.error ?? "Couldn't verify that signature.";
+  } catch (e) {
+    err.textContent = e?.message === "no account" ? "That wallet has no account to sign with." : "Wallet sign-in was cancelled.";
+  } finally {
+    btn.disabled = false;
+    $("walletlabel").textContent = $("keysave").hidden ? "Sign in with a Sui wallet" : "Use a Sui wallet instead";
+  }
+});
+
+/* ── live panels ── */
+let knownFacts = new Set();
+let first = true;
+
+// The server decides what "healthy" means and never blocks on the relayer, so
+// this just renders the answer. Before the first poll lands, stay neutral
+// rather than alarming someone who has done nothing wrong.
+async function refreshHealth() {
+  try {
+    const h = await fetch("/healthz").then((r) => r.json());
+    if (!h.known) { $("ping").className = "ping"; $("pingtext").textContent = "Connecting…"; return; }
+    const ok = h.ok !== false;
+    $("ping").className = "ping " + (ok ? "ok" : "bad");
+    $("pingtext").textContent = ok ? "Saving your memory" : "Reconnecting…";
+  } catch {
+    $("ping").className = "ping bad";
+    $("pingtext").textContent = "Offline";
+  }
+}
+
+let allFacts = [];
+
+async function refreshMemory() {
+  try {
+    const m = await fetch("/api/memory?userId=" + encodeURIComponent(userId)).then((r) => r.json());
+    const facts = m.facts ?? [];
+    allFacts = facts;
+    if (!facts.length) return;
+
+    const n = facts.length;
+    const name = m.name ? esc(m.name) : null;
+    $("memcount").innerHTML = name
+      ? `Hi ${name} — I remember ${n} thing${n === 1 ? "" : "s"} about you`
+      : `I remember ${n} thing${n === 1 ? "" : "s"} about you`;
+    if (name) $("tagline").textContent = `remembers ${name}`;
+    $("viewmem").hidden = false;
+    paintSurfaces(m.connected ?? [], name);
+    maybeNudge(n);
+    for (const f of facts) knownFacts.add(f.text);
+    first = false;
+  } catch {}
+}
+
+/**
+ * Say which apps this person is reachable on. The chips are the honest version
+ * of "you're connected": each one is either joined up or a way to join it up.
+ */
+const SURFACE_LABEL = { web: "Web", telegram: "Telegram", discord: "Discord" };
+let connectedNow = [];
+
+function paintSurfaces(connected, name) {
+  connectedNow = connected;
+  const box = $("surfaces");
+  box.hidden = false;
+  for (const chip of box.querySelectorAll(".sf")) {
+    const on = connected.includes(chip.dataset.surface);
+    chip.classList.toggle("on", on);
+    chip.innerHTML = `${SURFACE_LABEL[chip.dataset.surface]}<span class="tick">${on ? "connected" : "connect"}</span>`;
+    chip.disabled = on;
+  }
+
+  const others = connected.filter((c) => c !== "web");
+  $("railsub").textContent = others.length
+    ? `${others.map((c) => SURFACE_LABEL[c]).join(" and ")} ${others.length > 1 ? "see" : "sees"} these too.`
+    : "These follow you to Telegram and Discord.";
+
+  const all = ["web", "telegram", "discord"].every((c) => connected.includes(c));
+  let banner = $("allset");
+  if (all && !banner) {
+    banner = document.createElement("div");
+    banner.className = "allset";
+    banner.id = "allset";
+    banner.textContent = name
+      ? `All three connected. Wherever you open me, I'm still talking to ${name}.`
+      : "All three connected. Wherever you open me, it's still you.";
+    $("surfaces").insertAdjacentElement("afterend", banner);
+  } else if (!all && banner) {
+    banner.remove();
+  }
+}
+
+// A chip that isn't connected yet is the shortest route to connecting it.
+$("surfaces").addEventListener("click", (e) => {
+  const chip = e.target.closest(".sf");
+  if (chip && !chip.classList.contains("on")) $("linkbtn").click();
+});
+
+async function openMemories() {
+  const list = $("memlist");
+  $("memscrim").classList.add("on");
+
+  // Always re-read on open. Rendering the last cached copy meant a click before
+  // the first fetch landed said "Nothing yet" to someone it knows plenty about.
+  if (!allFacts.length) {
+    $("memtitle").textContent = "One moment";
+    $("memsub").textContent = "Fetching what I've got.";
+    list.innerHTML = '<div class="nothing"><span class="dots"><i></i><i></i><i></i></span></div>';
+    await refreshMemory();
+  }
+
+  $("memsub").textContent = allFacts.length
+    ? "Everything below follows you to Telegram and Discord."
+    : "";
+  $("memtitle").textContent = allFacts.length
+    ? `Here's everything — ${allFacts.length} thing${allFacts.length === 1 ? "" : "s"}`
+    : "Nothing yet";
+  list.innerHTML = allFacts.length
+    ? allFacts.map((f, i) =>
+        `<div class="memo" style="animation-delay:${Math.min(i * 40, 400)}ms">${esc(secondPerson(f.text))}${
+          f.at ? `<time>${new Date(f.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time>` : ""
+        }</div>`).join("")
+    : '<div class="nothing">Tell me something and it\'ll show up here.</div>';
+}
+
+$("viewmem").addEventListener("click", openMemories);
+$("memclose").addEventListener("click", () => $("memscrim").classList.remove("on"));
+$("memscrim").addEventListener("click", (e) => { if (e.target === $("memscrim")) $("memscrim").classList.remove("on"); });
+
+async function refreshLedger() {
+  try {
+    const r = await fetch("/api/ledger").then((r) => r.json());
+    const n = r.writes?.length ?? 0;
+    if (!n) return;
+    $("proofn").textContent = `${n} saved permanently`;
+    $("blobs").innerHTML = r.writes.slice(0, 20).map((w) =>
+      `<a target="_blank" rel="noopener" href="https://walruscan.com/mainnet/blob/${encodeURIComponent(w.blobId)}"
+        title="Open on Walruscan">${esc(w.blobId)}</a>`).join("");
+  } catch {}
+}
+
+/**
+ * Offer the key once there is something to lose. Asking on arrival would be a
+ * signup form in front of an empty chat; asking after two facts is a real offer.
+ */
+function maybeNudge(factCount) {
+  if (factCount < 2 || $("nudge")) return;
+  try { if (localStorage.getItem("ws8-keyed")) return; } catch {}
+  const b = document.createElement("button");
+  b.className = "nudge";
+  b.id = "nudge";
+  b.textContent = "I know a few things about you now. Save a key so a new browser doesn't lose them →";
+  b.onclick = () => $("savekey").click();
+  $("viewmem").insertAdjacentElement("afterend", b);
+}
+
+const refreshAll = () => { refreshMemory(); refreshLedger(); };
+refreshHealth(); refreshAll();
+setInterval(refreshHealth, 25000);
+setInterval(refreshAll, 20000);
+fetch("/api/stats").then((r) => r.json()).then((s) => { botUser = s.botUsername ?? botUser; }).catch(() => {});
+</script>
+</body>
+</html>

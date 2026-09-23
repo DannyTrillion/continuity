@@ -1,0 +1,7 @@
+# Railway builds with nixpacks. Chromium is here for /shot — without it the bot
+# still works and simply says it can't take screenshots on this host.
+[phases.setup]
+nixPkgs = ["nodejs_22", "chromium"]
+
+[start]
+cmd = "node src/server.mjs"

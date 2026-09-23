@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Continuity — never introduce yourself twice</title>
+<meta name="description" content="An assistant that remembers you on the web, on Telegram and on Discord. Tell it something once.">
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500&family=Inter:wght@400;450;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#05070A; --ink:#F2F6FA; --soft:#B7C3D1; --dim:#7E8C9C; --faint:#4E5A68;
+    --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.2);
+    --glass:rgba(255,255,255,.05); --glass-2:rgba(255,255,255,.085);
+    --live:#5AA9FF;
+    --ease:cubic-bezier(.22,.7,.28,1);
+    --display:'Outfit',system-ui,sans-serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--void);color:var(--ink);font:15px/1.6 var(--sans);
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+
+  /* The ceramic/suede ground, then a cool bloom on top of it. */
+  .ground{position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:url("/assets/texture.jpg");background-size:cover;background-position:center;
+    opacity:.9}
+  .bloom{position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(1000px 620px at 76% -12%, rgba(90,169,255,.17), transparent 62%),
+      radial-gradient(720px 520px at 8% 106%, rgba(120,90,255,.12), transparent 60%),
+      radial-gradient(1200px 900px at 50% 46%, rgba(0,0,0,.34), transparent 72%)}
+  /* A faint grain so the ground never looks like flat compression. */
+  .grain{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
+
+  .page{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;
+    padding:26px 30px;transition:opacity .34s var(--ease),transform .34s var(--ease)}
+  body.leaving .page{opacity:0;transform:translateY(-10px)}
+
+  /* ── corners ── */
+  .chrome{display:flex;align-items:center;justify-content:space-between;gap:16px;flex:none}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand b{font:500 15.5px var(--display);letter-spacing:.01em}
+  .tiny{font:400 10.5px var(--mono);letter-spacing:.17em;text-transform:uppercase;color:var(--faint)}
+  .tiny a:hover{color:var(--soft)}
+  a{color:inherit;text-decoration:none}
+  .status{display:inline-flex;align-items:center;gap:8px}
+  .ping{width:5px;height:5px;border-radius:50%;background:var(--live);
+    box-shadow:0 0 0 3px rgba(90,169,255,.14);animation:pulse 3.2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ── centre ── */
+  main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:20px 0;min-height:0}
+  .eyebrow{margin:0 0 26px}
+  h1{margin:0;font:200 clamp(38px,7.4vw,86px)/1.02 var(--display);letter-spacing:-.035em;
+    max-width:16ch}
+  h1 em{font-style:normal;font-weight:400;
+    background:linear-gradient(96deg,#fff 18%,var(--live) 132%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{margin:24px 0 0;max-width:52ch;color:var(--soft);font-size:clamp(14.5px,1.5vw,16.5px);
+    line-height:1.68}
+  .sub b{color:var(--ink);font-weight:500}
+
+  .actions{display:flex;align-items:center;justify-content:center;gap:11px;
+    margin-top:42px;flex-wrap:wrap}
+  .go{display:inline-flex;align-items:center;gap:10px;padding:15px 30px;border-radius:999px;
+    border:0;background:#fff;color:#080B10;font:600 14.5px var(--sans);cursor:pointer;
+    transition:transform .3s var(--ease),box-shadow .3s var(--ease)}
+  .go svg{transition:transform .3s var(--ease)}
+  .go:hover{transform:translateY(-2px);box-shadow:0 20px 44px -18px rgba(255,255,255,.55)}
+  .go:hover svg{transform:translateX(3px)}
+  .go:active{transform:translateY(0)}
+  .alt{display:inline-flex;align-items:center;gap:9px;padding:15px 22px;border-radius:999px;
+    border:1px solid var(--edge);background:var(--glass);color:var(--soft);
+    font:500 14px var(--sans);cursor:pointer;backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);
+    transition:transform .3s var(--ease),background .3s var(--ease),border-color .3s var(--ease),color .3s var(--ease)}
+  .alt svg{opacity:.85;transition:opacity .3s var(--ease)}
+  .alt:hover{transform:translateY(-2px);background:var(--glass-2);border-color:var(--edge-2);color:#fff}
+  .alt:hover svg{opacity:1}
+
+  .aside-link{margin:18px 0 0;font-size:12.5px}
+  .aside-link a{color:var(--faint);border-bottom:1px solid transparent;transition:.2s}
+  .aside-link a:hover{color:var(--soft);border-bottom-color:var(--edge-2)}
+  .carry{margin:20px 0 0;font-size:12.5px;color:var(--dim);max-width:46ch;line-height:1.6}
+  .carry b{color:var(--ink);font:500 13px ui-monospace,Menlo,monospace;letter-spacing:.08em}
+  .foot{display:flex;align-items:center;justify-content:space-between;gap:16px;flex:none}
+
+  /* ── entrance ── */
+  @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .up{animation:fadeUp .8s var(--ease) both}
+  .in{animation:fadeIn 1.1s var(--ease) both}
+  .d1{animation-delay:.05s}.d2{animation-delay:.16s}.d3{animation-delay:.3s}
+  .d4{animation-delay:.44s}.d5{animation-delay:.6s}.d6{animation-delay:.78s}
+  @media (prefers-reduced-motion:reduce){
+    .up,.in{animation:none}
+    .page,.go,.alt,.go svg{transition:none}
+  }
+
+  @media (max-width:760px){
+    body{overflow:auto}
+    .page{padding:20px 18px 26px;min-height:100%}
+    main{padding:56px 0 40px}
+    h1{letter-spacing:-.028em}
+    .actions{margin-top:34px;gap:9px}
+    .go,.alt{padding:14px 20px;font-size:13.5px}
+    .chrome .tiny span{display:none}
+    .foot{flex-direction:column;gap:8px;text-align:center}
+  }
+</style>
+</head>
+<body>
+<div class="ground"></div><div class="bloom"></div><div class="grain"></div>
+
+<div class="page">
+  <header class="chrome in d1">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="lcore" cx="35%" cy="30%" r="74%">
+            <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#9BD0FF"/>
+            <stop offset="100%" stop-color="#2E7ACB"/>
+          </radialGradient>
+          <linearGradient id="larc" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff"/><stop offset="100%" stop-color="#5AA9FF"/>
+          </linearGradient>
+        </defs>
+        <circle cx="16" cy="16" r="11" fill="none" stroke="#5AA9FF" stroke-width="1.5" opacity=".22"/>
+        <path d="M16 5a11 11 0 0 1 11 11" fill="none" stroke="url(#larc)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 27A11 11 0 0 1 5 16" fill="none" stroke="url(#larc)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4.1" fill="url(#lcore)"/>
+      </svg>
+      <b>Continuity</b>
+    </div>
+    <div class="tiny status"><span class="ping"></span><span>Memory stored on Walrus</span></div>
+  </header>
+
+  <main>
+    <p class="eyebrow tiny up d2">One memory · every app</p>
+    <h1 class="up d3">Never introduce<br>yourself <em>twice.</em></h1>
+    <p class="sub up d4">
+      Most assistants forget you the moment you close the tab. This one doesn't — and it
+      recognises you on <b>Telegram</b> and <b>Discord</b> too. Tell it something once.
+    </p>
+
+    <div class="actions">
+      <a class="go up d5" href="/chat" id="open">
+        Open the chat
+        <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
+          <path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7"
+            stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <a class="alt up d6" id="tg" href="https://t.me/walrusmemory_bot" target="_blank" rel="noopener">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+        Telegram
+      </a>
+      <a class="alt up d6" id="dc" href="#" target="_blank" rel="noopener" data-plain="">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.79.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.058a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.873-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .078-.01c3.928 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .79.009c.12.099.246.198.373.292a.077.077 0 0 1-.7.128 12.3 12.3 0 0 1-1.873.891.077.077 0 0 0-.4.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .84.029 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.055c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.029zM8.02 15.331c-1.182 0-2.157-1.086-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.211 0 2.176 1.095 2.157 2.42 0 1.332-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.332-.946 2.418-2.157 2.418z"/></svg>
+        Discord
+      </a>
+    </div>
+    <p class="carry" id="carry" hidden></p>
+    <p class="aside-link"><a id="dcinstall" href="#" target="_blank" rel="noopener">Or add the bot to your own Discord server →</a></p>
+  </main>
+
+  <footer class="foot in d6">
+    <span class="tiny">Answered by an open-weight model · never Claude or GPT</span>
+    <span class="tiny"><a href="https://walrus.xyz" target="_blank" rel="noopener">Walrus mainnet</a></span>
+  </footer>
+</div>
+
+<script>
+  // Fade the page out before navigating, so entering the chat feels continuous
+  // rather than like a hard document swap.
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.getElementById("open").addEventListener("click", (e) => {
+    if (reduced || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    document.body.classList.add("leaving");
+    setTimeout(() => { location.href = "/chat"; }, 320);
+  });
+
+  // Point the surface buttons at whatever this deployment is actually running.
+  let botUser = "walrusmemory_bot";
+  fetch("/api/stats").then((r) => r.json()).then((s) => {
+    botUser = s.botUsername ?? botUser;
+    document.getElementById("tg").href = "https://t.me/" + botUser;
+    // The pill joins the server the bot already lives in — which is also what
+    // makes DMing it possible at all, since Discord blocks DMs between people
+    // who share no server. Installing it elsewhere is a separate, later want,
+    // so it sits underneath as a quiet link.
+    const dc = document.getElementById("dc");
+    if (s.discordInvite) dc.href = s.discordInvite;
+    else dc.style.display = "none";
+
+    const install = document.getElementById("dcinstall");
+    if (s.discordInstall) install.href = s.discordInstall;
+    else install.parentElement.style.display = "none";
+
+    carryMemoryOver();
+  }).catch(carryMemoryOver);
+
+  /**
+   * If this visitor has already been chatting here, their Telegram link should
+   * carry them over rather than starting a stranger.
+   *
+   * Without this, someone who chats on the web, comes back to the homepage and
+   * taps Telegram becomes a second person with a second, empty memory — the two
+   * halves of the same user, never introduced. Telegram takes the code in the
+   * deep link, so that one is automatic. Discord has no equivalent, so the code
+   * is shown to paste.
+   */
+  async function carryMemoryOver() {
+    let userId = null;
+    try { userId = localStorage.getItem("ws8-user"); } catch {}
+    if (!userId) return;
+
+    // Who they are and what they've connected, before anything is written —
+    // the greeting below needs the name, and fetching it in parallel meant the
+    // line was composed before the name arrived and never included it.
+    const me = await fetch("/api/memory?userId=" + encodeURIComponent(userId))
+      .then((r) => r.json())
+      .catch(() => null);
+
+    const name = me?.name ?? null;
+    const connected = me?.connected ?? [];
+    const missing = ["telegram", "discord"].filter((c) => !connected.includes(c));
+
+    if (name) document.querySelector(".eyebrow").textContent = `Welcome back, ${name}`;
+    if (connected.length > 1 && !missing.length) {
+      document.querySelector(".sub").innerHTML =
+        "You're connected everywhere — <b>web</b>, <b>Telegram</b> and <b>Discord</b> all reach the same memory. " +
+        "Pick whichever you feel like.";
+    }
+
+    let data;
+    try {
+      const res = await fetch("/api/link/code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (res.status !== 200) return; // 204: nothing stored for this browser yet
+      data = await res.json();
+    } catch { return; }
+    if (!data?.code) return;
+
+    document.getElementById("tg").href = `https://t.me/${botUser}?start=${data.code}`;
+    const dc = document.getElementById("dc");
+    dc.dataset.code = data.code;
+
+    // Say who we think they are, and only offer what they haven't connected.
+    const who = name ? `Welcome back, ${name}.` : "We've talked before.";
+    const carry = document.getElementById("carry");
+
+    if (!missing.length) {
+      carry.innerHTML = `${who} Every app below reaches the same memory — no code needed.`;
+    } else if (missing.includes("telegram") && missing.includes("discord")) {
+      carry.innerHTML =
+        `${who} Telegram will pick up where we left off automatically. ` +
+        `On Discord, send <b>/link ${data.code}</b> (good for 10 minutes).`;
+    } else if (missing.includes("telegram")) {
+      carry.innerHTML = `${who} Telegram will pick up where we left off automatically.`;
+    } else {
+      carry.innerHTML = `${who} On Discord, send <b>/link ${data.code}</b> (good for 10 minutes).`;
+    }
+    carry.hidden = false;
+  }
+
+  // Copy the code on the way to Discord, since it has to be pasted by hand.
+  document.getElementById("dc").addEventListener("click", () => {
+    const code = document.getElementById("dc").dataset.code;
+    if (code) navigator.clipboard?.writeText(`/link ${code}`).catch(() => {});
+  });
+
+  // Warm the chat page so the transition lands on something already fetched.
+  addEventListener("load", () => {
+    const l = document.createElement("link");
+    l.rel = "prefetch"; l.href = "/chat";
+    document.head.appendChild(l);
+  });
+</script>
+</body>
+</html>

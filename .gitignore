@@ -1,0 +1,9 @@
+node_modules/
+.env
+.DS_Store
+site/dist/
+.env.railway
+outbox.json
+outbox.json.tmp
+blob-ledger.jsonl
+known-namespaces.json
