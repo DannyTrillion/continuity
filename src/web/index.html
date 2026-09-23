@@ -24,7 +24,7 @@
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;background:var(--void);color:var(--ink);font:15px/1.6 var(--sans);
-    -webkit-font-smoothing:antialiased;overflow:hidden}
+    -webkit-font-smoothing:antialiased}
 
   /* The ceramic/suede ground, then a cool bloom on top of it. */
   .ground{position:fixed;inset:0;z-index:0;pointer-events:none;
@@ -39,7 +39,7 @@
   .grain{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
 
-  .page{position:relative;z-index:1;height:100%;display:flex;flex-direction:column;
+  .page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;
     padding:26px 30px;transition:opacity .34s var(--ease),transform .34s var(--ease)}
   body.leaving .page{opacity:0;transform:translateY(-10px)}
 
@@ -91,6 +91,23 @@
   .aside-link a:hover{color:var(--soft);border-bottom-color:var(--edge-2)}
   .carry{margin:20px 0 0;font-size:12.5px;color:var(--dim);max-width:46ch;line-height:1.6}
   .carry b{color:var(--ink);font:500 13px ui-monospace,Menlo,monospace;letter-spacing:.08em}
+  /* Deliberately not an icon grid of category names. Each one is the moment the
+     memory pays off, which is the only part anybody cares about. */
+  .cases{max-width:920px;margin:0 auto;padding:96px 0 84px}
+  .cases .tiny{margin:0 0 34px;text-align:center}
+  .caselist{display:grid;gap:1px;background:var(--edge);border:1px solid var(--edge);
+    border-radius:var(--r);overflow:hidden;grid-template-columns:1fr 1fr}
+  .caselist article{background:#080B10;padding:30px 30px 32px;transition:background .3s var(--ease)}
+  .caselist article:hover{background:#0B0F16}
+  .caselist h2{margin:0 0 9px;font:400 19px var(--display);letter-spacing:-.012em}
+  .caselist p{margin:0;color:var(--dim);font-size:14px;line-height:1.66}
+  .casenote{max-width:56ch;margin:34px auto 0;text-align:center;color:var(--faint);
+    font-size:13px;line-height:1.7}
+  .scrollcue{display:block;margin:34px auto 0;color:var(--faint);font-size:11.5px;
+    letter-spacing:.14em;text-transform:uppercase;background:none;border:0;cursor:pointer;
+    font-family:var(--mono);transition:color .25s var(--ease)}
+  .scrollcue:hover{color:var(--soft)}
+
   .foot{display:flex;align-items:center;justify-content:space-between;gap:16px;flex:none}
 
   /* ── entrance ── */
@@ -105,6 +122,10 @@
     .page,.go,.alt,.go svg{transition:none}
   }
 
+  @media (max-width:860px){
+    .caselist{grid-template-columns:1fr}
+    .cases{padding:72px 0 64px}
+  }
   @media (max-width:760px){
     body{overflow:auto}
     .page{padding:20px 18px 26px;min-height:100%}
@@ -170,8 +191,38 @@
       </a>
     </div>
     <p class="carry" id="carry" hidden></p>
+    <button class="scrollcue up d6" id="scrollcue">What it's for ↓</button>
     <p class="aside-link"><a id="dcinstall" href="#" target="_blank" rel="noopener">Or add the bot to your own Discord server →</a></p>
   </main>
+
+  <section class="cases" id="cases">
+    <p class="tiny">What changes when it remembers</p>
+    <div class="caselist">
+      <article>
+        <h2>Learning something hard</h2>
+        <p>It knows you never got comfortable with recursion, so it stops explaining
+          everything else as though you did.</p>
+      </article>
+      <article>
+        <h2>Getting unstuck</h2>
+        <p>You described your setup once, three weeks ago, on a different app. Nobody
+          asks you to describe it again.</p>
+      </article>
+      <article>
+        <h2>A community helpdesk</h2>
+        <p>Someone asks in Discord what they already asked in a DM. Same person, same
+          thread, no repetition.</p>
+      </article>
+      <article>
+        <h2>Anything long-running</h2>
+        <p>You mentioned in March that you don't eat meat. It's November and that
+          hasn't quietly expired.</p>
+      </article>
+    </div>
+    <p class="casenote">The memory is a set of blobs on Walrus owned by your account —
+      not a row in someone's database. That's why it can follow you between apps that
+      know nothing about each other.</p>
+  </section>
 
   <footer class="foot in d6">
     <span class="tiny">Answered by an open-weight model · never Claude or GPT</span>
@@ -281,6 +332,13 @@
   document.getElementById("dc").addEventListener("click", () => {
     const code = document.getElementById("dc").dataset.code;
     if (code) navigator.clipboard?.writeText(`/link ${code}`).catch(() => {});
+  });
+
+  document.getElementById("scrollcue").addEventListener("click", () => {
+    document.getElementById("cases").scrollIntoView({
+      behavior: reduced ? "auto" : "smooth",
+      block: "start",
+    });
   });
 
   // Warm the chat page so the transition lands on something already fetched.

@@ -223,6 +223,38 @@ export async function rememberFact(namespace, text, { idempotencyKey, timeoutMs 
   return { blobId, id: res.id, namespace, pending: false };
 }
 
+/**
+ * Write many facts in one request.
+ *
+ * The relayer batches these server-side — embedding and encrypting in parallel,
+ * then collapsing what would be N separate transaction sets into roughly one.
+ * Writing twenty statements one at a time meant twenty mainnet round trips at
+ * 30-120s each; this is a single call.
+ *
+ * Max 20 per call, so callers hand over whatever they have and it is split.
+ */
+export async function rememberMany(namespace, texts, { timeoutMs = 300_000 } = {}) {
+  const items = texts.filter(Boolean).map((text) => ({ text, namespace }));
+  const out = [];
+
+  for (let i = 0; i < items.length; i += 20) {
+    const batch = items.slice(i, i + 20);
+    const res = await withRetry(
+      "rememberBulk",
+      () => memwal.rememberBulkAndWait(batch, { timeoutMs }),
+      { retries: 2, budgetMs: timeoutMs + 60_000 },
+    );
+    for (const r of res?.results ?? []) {
+      if (r.blob_id) {
+        rememberNamespace(r.namespace ?? namespace);
+        count("blobs");
+      }
+      out.push({ blobId: r.blob_id || null, status: r.status, error: r.error });
+    }
+  }
+  return out;
+}
+
 /** Resolve a write that timed out earlier. Never re-sends the text. */
 export async function resolvePending(jobId) {
   const s = await withRetry("status", () => memwal.getRememberStatus(jobId));
