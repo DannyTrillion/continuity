@@ -162,6 +162,36 @@ already been sent to the user, so nothing surfaces the loss.
 
 ---
 
+## Bug 4 — bulk writes report failure as a value nobody checks
+
+**Severity:** medium. Silent data loss, same family as the two above.
+
+`rememberBulkAndWait()` **resolves** when individual items fail — the failures
+are entries inside `results`, not an exception. Any caller with retry logic
+wrapped around the call never sees them, and a caller that counts successes
+loses the rest without a word.
+
+Seeding a knowledge base, 190 statements went in and 113 landed. Nothing threw.
+The 77 that vanished only became visible after we started inspecting every
+result entry, and the cause was transient and eminently retryable:
+
+```
+failed: Upstream Unavailable: Memory encryption backend is unavailable
+timeout: polling timed out after 300000ms
+```
+
+Both cleared on a retry seconds later.
+
+**Suggested fix:** either reject when every item in a batch fails, or document
+prominently that per-item status must be inspected. The current shape means the
+happy path and the 40%-data-loss path look identical to a caller.
+
+**Workaround:** `rememberMany()` in [`src/core/memory.mjs`](../src/core/memory.mjs)
+inspects every entry and retries the failures itself with backoff, because the
+outer retry wrapper cannot see a failure that arrives as a value.
+
+---
+
 ## Minor — client sends malformed bodies instead of validating
 
 `rememberAndWait` is positional (`text, namespace`). Passing the object form

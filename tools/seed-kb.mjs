@@ -75,6 +75,10 @@ async function extract(part, page) {
         "- Impersonal. Never write \"User\", \"You\" or \"Assistant\" — write about Walrus, the CLI, the publisher, the relayer.\n" +
         "- Self-contained. Each line must make sense alone, so name the thing: \"Walrus storage epochs...\" not \"They last...\".\n" +
         "- Concrete only: commands, flags, limits, error causes, defaults, URLs. Skip marketing and navigation.\n" +
+        "- Qualify anything that differs by network. Walrus epoch length, publisher\n" +
+        "  availability and costs are not the same on Mainnet and Testnet, and a fact\n" +
+        "  stored without saying which one is worse than no fact: it will be recalled\n" +
+        "  months later with no context and contradict its neighbour.\n" +
         "- Never invent a command, flag or number that is not in the text.\n" +
         "- At most 10 lines. Fewer is fine if the text is thin.",
     },
@@ -116,6 +120,15 @@ for (const url of urls) {
   console.log(`\n${page.title}\n  ${url}\n  ${page.text.length} chars → ${parts.length} chunk(s)`);
 
   for (const [i, part] of parts.entries()) {
+    // Identity of a chunk is its own text, so edits to the docs re-seed and
+    // an unchanged page costs nothing at all.
+    const chunkKey = `chunk:${keyOf(url + "#" + part)}`;
+    if (seeded.has(chunkKey)) {
+      console.log(`  chunk ${i + 1}: already seeded`);
+      skipped++;
+      continue;
+    }
+
     try {
       const statements = await extract(part, page);
 
@@ -146,6 +159,11 @@ for (const url of urls) {
       saveLedger();
       blobs += ok.length;
 
+      if (ok.length === written.length) {
+        seeded.add(chunkKey); // only mark the chunk done when all of it landed
+        saveLedger();
+      }
+
       const lost = written.length - ok.length;
       console.log(
         `  chunk ${i + 1}: ${fresh.length} statement(s), ${ok.length} stored` +
@@ -157,7 +175,7 @@ for (const url of urls) {
   }
 }
 
-console.log(`\n${facts} new statement(s), ${blobs} stored, ${skipped} already present in ${KB_NS}`);
+console.log(`\n${facts} new statement(s), ${blobs} stored, ${skipped} chunk(s)/statement(s) skipped — ${KB_NS}`);
 const check = await recall(KB_NS, "publisher returns 403 when storing a blob", { limit: 3 });
 console.log(`spot check — "publisher 403" recalls ${check.length}:`);
 for (const h of check) console.log(`  • ${h.text.slice(0, 110)}`);

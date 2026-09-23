@@ -114,7 +114,16 @@ export async function handleTurn({
     Promise.all(namespaces.map((ns) =>
       recall(ns, "who this person is: their name, work, setup and preferences", { limit: 5, maxTokens: 400 }),
     )),
-    recall(KB_NS, message, { limit: 4, maxTokens: 400 }),
+    // The shared knowledge base is supplementary, and it is the biggest
+    // namespace we have — big enough that a slow recall can exhaust its budget
+    // and throw. Sitting in the same Promise.all as the personal recall, that
+    // would reject the whole turn: a slow handbook would look like the bot
+    // being down. Personal recall is NOT given this treatment; if we cannot
+    // read who someone is, failing loudly beats greeting them as a stranger.
+    recall(KB_NS, message, { limit: 4, maxTokens: 400 }).catch((err) => {
+      console.warn("[agent] knowledge base recall skipped:", err.message.slice(0, 90));
+      return [];
+    }),
     Promise.all(links.map((u) => readPage(u))),
   ]);
 
