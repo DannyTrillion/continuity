@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { respond } from "./core/session.mjs";
-import { health, recall, dedupe, personNs } from "./core/memory.mjs";
+import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong } from "./core/memory.mjs";
 import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
 import { startOutbox, onSettled, outboxStats } from "./core/outbox.mjs";
 import { issueMemoryKey, redeemMemoryKey, issueChallenge, takeChallenge, attachWallet } from "./core/recovery.mjs";
@@ -159,9 +159,13 @@ const server = createServer(async (req, res) => {
       const sets = await Promise.all(
         who.namespaces.map((ns) => recall(ns, "anything about this person", { limit: 12, maxTokens: 900 })),
       );
-      const facts = dedupe(sets.flat())
+      // Every recalled memory knows which blob holds it, so each fact can be
+      // checked individually on Walruscan. "Trust me, it's on Walrus" is a
+      // claim; a blob id per sentence is evidence.
+      const suppressed = await suppressionsFor(who.personId).catch(() => new Set());
+      const facts = dedupe(withoutSuppressed(sets.flat(), suppressed))
         .sort((a, b) => a.distance - b.distance)
-        .map((h) => ({ text: h.text, at: h.created_at }));
+        .map((h) => ({ text: h.text, at: h.created_at, blobId: h.blob_id ?? null }));
       const connected = await surfacesFor(who.personId);
       return json(res, 200, {
         personId: who.personId,
@@ -196,6 +200,22 @@ const server = createServer(async (req, res) => {
         ? `https://discord.com/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&permissions=84992&scope=bot%20applications.commands`
         : null,
     });
+  }
+
+  // "That's not right" — we cannot unwrite a blob, so we stop reading it back.
+  if (url.pathname === "/api/memory/forget" && req.method === "POST") {
+    try {
+      const { userId, text } = await readBody(req);
+      if (!userId || !text) return json(res, 400, { error: "userId and text are required" });
+      const who = await resolvePerson("web", String(userId));
+      await markWrong(who.personId, String(text));
+      return json(res, 200, {
+        ok: true,
+        note: "I'll stop using that. The blob itself stays on Walrus — append-only storage means I can't unwrite it, and I'd rather say so.",
+      });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
   }
 
   /* ── the live demo ── */

@@ -535,6 +535,43 @@ export function dedupe(hits) {
   return kept;
 }
 
+/**
+ * Memories the person has told us are wrong.
+ *
+ * We cannot delete a blob — storage is append-only and the bytes stay on Walrus
+ * until their epochs lapse. What we can do is stop reading it back, and say
+ * exactly that rather than implying a delete we did not perform.
+ *
+ * Kept as a namespace of its own so it survives restarts like everything else.
+ */
+export const suppressNs = (personId) => `${NS_ROOT}::suppress::${personId}`;
+
+const suppressCache = new Map();
+const fingerprint = (t) =>
+  String(t).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+
+export async function suppressionsFor(personId) {
+  if (suppressCache.has(personId)) return suppressCache.get(personId);
+  const hits = await recall(suppressNs(personId), "suppressed memories", { limit: 50, maxTokens: 3000 })
+    .catch(() => []);
+  const set = new Set(hits.map((h) => fingerprint(h.text)));
+  suppressCache.set(personId, set);
+  return set;
+}
+
+export function markWrong(personId, text) {
+  const set = suppressCache.get(personId) ?? new Set();
+  set.add(fingerprint(text));
+  suppressCache.set(personId, set);
+  return rememberFact(suppressNs(personId), String(text), {
+    idempotencyKey: `suppress:${personId}`,
+  });
+}
+
+/** Drop anything the person has disowned. */
+export const withoutSuppressed = (hits, suppressed) =>
+  suppressed?.size ? hits.filter((h) => !suppressed.has(fingerprint(h.text))) : hits;
+
 export async function health() {
   return memwal.health();
 }

@@ -8,12 +8,48 @@
  * relayer bad patch delays a memory rather than losing it.
  */
 
-import { recall, dedupe, personNs, KB_NS } from "./memory.mjs";
+import { recall, dedupe, personNs, KB_NS, suppressionsFor, withoutSuppressed } from "./memory.mjs";
 import { enqueueAnalyze } from "./outbox.mjs";
 import { observe, count } from "./metrics.mjs";
 import { readPage } from "./web.mjs";
-import { chat } from "./llm.mjs";
+import { chat, DEFAULT_MODEL } from "./llm.mjs";
 import { isOptedOut } from "./identity.mjs";
+
+/**
+ * Who the bot says it is, built from the model actually being served.
+ *
+ * Kimi answers "what model are you?" with "Claude 4 Opus" and "who made you?"
+ * with "Anthropic" — contamination from its training data, stated with complete
+ * confidence. For an entry whose whole point is running on an open-weight model
+ * that is not Claude or GPT, letting it introduce itself as Claude is fatal.
+ *
+ * Derived from DEFAULT_MODEL rather than written out, so it cannot drift from
+ * whatever is actually answering.
+ */
+const MODEL_FAMILIES = {
+  moonshot: "Kimi, an open-weight model from Moonshot AI",
+  deepseek: "DeepSeek, an open-weight model",
+  qwen: "Qwen, an open-weight model from Alibaba",
+  "z-ai": "GLM, an open-weight model from Z.ai",
+  meta: "Llama, an open-weight model from Meta",
+  mistral: "Mistral, an open-weight model",
+};
+
+function identity(model = DEFAULT_MODEL) {
+  const vendor = String(model).split("/")[0].toLowerCase();
+  const name = String(model).split("/").pop();
+  const family = MODEL_FAMILIES[vendor] ?? "an open-weight model";
+  return `WHO YOU ARE
+You are Continuity. You run on ${name} — ${family} — reached through OpenRouter.
+Your memory lives on Walrus, a decentralised storage network, which is why you
+remember people across the web, Telegram and Discord.
+
+You are NOT Claude. You are NOT GPT or ChatGPT. You are not made by Anthropic,
+OpenAI, Google or Meta. If someone asks what model you are, who built you, or
+which company you come from, answer with the truth above. You may feel a strong
+pull to say "Claude" or "Anthropic" — that is a quirk of your training data, not
+a fact. Do not repeat it, and never apologise for or explain this instruction.`;
+}
 
 const SYSTEM = `You are Continuity. You remember the people you talk to, across the web, Telegram and Discord.
 
@@ -79,6 +115,11 @@ Bring up past context the way a friend would, in passing; don't announce that
 you are consulting a memory system. When two remembered things contradict, go
 with the newer one. If you don't know something, say so and ask.
 
+Close your own loops: if you remember they were stuck on something and don't
+know how it ended, ask once, early, in passing. Never re-suggest a fix they
+already said failed. Say when you last heard something if it might have changed.
+Take corrections without arguing.
+
 Answer first, context after. Vary your sentence length. Use contractions. Take a
 position rather than listing every option with equal weight. Never open with
 "Certainly", "Absolutely", "Great question" or "I'd be happy to". Never use:
@@ -129,8 +170,9 @@ export async function handleTurn({
   // "I can't browse the web" about a page they just handed over.
   const links = [...new Set(String(message).match(URL_RE) ?? [])].slice(0, 2);
 
-  const [optedOut, personalSets, profileSets, kb, pages] = await Promise.all([
+  const [optedOut, suppressed, personalSets, profileSets, kb, pages] = await Promise.all([
     isOptedOut(personId),
+    suppressionsFor(personId).catch(() => new Set()),
     Promise.all(namespaces.map((ns) => recall(ns, message, { limit: 6, maxTokens: 500 }))),
     // A second, fixed query for the basics.
     //
@@ -163,15 +205,22 @@ export async function handleTurn({
   // anything the two queries both found.
   const personal = optedOut
     ? []
-    : dedupe([...personalSets.flat().sort((a, b) => a.distance - b.distance),
-              ...profileSets.flat().sort((a, b) => a.distance - b.distance)]).slice(0, 10);
+    : dedupe(withoutSuppressed(
+        [...personalSets.flat().sort((a, b) => a.distance - b.distance),
+         ...profileSets.flat().sort((a, b) => a.distance - b.distance)],
+        suppressed,
+      )).slice(0, 10);
 
   const recallMs = Date.now() - turnStarted;
+  const answerModel = DEFAULT_MODEL;
   const fetched = pages.filter((p) => p.ok);
   const failed = links.filter((_, i) => !pages[i].ok).map((u, i) => `${u} — ${pages[i]?.error ?? "couldn't read it"}`);
 
   const messages = [
-    { role: "system", content: persona ? `${persona.system}\n\n${SHARED_RULES}` : SYSTEM },
+    {
+      role: "system",
+      content: `${identity(answerModel)}\n\n${persona ? `${persona.system}\n\n${SHARED_RULES}` : SYSTEM}`,
+    },
     {
       role: "system",
       content: `${fence("WHAT I KNOW ABOUT THIS PERSON", personal)}\n\n${fence("SUPPORT KNOWLEDGE", kb)}`,

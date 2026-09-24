@@ -311,6 +311,25 @@
     animation:rise .3s both}
   .memlist .memo time{display:block;margin-top:6px;font-size:11px;color:var(--faint)}
   .memlist .nothing{padding:20px;text-align:center;color:var(--faint);font-size:13px}
+  .grouphead{margin:16px 0 8px;font:500 10.5px var(--sans);letter-spacing:.13em;
+    text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:8px}
+  .grouphead:first-child{margin-top:0}
+  .grouphead span{padding:2px 7px;border-radius:999px;background:rgba(255,255,255,.07);
+    font:500 10px var(--mono);letter-spacing:0}
+  .grouphead.open{color:var(--live)}
+  .grouphead.open span{background:var(--live-ghost)}
+  .memlist .memo p{margin:0}
+  .memofoot{display:flex;align-items:center;gap:10px;margin-top:9px;font-size:11px;color:var(--faint)}
+  .memofoot time{font-size:11px}
+  .verify{color:var(--faint);border-bottom:1px solid transparent;transition:.2s}
+  .verify:hover{color:var(--live);border-bottom-color:rgba(90,169,255,.4)}
+  .wrong{margin-left:auto;background:none;border:0;color:var(--faint);font:inherit;font-size:11px;
+    cursor:pointer;padding:2px 0;border-bottom:1px dashed var(--edge-2)}
+  .wrong:hover{color:#FF8E7F;border-bottom-color:rgba(255,142,127,.5)}
+  .wrong:disabled{opacity:.5;cursor:default}
+  .memo.dropped{opacity:.42}
+  .memo.dropped p{text-decoration:line-through;text-decoration-color:var(--faint)}
+  .dropnote{color:var(--faint);font-size:11px}
   .close{margin-top:22px;width:100%;padding:12px;border-radius:999px;border:1px solid var(--edge-2);
     background:var(--glass);color:var(--soft);cursor:pointer;font-size:13.5px}
   .close:hover{background:var(--glass-2);color:#fff}
@@ -1021,12 +1040,26 @@ $("surfaces").addEventListener("click", (e) => {
   if (chip && !chip.classList.contains("on")) $("linkbtn").click();
 });
 
+/**
+ * Sort memories into the shapes people actually think in. Crude on purpose:
+ * one flat list of sentences was the weakest possible presentation of the most
+ * interesting thing here.
+ */
+const GROUPS = [
+  { id: "open", label: "Still open", test: /\b(stuck|error|failing|broken|issue|problem|can't|cannot|trying to|403|404|500)\b/i },
+  { id: "prefs", label: "Preferences", test: /\b(prefer|likes?|dislikes?|doesn't like|don't like|favourite|favorite|vegetarian|allergic|rather)\b/i },
+  { id: "about", label: "About you", test: /\b(name is|work|works|working|building|builds|runs?|uses?|studies|studying|team|deploys?)\b/i },
+];
+
+function groupOf(text) {
+  for (const g of GROUPS) if (g.test.test(text)) return g.id;
+  return "other";
+}
+
 async function openMemories() {
   const list = $("memlist");
   $("memscrim").classList.add("on");
 
-  // Always re-read on open. Rendering the last cached copy meant a click before
-  // the first fetch landed said "Nothing yet" to someone it knows plenty about.
   if (!allFacts.length) {
     $("memtitle").textContent = "One moment";
     $("memsub").textContent = "Fetching what I've got.";
@@ -1035,18 +1068,69 @@ async function openMemories() {
   }
 
   $("memsub").textContent = allFacts.length
-    ? "Everything below follows you to Telegram and Discord."
+    ? "Each one is a blob on Walrus. Open any of them to check it yourself."
     : "";
   $("memtitle").textContent = allFacts.length
     ? `Here's everything — ${allFacts.length} thing${allFacts.length === 1 ? "" : "s"}`
     : "Nothing yet";
-  list.innerHTML = allFacts.length
-    ? allFacts.map((f, i) =>
-        `<div class="memo" style="animation-delay:${Math.min(i * 40, 400)}ms">${esc(secondPerson(f.text))}${
-          f.at ? `<time>${new Date(f.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time>` : ""
-        }</div>`).join("")
-    : '<div class="nothing">Tell me something and it\'ll show up here.</div>';
+
+  if (!allFacts.length) {
+    list.innerHTML = '<div class="nothing">Tell me something and it\'ll show up here.</div>';
+    return;
+  }
+
+  const buckets = new Map([["open", []], ["prefs", []], ["about", []], ["other", []]]);
+  for (const f of allFacts) buckets.get(groupOf(f.text)).push(f);
+
+  const labels = { ...Object.fromEntries(GROUPS.map((g) => [g.id, g.label])), other: "Everything else" };
+  let html = "";
+  let i = 0;
+  for (const [id, facts] of buckets) {
+    if (!facts.length) continue;
+    html += `<h4 class="grouphead${id === "open" ? " open" : ""}">${labels[id]} <span>${facts.length}</span></h4>`;
+    html += facts.map((f) => {
+      const when = f.at ? new Date(f.at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+      return `<div class="memo" style="animation-delay:${Math.min(i++ * 35, 380)}ms" data-text="${esc(f.text)}">
+        <p>${esc(secondPerson(f.text))}</p>
+        <div class="memofoot">
+          ${when ? `<time>${when}</time>` : ""}
+          ${f.blobId ? `<a class="verify" target="_blank" rel="noopener"
+             href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}"
+             title="${esc(f.blobId)}">on Walrus ↗</a>` : ""}
+          <button class="wrong" type="button">Not right</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  list.innerHTML = html;
 }
+
+// Disowning a memory stops it being read back. It cannot unwrite the blob, and
+// the confirmation says so rather than implying a delete.
+$("memlist").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".wrong");
+  if (!btn) return;
+  const card = btn.closest(".memo");
+  const text = card.dataset.text;
+  btn.disabled = true;
+  btn.textContent = "…";
+  try {
+    const r = await fetch("/api/memory/forget", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, text }),
+    }).then((r) => r.json());
+    if (r.ok) {
+      card.classList.add("dropped");
+      card.querySelector(".memofoot").innerHTML = '<span class="dropnote">Won\'t use this again</span>';
+      allFacts = allFacts.filter((f) => f.text !== text);
+      setTimeout(refreshMemory, 800);
+    } else {
+      btn.disabled = false; btn.textContent = "Not right";
+    }
+  } catch {
+    btn.disabled = false; btn.textContent = "Not right";
+  }
+});
 
 $("viewmem").addEventListener("click", openMemories);
 $("memclose").addEventListener("click", () => $("memscrim").classList.remove("on"));
