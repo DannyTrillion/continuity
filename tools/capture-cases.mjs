@@ -13,9 +13,10 @@
  * Writes src/web/cases.json. Costs WAL: each case stores real memories.
  */
 
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { respond } from "../src/core/session.mjs";
 import { lookupAccount, issueLinkCode, redeemLinkCode } from "../src/core/identity.mjs";
+import { recall, personNs } from "../src/core/memory.mjs";
 import { startOutbox, outboxStats } from "../src/core/outbox.mjs";
 
 startOutbox();
@@ -67,13 +68,29 @@ const CASES = [
   },
 ];
 
-const drain = async (limit = 240000) => {
+// Writes can sit in the outbox for minutes when the relayer is unwell, and a
+// case captured before they land is a transcript of the bot forgetting.
+const drain = async (limit = 420000) => {
   const t0 = Date.now();
   while (outboxStats().pending && Date.now() - t0 < limit) await new Promise((r) => setTimeout(r, 3000));
 };
 
 const wanted = process.argv.slice(2);
 const chosen = wanted.length ? CASES.filter((c) => wanted.includes(c.id)) : CASES;
+
+/**
+ * Re-running one case must not delete the others. Existing transcripts are
+ * loaded, the captured ones replace their own entry, and the file keeps the
+ * order the cases are declared in.
+ */
+const OUT = "src/web/cases.json";
+const existing = existsSync(OUT) ? JSON.parse(readFileSync(OUT, "utf8")) : [];
+const byId = new Map(existing.map((c) => [c.id, c]));
+
+const save = () => {
+  const ordered = CASES.map((c) => byId.get(c.id)).filter(Boolean);
+  writeFileSync(OUT, JSON.stringify(ordered, null, 2));
+};
 const out = [];
 
 for (const spec of chosen) {
@@ -92,12 +109,24 @@ for (const spec of chosen) {
   console.log("   waiting for memories to land on Walrus…");
   await drain();
 
-  // Link the two accounts the same way a person would.
+  // Show what actually landed before the handoff. A thin transcript can mean
+  // the facts were never written or that recall missed them, and those need
+  // different fixes.
   const me = await lookupAccount(spec.first.surface, firstId);
+  const stored = await recall(personNs(me.personId), "everything about this person", { limit: 12, maxTokens: 900 });
+  console.log(`   stored: ${stored.length} memor${stored.length === 1 ? "y" : "ies"}`);
+  for (const h of stored) console.log(`     · ${h.text.slice(0, 72)}`);
+
+  // Link the two accounts the same way a person would.
   const { code } = issueLinkCode(me.personId, spec.first.surface);
   const linked = await redeemLinkCode(spec.later.surface, laterId, code);
   if (!linked.ok) {
     console.log(`   link failed: ${linked.reason}`);
+    continue;
+  }
+
+  if (!stored.length) {
+    console.log("   nothing landed — skipping, run this case again");
     continue;
   }
 
@@ -110,7 +139,7 @@ for (const spec of chosen) {
     carried = (r.meta?.trace ?? []).map((t) => t.text);
   }
 
-  out.push({
+  const captured = {
     id: spec.id,
     title: spec.title,
     situation: spec.situation,
@@ -120,8 +149,10 @@ for (const spec of chosen) {
     later,
     carried,
     capturedAt: new Date().toISOString(),
-  });
-  writeFileSync("src/web/cases.json", JSON.stringify(out, null, 2));
+  };
+  byId.set(spec.id, captured);
+  out.push(captured);
+  save();
 }
 
 console.log(`\ncaptured ${out.length} case(s) → src/web/cases.json`);

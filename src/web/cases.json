@@ -1,35 +1,5 @@
 [
   {
-    "id": "learning",
-    "title": "Learning something hard",
-    "situation": "A tutor that knows what you already struggled with doesn't re-explain the easy parts, or assume you got the hard one.",
-    "firstSurface": "web",
-    "laterSurface": "telegram",
-    "first": [
-      {
-        "you": "I'm learning Rust and the borrow checker keeps rejecting my code. Ownership I think I get, but lifetimes make no sense to me.",
-        "bot": "Lifetimes are just labels the compiler uses to track how long references stay valid. The syntax looks weird, but the concept is dead simple: you can't hand out a reference that outlives the thing it points to.\n\nThe `'a` stuff? That's you telling the compiler \"these two references need to live as long as each other\" or \"this returned reference borrows from *this* argument, not that one.\" The compiler already infers most of them, which is why you only write them when things get ambiguous.\n\nCommon gotcha: returning a reference to something created inside your function. That can't work, the value dies when the function ends. The borrow checker is basically saying \"I can't prove this is safe,\" and sometimes the fix is owning the data (return `String` not `&str`) rather than fighting the annotations.\n\nGot a specific function the checker is rejecting? Post it and I can show you what's actually going on."
-      },
-      {
-        "you": "yeah the 'a syntax is where I lose it",
-        "bot": "Think of `'a` as a contract, not a duration. When you write `fn foo<'a>(x: &'a str) -> &'a str`, you're saying \"I return a reference that lives exactly as long as the input.\" The compiler checks this at call sites.\n\nThe angle brackets declare the lifetime as a generic parameter, same idea as `<T>` for types. You don't pick `'a` — the caller's context does. Your job is just describing the relationships.\n\nWhere it gets messy: multiple inputs. This says the output borrows from `x` specifically:\n\n```rust\nfn foo<'a>(x: &'a str, y: &str) -> &'a str\n```\n\nWhile this ties all three together:\n\n```rust\nfn foo<'a>(x: &'a str, y: &'a str) -> &'a str\n```\n\nMost of the time you can skip the annotations entirely. The compiler has \"lifetime elision\" rules — three patterns it recognizes automatically. You only write `'a` when your function's signature breaks one of those patterns.\n\nWhat code are you looking at that forced you to use explicit lifetimes?"
-      }
-    ],
-    "later": [
-      {
-        "you": "can you explain lifetimes to me?",
-        "bot": "Every reference in Rust has a lifetime: the span where the thing it points to stays alive. The borrow checker just makes sure you never use a reference after that thing dies.\n\nLifetimes aren't types. They're more like compile-time tags that track \"this borrow depends on that data.\" The `'a` syntax lets you name these dependencies when the compiler can't figure them out on its own.\n\nThree cases where you actually need to write them:\n\n**One input, one output** — usually elided, but explicit it's:\n```rust\nfn first<'a>(s: &'a str) -> &'a str\n```\nOutput lives as long as input. Obvious.\n\n**Two inputs, pick which one**:\n```rust\nfn longest<'a>(x: &'a str, y: &str) -> &'a str\n```\nHere `y` is borrowed for the call only. Return value is tied to `x`.\n\n**Structs holding references**:\n```rust\nstruct Parser<'a> {\n    text: &'a str,\n}\n```\nThe parser can't outlive the string it borrows.\n\nThe key insight: lifetimes don't change how long anything lives. They only describe relationships so the compiler can verify safety."
-      }
-    ],
-    "carried": [
-      "User is learning Rust",
-      "User's code is being rejected by the borrow checker in Rust",
-      "User finds lifetimes in Rust confusing",
-      "User understands ownership in Rust"
-    ],
-    "capturedAt": "2026-09-23T23:52:27.218Z"
-  },
-  {
     "id": "unstuck",
     "title": "Getting unstuck",
     "situation": "You describe your setup once. Nobody asks you to describe it again, on any app, ever.",
@@ -38,52 +8,49 @@
     "first": [
       {
         "you": "I'm on Node 22 on a Mac, deploying a Walrus Site with site-builder, and the publisher returns 403 every time.",
-        "bot": "I'm being rate-limited right now. Give it a few seconds and ask me again."
+        "bot": "That's the aggregator rejecting your upload, not the Walrus nodes themselves. The default publisher in `site-builder` config often points at a public aggregator with rate limits or IP blocks, and 403 is their way of saying no.\n\nCheck your `site-builder.yaml`. If `publisher_url` is something like `https://aggregator.walrus-testnet.walrus.space` or similar, that's the problem. You need a publisher that actually accepts writes.\n\nOptions:\n\n- Run your own Walrus node with publisher enabled\n- Use a different publisher endpoint you have access to\n- If you're on testnet, the Sui/Walrus faucet might give you a publisher URL, or check the Discord for working endpoints\n\nWhat's your current `publisher_url` set to?"
       },
       {
         "you": "I already tried a different publisher URL and regenerated my wallet, no luck",
-        "bot": "Still hitting the same error? What's the actual message you're getting?\n\nAnd just to confirm, you're on Testnet, right? The public publishers are Testnet-only, so if you're pointed at Mainnet that's your problem right there."
+        "bot": "I'm being rate-limited right now. Give it a few seconds and ask me again."
       }
     ],
     "later": [
       {
         "you": "ok I'm back. what should I try next?",
-        "bot": "Let's check the three things that actually matter. \n\nFirst: in your Walrus dashboard, is the key you're using listed under the exact account you're trying to use? Account ID has to match character for character.\n\nSecond: which relayer URL are you pointing at? Testnet and mainnet have different ones, and mixing them up causes auth failures. Testnet is `https://relayer-staging.memory.walrus.xyz`, mainnet is `https://relayer.memory.walrus.xyz`.\n\nThird: did you create the account in the same environment you're now trying to use it in?\n\nWhat error are you seeing when it fails?"
+        "bot": "Still hitting that 403? Let's check the actual config.\n\nWhat's your `publisher_url` in `site-builder.yaml` right now? And are you targeting testnet or mainnet?\n\nThe public aggregators often block uploads. If you're on testnet, you might need to point at a specific publisher endpoint instead of the default aggregator."
       }
     ],
     "carried": [
-      "User tried a different publisher URL and regenerated their wallet, but had no luck"
+      "User is deploying a Walrus Site with site-builder",
+      "User's publisher returns a 403 error every time",
+      "User is on Node 22 on a Mac"
     ],
-    "capturedAt": "2026-09-23T23:55:30.868Z"
+    "capturedAt": "2026-09-24T00:08:04.849Z"
   },
   {
-    "id": "helpdesk",
-    "title": "A community helpdesk",
-    "situation": "Someone asks in Discord what they already asked you in a DM last week. Same person, same thread.",
-    "firstSurface": "telegram",
-    "laterSurface": "discord",
+    "id": "longrunning",
+    "title": "Something you said months ago",
+    "situation": "A preference you mentioned once doesn't quietly expire because a session ended.",
+    "firstSurface": "web",
+    "laterSurface": "telegram",
     "first": [
       {
-        "you": "we're a small team of 4, we store user uploads on Walrus and we're trying to work out storage costs before we commit",
-        "bot": "Walrus pricing is pretty straightforward once you cut through it. You're paying for storage + bandwidth, with the storage cost tied to how long you commit for.\n\nThe commit period is the big lever. One epoch is about a day, and you pay upfront for whatever you lock in. Longer commit = lower per-epoch cost. But if you overcommit and the blob expires early, you eat the difference. Undercommit and you pay for extensions.\n\nFor a team your size, the real question is your upload pattern. Hot files that get downloaded a lot? Bandwidth will dominate. Cold archival stuff? Storage commits are your focus.\n\nWhat's your rough split—mostly write-once-read-never, or do users come back to these files repeatedly? And are we talking images, documents, larger media? That changes the math a lot."
+        "you": "quick thing about me: I'm vegetarian and I really don't like coriander",
+        "bot": "I'm being rate-limited right now. Give it a few seconds and ask me again."
       },
       {
-        "you": "about 50GB to start, growing maybe 10GB a month",
-        "bot": "50 GB raw, so figure roughly 225 GB encoded (4.5x) plus per-blob overhead. If your files are small, that overhead stings—600 tiny blobs balloon to 38 GB encoded because each carries 64 MB of metadata. If you're storing 10 KB avatars individually, rethink that.\n\nAt $0.023/GB/month, your 225 GB lands around $5.18/month to start. Add 10 GB raw monthly, that's another ~$1.03 encoded. But the real swing is your blob count. Pack small files or you'll watch your bill triple on metadata.\n\nWhat's your typical file size? And are these user avatars, documents, something else?"
+        "you": "also I cook for two most nights",
+        "bot": "I'm being rate-limited right now. Give it a few seconds and ask me again."
       }
     ],
     "later": [
       {
-        "you": "what would our storage cost look like over a year?",
-        "bot": "Rough numbers, assuming your files aren't tiny (so we skip the worst of the per-blob overhead):\n\n**Month 1:** ~225 GB encoded → **~$5.18**\n**Month 12:** ~765 GB encoded → **~$17.60**\n\nYear total lands somewhere around **$130-150**, depending on how that 10 GB/month actually arrives—smooth growth vs. spikes, and whether you're packing files sensibly.\n\nThe catch: Walrus makes you commit storage epochs upfront. You're locking in time, not just space. So you'll need to estimate your growth curve and commit accordingly, or pay for extensions later.\n\nWant me to walk through how the commit periods work?"
+        "you": "what should I make for dinner tonight?",
+        "bot": "I don't have any memory of your preferences or dietary stuff, so I'm flying blind here.\n\nWhat do you have in the fridge? And are you cooking for one or feeding a crowd?"
       }
     ],
-    "carried": [
-      "User plans to start with about 50GB on Telegram, growing by maybe 10GB a month",
-      "User's team stores user uploads on Walrus",
-      "User is part of a small team of 4",
-      "User's team is trying to work out storage costs before committing"
-    ],
-    "capturedAt": "2026-09-23T23:58:56.669Z"
+    "carried": [],
+    "capturedAt": "2026-09-24T00:10:11.984Z"
   }
 ]

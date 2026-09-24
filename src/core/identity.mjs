@@ -31,7 +31,7 @@
  */
 
 import { randomUUID, randomInt } from "node:crypto";
-import { readLatest, readRecords, identityNs, personNs, profileNs } from "./memory.mjs";
+import { readLatest, readRecords, identityNs, personNs, profileNs, markNonEmpty } from "./memory.mjs";
 import { enqueueRemember } from "./outbox.mjs";
 
 const LINK_CODE_TTL_MS = 10 * 60 * 1000;
@@ -57,12 +57,18 @@ const linkCodes = new Map();
 /** personId -> boolean */
 const optOuts = new Map();
 
-const toPerson = (rec, isNew = false) => ({
-  personId: rec.personId,
-  namespaces: [personNs(rec.personId), ...(rec.mergedFrom ?? []).map(personNs)],
-  mergedFrom: rec.mergedFrom ?? [],
-  isNew,
-});
+const toPerson = (rec, isNew = false) => {
+  const namespaces = [personNs(rec.personId), ...(rec.mergedFrom ?? []).map(personNs)];
+
+  // A person who already exists has already told us things, so their memory
+  // namespaces hold data. Saying so up front matters: recall only retries the
+  // relayer's random empty responses for namespaces it knows are non-empty, and
+  // a process that has just started knows nothing. Without this, the first
+  // message after every deploy had a real chance of being met with amnesia.
+  if (!isNew) for (const ns of namespaces) markNonEmpty(ns);
+
+  return { personId: rec.personId, namespaces, mergedFrom: rec.mergedFrom ?? [], isNew };
+};
 
 /**
  * Persist a record to Walrus without making anyone wait for it. The outbox
