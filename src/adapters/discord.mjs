@@ -49,6 +49,40 @@ const COMMANDS = [
   { name: "help", description: "What I can do" },
 ];
 
+/**
+ * Edit one reply as the words arrive, rather than leaving a deferred
+ * interaction blank for the length of the turn. Discord's edit rate limits are
+ * unforgiving, so this is throttled and only fires when the text has grown.
+ */
+function streamer(edit) {
+  let sent = "";
+  let pending = "";
+  let timer = null;
+  let closed = false;
+
+  const flush = async () => {
+    timer = null;
+    if (closed || pending === sent || !pending.trim()) return;
+    const text = pending.slice(0, DISCORD_LIMIT);
+    try {
+      await edit(text);
+      sent = text;
+    } catch { /* cosmetic; the final edit is what counts */ }
+  };
+
+  return {
+    onDelta(chunk) {
+      pending += chunk;
+      if (!timer) timer = setTimeout(flush, 1300);
+    },
+    async finish(final) {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      return sent !== "";
+    },
+  };
+}
+
 /** Discord hard-caps messages at 2000 chars; split on paragraphs, not mid-word. */
 function chunk(text) {
   if (text.length <= DISCORD_LIMIT) return [text];
@@ -133,12 +167,15 @@ export async function startDiscord({ token }) {
       : "/help";
 
     try {
+      const stream = streamer((t) => interaction.editReply(t));
       const { reply, image } = await respond({
         surface: "discord",
         surfaceUserId: interaction.user.id,
         displayName: interaction.user.username,
         text,
+        onDelta: (chunk) => stream.onDelta(chunk),
       });
+      await stream.finish(reply);
       await interaction.editReply(
         image
           ? { content: chunk(reply)[0], files: [{ attachment: image.png, name: image.name ?? "shot.png" }] }
@@ -216,22 +253,40 @@ export async function startDiscord({ token }) {
 
     try {
       await msg.channel.sendTyping();
+
+      // Post a first fragment as soon as there is one and edit it as the rest
+      // arrives, rather than leaving the channel silent for the whole turn.
+      let placeholder = null;
+      const stream = streamer(async (t) => {
+        if (placeholder) await placeholder.edit(t);
+        else placeholder = await msg.reply(t);
+      });
+
       const { reply, image } = await respond({
         surface: "discord",
         surfaceUserId: msg.author.id,
         displayName: msg.author.username,
         text,
+        onDelta: (c) => stream.onDelta(c),
       });
+      await stream.finish(reply);
+
       let out = reply;
       if (!isDM && !warnedInPublic.has(msg.author.id)) {
         warnedInPublic.add(msg.author.id);
         out += `\n\n-# Everyone here can read this, and I'll remember it. DM me if you'd rather it stayed between us.`;
       }
 
+      const parts = chunk(out);
       if (image) {
-        await msg.reply({ content: chunk(out)[0], files: [{ attachment: image.png, name: image.name ?? "shot.png" }] });
+        const body = { content: parts[0], files: [{ attachment: image.png, name: image.name ?? "shot.png" }] };
+        if (placeholder) await placeholder.delete().catch(() => {});
+        await msg.reply(body);
+      } else if (placeholder) {
+        await placeholder.edit(parts[0]).catch(() => {});
+        for (const extra of parts.slice(1)) await msg.reply(extra);
       } else {
-        for (const part of chunk(out)) await msg.reply(part);
+        for (const part of parts) await msg.reply(part);
       }
     } catch (err) {
       console.error("[discord] handler error:", err.message);

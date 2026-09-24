@@ -162,6 +162,7 @@ const knownNonEmpty = new Set(
 let indexDirty = false;
 const rememberNamespace = (namespace) => {
   knownEmpty.delete(namespace);
+  profileCache.delete(namespace); // new fact — the cached profile is now stale
   if (!knownNonEmpty.has(namespace)) {
     knownNonEmpty.add(namespace);
     indexDirty = true;
@@ -360,6 +361,19 @@ export async function learnFrom(namespace, text, occurredAt = new Date()) {
 const KB_CACHE_MS = 10 * 60 * 1000;
 const kbCache = new Map();
 
+/**
+ * The profile query is the same sentence every turn, for every person, and what
+ * it returns changes only when that person says something new. Recall is the
+ * slowest part of a turn — 3 to 6 seconds against 2 to 3 for the model — so the
+ * one query we ask over and over is the obvious thing to stop repeating.
+ *
+ * Cleared as soon as a write lands in that namespace, so a new fact shows up on
+ * the very next turn rather than after a timeout.
+ */
+const PROFILE_CACHE_MS = 3 * 60 * 1000;
+const profileCache = new Map();
+export const forgetProfileCache = (namespace) => profileCache.delete(namespace);
+
 function cachedKb(query) {
   const key = String(query).toLowerCase().replace(/\s+/g, " ").trim().slice(0, 120);
   const hit = kbCache.get(key);
@@ -367,10 +381,15 @@ function cachedKb(query) {
   return { key, hits: null };
 }
 
-export async function recall(namespace, query, { limit = 8, maxTokens = 700, retries = 3 } = {}) {
+export async function recall(namespace, query, { limit = 8, maxTokens = 700, retries = 3, profile = false } = {}) {
   const shared = namespace === KB_NS;
   const cache = shared ? cachedKb(query) : null;
   if (cache?.hits) return cache.hits;
+
+  if (profile) {
+    const hit = profileCache.get(namespace);
+    if (hit && hit.until > Date.now()) return hit.hits;
+  }
   // The relayer intermittently answers a matching query with an empty result
   // set — measured at 6 empties in 14 identical calls against a namespace
   // holding 13 memories. An empty recall is indistinguishable from a namespace
@@ -402,6 +421,7 @@ export async function recall(namespace, query, { limit = 8, maxTokens = 700, ret
       rememberNamespace(namespace);
       observe("recallMs", Date.now() - started);
       if (cache) kbCache.set(cache.key, { hits, until: Date.now() + KB_CACHE_MS });
+      if (profile) profileCache.set(namespace, { hits, until: Date.now() + PROFILE_CACHE_MS });
       return hits;
     }
     // Nothing came back. Retry only if we know this namespace has content —

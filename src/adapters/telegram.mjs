@@ -26,6 +26,61 @@ async function call(token, method, body) {
 const toTelegram = (text) =>
   text.replace(/^#+\s*/gm, "").replace(/\*\*(.+?)\*\*/g, "*$1*");
 
+/**
+ * Stream a reply by editing one message as the words arrive.
+ *
+ * Telegram gives no typing feedback beyond a dot, so a ten-second turn is ten
+ * seconds of nothing. Editing a single message turns that into words appearing
+ * about two seconds in. Telegram rate-limits edits per chat, so this throttles
+ * hard and only sends when the text has actually grown.
+ */
+function streamer(token, chatId) {
+  let messageId = null;
+  let sent = "";
+  let pending = "";
+  let timer = null;
+  let closed = false;
+
+  const flush = async () => {
+    timer = null;
+    if (closed || pending === sent || !pending.trim()) return;
+    const text = pending;
+    try {
+      if (messageId === null) {
+        const msg = await call(token, "sendMessage", { chat_id: chatId, text });
+        messageId = msg.message_id;
+      } else {
+        await call(token, "editMessageText", { chat_id: chatId, message_id: messageId, text });
+      }
+      sent = text;
+    } catch {
+      // A failed edit is cosmetic; the final send below is what matters.
+    }
+  };
+
+  return {
+    onDelta(chunk) {
+      pending += chunk;
+      if (!timer) timer = setTimeout(flush, 1100);
+    },
+    async finish(final) {
+      closed = true;
+      if (timer) clearTimeout(timer);
+      if (messageId === null) return null;
+      if (final === sent) return messageId;
+      // Markdown only at the end: half-finished entities make Telegram reject
+      // the edit, and a rejected edit leaves the reply looking truncated.
+      await call(token, "editMessageText", {
+        chat_id: chatId, message_id: messageId,
+        text: toTelegram(final), parse_mode: "Markdown",
+      }).catch(() =>
+        call(token, "editMessageText", { chat_id: chatId, message_id: messageId, text: final }).catch(() => {}),
+      );
+      return messageId;
+    },
+  };
+}
+
 /** Photos go as multipart, with the caption alongside. */
 async function sendPhoto(token, chatId, image, caption) {
   const form = new FormData();
@@ -88,6 +143,7 @@ export async function startTelegram({ token }) {
               4000,
             );
 
+            const stream = streamer(token, msg.chat.id);
             let reply, image;
             try {
               ({ reply, image } = await respond({
@@ -95,13 +151,15 @@ export async function startTelegram({ token }) {
                 surfaceUserId: String(msg.from.id),
                 displayName: msg.from.username ?? msg.from.first_name,
                 text: msg.text,
+                onDelta: (chunk) => stream.onDelta(chunk),
               }));
             } finally {
               clearInterval(keepTyping);
             }
 
-            if (image) await sendPhoto(token, msg.chat.id, image, reply);
-            else await send(token, msg.chat.id, reply);
+            const streamed = await stream.finish(reply);
+            if (image) await sendPhoto(token, msg.chat.id, image, streamed ? "" : reply);
+            else if (!streamed) await send(token, msg.chat.id, reply);
           } catch (err) {
             console.error(`[telegram] update ${u.update_id} failed:`, err.message);
             await send(token, msg.chat.id, "Something went wrong handling that. Try again in a moment.")
