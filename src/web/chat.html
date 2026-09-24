@@ -169,6 +169,25 @@
   .seed:hover{border-color:var(--edge-2);color:#fff;background:var(--glass-2);transform:translateY(-2px)}
 
   .composer{flex:none;display:flex;gap:11px;align-items:flex-end;padding:16px 18px 18px}
+  .clip{width:44px;height:44px;flex:none;border-radius:50%;border:1px solid var(--edge);
+    background:rgba(0,0,0,.3);color:var(--dim);cursor:pointer;display:grid;place-items:center;
+    transition:.2s cubic-bezier(.22,.7,.28,1)}
+  .clip:hover{color:#fff;border-color:var(--edge-2);background:var(--glass-2)}
+  .clip:disabled{opacity:.4;cursor:default}
+
+  .attached{flex:none;display:flex;align-items:center;gap:11px;margin:0 18px;padding:10px 12px;
+    border:1px solid var(--edge);border-radius:var(--r-md);background:var(--glass);
+    animation:rise .25s both}
+  .attached img{width:42px;height:42px;object-fit:cover;border-radius:8px;flex:none}
+  .attached .what{flex:1;min-width:0}
+  .attached .what b{display:block;font:500 13px var(--sans);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .attached .what span{font-size:11.5px;color:var(--faint)}
+  .attached .drop{background:none;border:0;color:var(--faint);cursor:pointer;font-size:18px;
+    line-height:1;padding:4px 6px}
+  .attached .drop:hover{color:#FF8E7F}
+  .shot{display:block;margin-top:10px;border-radius:12px;overflow:hidden;border:1px solid var(--edge);max-width:280px}
+  .shot img{display:block;width:100%;height:auto}
   #input{flex:1;min-width:0;max-height:132px;padding:14px 20px;border-radius:22px;
     border:1px solid var(--edge);background:rgba(0,0,0,.32);color:var(--ink);
     font:inherit;font-size:15px;outline:none;resize:none;transition:.2s;line-height:1.5}
@@ -349,6 +368,7 @@
         <button id="savekey">Save your memory key</button>
         <button id="restorekey">I have a key already</button>
         <a id="showmem" href="/memory">Open your memory dashboard</a>
+        <a href="/history">Past conversations</a>
         <button data-say="/forgetme">Stop remembering me</button>
         <button id="newchat">Clear this conversation</button>
       </div>
@@ -369,7 +389,14 @@
           </div>
         </div>
       </div>
+      <div class="attached" id="attached" hidden></div>
       <form class="composer" id="form">
+        <input type="file" id="file" accept="image/*,.pdf,.txt,.md" hidden>
+        <button type="button" class="clip" id="clip" aria-label="Attach a file" title="Attach a file">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+            <path d="M14.5 9.2l-4.9 4.9a3 3 0 0 1-4.2-4.2l5.6-5.6a2 2 0 1 1 2.8 2.8l-5.6 5.6a1 1 0 0 1-1.4-1.4l5.1-5.1"
+              stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <textarea id="input" rows="1" placeholder="Tell me something…" aria-label="Message"></textarea>
         <button id="send" type="submit" aria-label="Send">
           <svg width="19" height="19" viewBox="0 0 19 19" fill="none">
@@ -584,7 +611,17 @@ let busy = false;
 async function ask(text, { silent = false } = {}) {
   if (busy || !text) return;
   busy = true; $("send").disabled = true;
-  if (!silent) bubble(turn("me"), esc(text));
+  const sending = pending;
+  if (!silent) {
+    const mine = bubble(turn("me"), esc(text));
+    if (sending?.url && /^image\//.test(sending.type ?? "")) {
+      mine.insertAdjacentHTML("beforeend",
+        `<a class="shot" href="${sending.url}" target="_blank" rel="noopener"><img src="${sending.url}" alt="${esc(sending.name ?? "")}"></a>`);
+    }
+  }
+  pending = null;
+  $("attached").hidden = true;
+  $("attached").innerHTML = "";
   const t = turn("bot");
   const b = bubble(t, '<span class="dots"><i></i><i></i><i></i></span>');
 
@@ -595,7 +632,7 @@ async function ask(text, { silent = false } = {}) {
     const res = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, text }),
+      body: JSON.stringify({ userId, text, attachment: pending }),
     });
     if (!res.ok || !res.body) throw new Error("stream unavailable");
 
@@ -636,7 +673,7 @@ async function ask(text, { silent = false } = {}) {
     try {
       const res = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, text }),
+        body: JSON.stringify({ userId, text, attachment: sending }),
       }).then((r) => r.json());
       b.innerHTML = fmt(res.reply ?? res.error ?? "Something went wrong.");
       if (res.image) attachImage(b, res.image, res.reply);
@@ -651,6 +688,65 @@ async function ask(text, { silent = false } = {}) {
     busy = false; $("send").disabled = false; $("input").focus();
   }
 }
+
+/* ── attachments ── */
+
+let pending = null; // { id, url, name, description, type, sawIt }
+
+$("clip").addEventListener("click", () => $("file").click());
+
+$("file").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) {
+    showAttached({ name: file.name, error: "Over 8MB — try a smaller one." });
+    return;
+  }
+
+  showAttached({ name: file.name, pending: true });
+  $("clip").disabled = true;
+  try {
+    const data = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+
+    const out = await fetch("/api/attach", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, name: file.name, type: file.type, data }),
+    }).then((r) => r.json());
+
+    if (out.error) { showAttached({ name: file.name, error: out.error }); return; }
+    pending = out;
+    showAttached(out);
+  } catch {
+    showAttached({ name: file.name, error: "Couldn't upload that." });
+  } finally {
+    $("clip").disabled = false;
+  }
+});
+
+function showAttached(a) {
+  const box = $("attached");
+  box.hidden = false;
+  const thumb = a.url && /^image\//.test(a.type ?? "") ? `<img src="${a.url}" alt="">` : "";
+  const line = a.pending ? "Looking at it…"
+    : a.error ? a.error
+    : a.sawIt ? "Read and ready to send"
+    : "Attached";
+  box.innerHTML = `${thumb}<div class="what"><b>${esc(a.name ?? "file")}</b><span>${esc(line)}</span></div>
+    <button class="drop" type="button" aria-label="Remove">×</button>`;
+}
+
+$("attached").addEventListener("click", (e) => {
+  if (!e.target.closest(".drop")) return;
+  pending = null;
+  $("attached").hidden = true;
+  $("attached").innerHTML = "";
+});
 
 const input = $("input");
 function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 132) + "px"; }
@@ -899,6 +995,36 @@ $("walletbtn").addEventListener("click", async () => {
     $("walletlabel").textContent = $("keysave").hidden ? "Sign in with a Sui wallet" : "Use a Sui wallet instead";
   }
 });
+
+/**
+ * Arriving from the conversations list: put the transcript back on screen and
+ * back into short-term context, so the next message continues the thread
+ * rather than starting a new one.
+ */
+async function reopen(id) {
+  try {
+    const r = await fetch("/api/conversations/open", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, id }),
+    }).then((r) => r.json());
+    if (!r.conversation) return;
+
+    log.innerHTML = "";
+    for (const t of r.conversation.turns) {
+      if (t.you) bubble(turn("me"), esc(t.you));
+      if (t.bot) bubble(turn("bot"), fmt(t.bot));
+    }
+    const note = document.createElement("div");
+    note.className = "resumed";
+    note.textContent = "Picking up where you left off";
+    log.appendChild(note);
+    scroll(true);
+    history.replaceState(null, "", "/chat");
+  } catch { /* a failed reopen just leaves a fresh chat */ }
+}
+
+const convoParam = new URLSearchParams(location.search).get("convo");
+if (convoParam) reopen(convoParam);
 
 /* ── live panels ── */
 let knownFacts = new Set();

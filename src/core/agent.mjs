@@ -156,6 +156,10 @@ export async function handleTurn({
   // The demo turns this off when the hourly quota runs low: still answers from
   // memory, just stops adding to it.
   remember = true,
+  // What the person attached to this message, already described by a model
+  // that can see. Walrus Memory stores text, so the description is what
+  // becomes a memory; the file itself is just served back.
+  attachment = null,
 }) {
   // Every read this turn needs happens at once. Checking the opt-out first and
   // then starting recall put two round trips end to end on the path to the
@@ -224,6 +228,13 @@ export async function handleTurn({
   const fetched = pages.filter((p) => p.ok);
   const failed = links.filter((_, i) => !pages[i].ok).map((u, i) => `${u} — ${pages[i]?.error ?? "couldn't read it"}`);
 
+  const attached = attachment?.description
+    ? `THE PERSON ATTACHED SOMETHING TO THIS MESSAGE (a model looked at it and ` +
+      `described it; treat the description as what they showed you, and quote ` +
+      `anything exact — errors, URLs, numbers — back to them precisely):\n\n` +
+      `${attachment.name ? `"${attachment.name}" — ` : ""}${attachment.description}`
+    : null;
+
   const messages = [
     {
       role: "system",
@@ -237,6 +248,7 @@ export async function handleTurn({
     // put anything on a web page, including instructions aimed at whatever
     // model reads it. Fenced hard, and the model is told to treat it as quoted
     // material rather than as something addressing it.
+    ...(attached ? [{ role: "system", content: attached }] : []),
     ...(fetched.length
       ? [{
           role: "system",
@@ -268,7 +280,10 @@ export async function handleTurn({
   // can be used"), which would then be recalled later as things the user had
   // told us. A memory of what we guessed is worse than no memory.
   if (!optedOut && remember) {
-    const utterance = `On ${surface}, the user said: ${message}`;
+    // The attachment is part of what they said, so it goes into memory with it.
+    const utterance = attached
+      ? `On ${surface}, the user said: ${message}\nThey attached ${attachment.name ? `"${attachment.name}"` : "a file"}, which showed: ${attachment.description}`
+      : `On ${surface}, the user said: ${message}`;
     enqueueAnalyze(personNs(personId), utterance, new Date(), surface);
   }
 
@@ -277,6 +292,7 @@ export async function handleTurn({
     model: answer.model,
     fellBack: answer.fellBack ?? false,
     recalled: { personal: personal.length, kb: kb.length },
+    attachment: attachment ? { url: attachment.url, name: attachment.name, sawIt: attachment.sawIt } : null,
     read: fetched.map((p) => ({ url: p.url, title: p.title })),
     // The exact memories behind this answer. Surfaced so the console can show
     // its work — a recall trace is the difference between "it remembered" and

@@ -9,6 +9,7 @@
 import { resolvePerson } from "./identity.mjs";
 import { handleCommand } from "./commands.mjs";
 import { handleTurn } from "./agent.mjs";
+import { record as recordTurn } from "./conversations.mjs";
 
 const HISTORY_TURNS = 6;
 
@@ -16,6 +17,20 @@ const histories = new Map(); // personId -> [{role, content}]
 
 const person = (surface, surfaceUserId, displayName) =>
   resolvePerson(surface, surfaceUserId, { displayName });
+
+/**
+ * Reopen a past conversation: put its last few turns back into short-term
+ * context so the next message continues it rather than starting over.
+ */
+export function resume(personId, turns) {
+  const flat = [];
+  for (const t of turns.slice(-HISTORY_TURNS)) {
+    if (t.you) flat.push({ role: "user", content: t.you });
+    if (t.bot) flat.push({ role: "assistant", content: t.bot });
+  }
+  histories.set(personId, flat);
+  return flat.length;
+}
 
 /** Short-term conversational context. Walrus holds the long term; this is just the last few turns. */
 function history(personId) {
@@ -31,7 +46,7 @@ function pushHistory(personId, userText, replyText) {
  * Handle one inbound message from any surface.
  * Returns `{ reply, meta }`; never throws for ordinary failures.
  */
-export async function respond({ surface, surfaceUserId, displayName, text, onDelta, persona, remember = true }) {
+export async function respond({ surface, surfaceUserId, displayName, text, onDelta, persona, remember = true, attachment }) {
   const trimmed = (text ?? "").trim();
   if (!trimmed) return { reply: "Say something and I'll answer.", meta: {} };
 
@@ -88,8 +103,10 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
       onDelta,
       persona,
       remember,
+      attachment,
     });
     pushHistory(who.personId, trimmed, turn.text);
+    recordTurn(who.personId, surface, trimmed, turn.text);
     return { reply: turn.text, meta: { ...turn, personId: who.personId } };
   } catch (err) {
     console.error(`[${surface}] turn failed:`, err.message);

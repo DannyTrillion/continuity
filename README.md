@@ -82,6 +82,59 @@ Then: tell it something on one surface, `/link` to another, and ask it there.
 | [tools/shot.mjs](tools/shot.mjs) | Screenshots the running UI, for designing against what it really looks like |
 | [docs/memwal-feedback.md](docs/memwal-feedback.md) | Bugs and improvements found while building |
 
+## Attachments
+
+An image cannot itself be a memory: Walrus Memory stores text, and every write
+method on the SDK takes a string. What can be a memory is a *description* — and
+a good one outlives the file. "A 403 from publisher.walrus.space with an empty
+Authorization header" is worth carrying to Telegram; the PNG is not.
+
+So an attachment takes two paths. A small vision model reads the image and the
+description goes into memory like anything else said in that conversation,
+which means it crosses surfaces and shows up in recall. The bytes are kept and
+served back separately.
+
+Worth being precise about what is durable: **the description is on Walrus, the
+file is on disk.** On a platform with an ephemeral filesystem the file does not
+survive a redeploy and the memory of it does. Putting the bytes on Walrus too
+needs either a publisher (there are no public unauthenticated publishers on
+Mainnet) or `rememberManual()`, which accepts SEAL-encrypted bytes and an
+embedding you generate yourself — a second implementation of the memory layer
+rather than a flag to flip.
+
+## Conversations
+
+Transcripts live in their own namespace, apart from memories, because the two
+want different handling: a memory is a fact worth keeping forever and gets
+extracted, deduped and recalled semantically, while a transcript is read whole
+and in order.
+
+One blob per conversation, not per turn — writing every message would double
+the cost of a turn against an hourly quota that is already tight. A conversation
+saves itself once it goes quiet, and on `SIGTERM`, so a redeploy does not eat
+what is in flight.
+
+## What's next (v2)
+
+The direction this is heading, after the hackathon submission: an AI workspace
+rather than a chat window, where conversations, memories, files and things the
+assistant makes for you all hang off the same identity.
+
+- **Files as first-class memories.** The `rememberManual()` path — SEAL
+  encryption and embeddings generated client-side — so a PDF or an image is
+  itself a blob the account owns, not just a description of one.
+- **Things the assistant creates.** Ask for a to-do list and get a real page,
+  saved under *What I Created*, openable and editable later. This needs the
+  model to call tools rather than only answer, plus somewhere durable for the
+  artefacts and a way to version them.
+- **Spaces.** Sections a person or the assistant can create to group related
+  conversations, files and artefacts.
+
+The hard part is not the UI. It is that an artefact is mutable and Walrus is
+append-only, so editing a page means superseding it — the same problem identity
+records already have, at a larger size and with a version history people expect
+to be able to walk back through.
+
 ## Running it
 
 ```bash

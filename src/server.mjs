@@ -12,9 +12,14 @@ import { respond } from "./core/session.mjs";
 import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, findConflicts } from "./core/memory.mjs";
 import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
 import { startOutbox, onSettled, outboxStats } from "./core/outbox.mjs";
+import { list as listConversations, get as getConversation, flushAll } from "./core/conversations.mjs";
+import { resume } from "./core/session.mjs";
 import { issueMemoryKey, redeemMemoryKey, issueChallenge, takeChallenge, attachWallet } from "./core/recovery.mjs";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { snapshot } from "./core/metrics.mjs";
+import { describeImage, canSee } from "./core/vision.mjs";
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile as writeFileAsync } from "node:fs/promises";
 import { noteWrite, provenanceFor, provenanceStats } from "./core/provenance.mjs";
 import { personaList, getPersona } from "./core/personas.mjs";
 import { demoAllowance, recordDemoTurn, budgetSnapshot } from "./core/budget.mjs";
@@ -25,6 +30,7 @@ import { startDiscord } from "./adapters/discord.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 8080);
 const LEDGER = process.env.LEDGER_PATH ?? join(here, "..", "blob-ledger.jsonl");
+const UPLOADS = process.env.UPLOADS_PATH ?? join(here, "..", "uploads");
 
 /**
  * Every confirmed write, appended with its blob id. This is the receipt rule
@@ -104,12 +110,14 @@ const json = (res, code, body) => {
   res.end(JSON.stringify(body));
 };
 
-const readBody = (req) =>
+// 100KB is right for a chat message and far too small for a file: an ordinary
+// screenshot arrives as several megabytes of base64. The cap is per-route now.
+const readBody = (req, maxBytes = 100_000) =>
   new Promise((resolve, reject) => {
     let raw = "";
     req.on("data", (c) => {
       raw += c;
-      if (raw.length > 100_000) reject(new Error("body too large"));
+      if (raw.length > maxBytes) reject(new Error("That's too large to send in one message."));
     });
     req.on("end", () => {
       try {
@@ -265,6 +273,103 @@ const server = createServer(async (req, res) => {
         ok: true,
         note: "I'll stop using that. The blob itself stays on Walrus — append-only storage means I can't unwrite it, and I'd rather say so.",
       });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
+  }
+
+  /* ── attachments ── */
+
+  /**
+   * An image cannot be a memory: Walrus Memory stores text. What CAN be a
+   * memory is a description of it, and a good one outlives the file — "a 403
+   * from publisher.walrus.space with no Authorization header" is worth
+   * carrying to Telegram, the PNG is not.
+   *
+   * So the bytes are kept and served back, and the description goes into
+   * memory like anything else said in the conversation.
+   */
+  if (url.pathname === "/api/attach" && req.method === "POST") {
+    try {
+      const { userId, name, type, data, hint } = await readBody(req, 12 * 1024 * 1024);
+      if (!userId || !data) return json(res, 400, { error: "userId and data are required" });
+
+      const bytes = Buffer.from(String(data).replace(/^data:[^,]+,/, ""), "base64");
+      if (bytes.length > 8 * 1024 * 1024) {
+        return json(res, 413, { error: "That file is over 8MB. Try a smaller one." });
+      }
+
+      const ext = (String(name ?? "").match(/\.([a-z0-9]{1,5})$/i)?.[1] ?? "bin").toLowerCase();
+      const id = randomUUID();
+      await mkdir(UPLOADS, { recursive: true });
+      await writeFileAsync(join(UPLOADS, `${id}.${ext}`), bytes);
+      const fileUrl = `/uploads/${id}.${ext}`;
+
+      let description = null;
+      let sawIt = false;
+      if (canSee(type)) {
+        const seen = await describeImage(`data:${type};base64,${bytes.toString("base64")}`, { hint });
+        if (seen.ok) { description = seen.description; sawIt = true; }
+        else description = `an image the assistant could not read (${seen.error})`;
+      } else {
+        description = `a ${ext.toUpperCase()} file named "${name ?? "untitled"}" (${Math.round(bytes.length / 1024)}KB)`;
+      }
+
+      return json(res, 200, { id, url: fileUrl, name: name ?? null, type: type ?? null, description, sawIt });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
+  // Files are served back from disk. On a platform with an ephemeral
+  // filesystem these do not survive a redeploy — the DESCRIPTION does, because
+  // that lives on Walrus, which is the part that had to be durable.
+  const upload = url.pathname.match(/^\/uploads\/([\w.-]+)$/);
+  if (upload) {
+    try {
+      const body = await readFile(join(UPLOADS, upload[1]));
+      const ext = upload[1].split(".").pop().toLowerCase();
+      const type = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+        webp: "image/webp", pdf: "application/pdf", txt: "text/plain", md: "text/markdown" }[ext];
+      res.writeHead(200, { "Content-Type": type ?? "application/octet-stream", "Cache-Control": "public, max-age=86400" });
+      return res.end(body);
+    } catch {
+      return json(res, 404, { error: "That file is no longer here." });
+    }
+  }
+
+  /* ── past conversations ── */
+
+  if (url.pathname === "/api/conversations") {
+    const userId = url.searchParams.get("userId");
+    if (!userId) return json(res, 400, { error: "userId is required" });
+    try {
+      const who = await resolvePerson("web", userId);
+      const all = await listConversations(who.personId);
+      // The list only needs enough to recognise a conversation by.
+      return json(res, 200, {
+        conversations: all.map((c) => ({
+          id: c.id, title: c.title, surface: c.surface,
+          startedAt: c.startedAt, endedAt: c.endedAt,
+          turns: c.turns.length, live: Boolean(c.live), blobId: c.blobId ?? null,
+        })),
+      });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
+  }
+
+  // Reopening one puts it back into short-term context, so the next message
+  // continues the thread instead of starting a new one.
+  if (url.pathname === "/api/conversations/open" && req.method === "POST") {
+    try {
+      const { userId, id } = await readBody(req);
+      if (!userId || !id) return json(res, 400, { error: "userId and id are required" });
+      const who = await resolvePerson("web", String(userId));
+      const convo = await getConversation(who.personId, String(id));
+      if (!convo) return json(res, 404, { error: "No such conversation." });
+      const restored = resume(who.personId, convo.turns);
+      return json(res, 200, { conversation: convo, restored });
     } catch (err) {
       return json(res, 503, { error: err.message });
     }
@@ -459,12 +564,13 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === "/api/chat" && req.method === "POST") {
     try {
-      const { userId, text } = await readBody(req);
+      const { userId, text, attachment } = await readBody(req);
       if (!userId || !text) return json(res, 400, { error: "userId and text are required" });
       const out = await respond({
         surface: "web",
         surfaceUserId: String(userId),
         text: String(text),
+        attachment,
       });
       return json(res, 200, withImage(out));
     } catch (err) {
@@ -477,6 +583,7 @@ const server = createServer(async (req, res) => {
     "/": "index.html", "/index.html": "index.html",
     "/demo": "demo.html", "/demo.html": "demo.html",
     "/memory": "memory.html", "/memory.html": "memory.html",
+    "/history": "history.html", "/history.html": "history.html",
     "/chat": "chat.html", "/chat.html": "chat.html",
     "/use-cases": "use-cases.html", "/use-cases.html": "use-cases.html",
   };
@@ -522,6 +629,16 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => console.log(`[web] listening on :${PORT}`));
+
+// A conversation in progress is only in memory until it goes quiet. On a
+// redeploy that would lose it, so save everything in flight on the way out.
+for (const signal of ["SIGTERM", "SIGINT"]) {
+  process.on(signal, async () => {
+    console.log(`[web] ${signal} — saving conversations in progress`);
+    await flushAll().catch(() => {});
+    process.exit(0);
+  });
+}
 
 /**
  * Bring a surface up, and keep trying.

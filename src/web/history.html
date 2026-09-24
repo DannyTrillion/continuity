@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Past conversations — Continuity</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#05070A; --ink:#F2F6FA; --soft:#C3CEDB; --dim:#8695A6; --faint:#5A6674;
+    --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.19);
+    --glass:rgba(255,255,255,.05); --glass-2:rgba(255,255,255,.085);
+    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.12); --wal:#7FE3D4;
+    --r:20px; --r-md:15px; --r-sm:11px;
+    --ease:cubic-bezier(.22,.7,.28,1);
+    --display:'Outfit',system-ui,sans-serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--void);color:var(--ink);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+  .ground,.bloom,.grain{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .ground{background-image:url("/assets/texture.jpg");background-size:cover;background-position:center;opacity:.9}
+  .bloom{background:radial-gradient(1000px 540px at 82% -14%, rgba(90,169,255,.14), transparent 62%)}
+  .grain{opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
+  a{color:inherit;text-decoration:none}
+
+  .wrap{position:relative;z-index:1;max-width:900px;margin:0 auto;padding:24px 22px 80px}
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:34px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+  .brand b{font:500 16px var(--display)}
+  .brand:hover{opacity:.75}
+  .tiny{font:400 10.5px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+  .cta{padding:10px 19px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
+    font:600 13px var(--sans);transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
+  .cta:hover{transform:translateY(-1px);box-shadow:0 14px 30px -14px rgba(255,255,255,.5)}
+
+  h1{margin:0 0 8px;font:200 clamp(28px,4.2vw,40px)/1.1 var(--display);letter-spacing:-.028em}
+  h1 em{font-style:normal;font-weight:400;background:linear-gradient(96deg,#fff 20%,var(--live) 130%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{margin:0 0 26px;color:var(--soft);font-size:14.5px;max-width:60ch;line-height:1.7}
+
+  .search{display:flex;align-items:center;gap:9px;padding:10px 15px;border-radius:999px;
+    background:rgba(0,0,0,.32);border:1px solid var(--edge);margin-bottom:18px}
+  .search input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:14px;outline:none}
+  .search input::placeholder{color:var(--faint)}
+
+  .list{display:flex;flex-direction:column;gap:10px}
+  .convo{display:block;border:1px solid var(--edge);border-radius:var(--r-md);padding:16px 18px;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.018) 50%);
+    transition:border-color .22s var(--ease),transform .22s var(--ease);cursor:pointer;
+    animation:rise .35s var(--ease) both}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .convo:hover{border-color:var(--edge-2);transform:translateY(-1px)}
+  .convo h2{margin:0;font:500 15.5px var(--sans);line-height:1.45}
+  .meta{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;font-size:11px;color:var(--faint)}
+  .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+    border:1px solid var(--edge);background:rgba(0,0,0,.26)}
+  .pill.live{border-color:rgba(90,169,255,.35);color:var(--live)}
+  .pill.wal{border-color:rgba(127,227,212,.3);color:var(--wal)}
+  .preview{margin:11px 0 0;font-size:13px;color:var(--dim);line-height:1.6;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .empty,.loading{padding:50px 20px;text-align:center;color:var(--faint);font-size:14px}
+  .foot{margin-top:40px;padding-top:22px;border-top:1px solid var(--edge);
+    display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  @media (prefers-reduced-motion:reduce){.convo{animation:none;transition:none}}
+</style>
+</head>
+<body>
+<div class="ground"></div><div class="bloom"></div><div class="grain"></div>
+
+<div class="wrap">
+  <nav class="top">
+    <a class="brand" href="/">
+      <svg width="26" height="26" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="hcore" cx="35%" cy="30%" r="74%">
+            <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#9BD0FF"/>
+            <stop offset="100%" stop-color="#2E7ACB"/></radialGradient>
+          <linearGradient id="harc" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff"/><stop offset="100%" stop-color="#5AA9FF"/></linearGradient>
+        </defs>
+        <circle cx="16" cy="16" r="11" fill="none" stroke="#5AA9FF" stroke-width="1.5" opacity=".22"/>
+        <path d="M16 5a11 11 0 0 1 11 11" fill="none" stroke="url(#harc)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 27A11 11 0 0 1 5 16" fill="none" stroke="url(#harc)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4.1" fill="url(#hcore)"/>
+      </svg>
+      <b>Continuity</b>
+    </a>
+    <span class="tiny">Past conversations</span>
+    <a class="cta" href="/chat">New conversation</a>
+  </nav>
+
+  <h1>Everything you've<br><em>talked about.</em></h1>
+  <p class="sub">Open any of these and carry on where you stopped — on any app. Each one is stored
+    on Walrus alongside the memories it produced.</p>
+
+  <label class="search">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.4" stroke="#5A6674" stroke-width="1.3"/><path d="M9.4 9.4L12.5 12.5" stroke="#5A6674" stroke-width="1.3" stroke-linecap="round"/></svg>
+    <input id="q" placeholder="Search your conversations…" autocomplete="off">
+  </label>
+
+  <div class="list" id="list"><p class="loading">Reading from Walrus…</p></div>
+
+  <footer class="foot">
+    <span class="tiny">A conversation saves itself once it goes quiet</span>
+    <span class="tiny"><a href="/memory">What it remembers →</a></span>
+  </footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const userId = (() => { try { return localStorage.getItem("ws8-user"); } catch { return null; } })();
+const SURFACE = { web: "Web", telegram: "Telegram", discord: "Discord", demo: "Demo" };
+
+let all = [], query = "";
+
+function when(iso) {
+  if (!iso) return "";
+  const d = new Date(iso), now = new Date();
+  const mins = Math.round((now - d) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
+  if (mins < 60 * 24 * 7) return `${Math.round(mins / 1440)}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function render() {
+  const shown = query ? all.filter((c) => c.title.toLowerCase().includes(query)) : all;
+  if (!shown.length) {
+    $("list").innerHTML = `<p class="empty">${query ? "Nothing matches that." :
+      'No conversations yet. <a href="/chat" style="color:var(--live)">Start one →</a>'}</p>`;
+    return;
+  }
+  $("list").innerHTML = shown.map((c, i) => `
+    <a class="convo" href="/chat?convo=${encodeURIComponent(c.id)}" style="animation-delay:${Math.min(i * 40, 320)}ms">
+      <h2>${esc(c.title)}</h2>
+      <div class="meta">
+        <span class="pill">${when(c.endedAt)}</span>
+        <span class="pill">${SURFACE[c.surface] ?? c.surface}</span>
+        <span class="pill">${c.turns} turn${c.turns === 1 ? "" : "s"}</span>
+        ${c.live ? '<span class="pill live">in progress</span>' : ""}
+        ${c.blobId ? '<span class="pill wal">on Walrus</span>' : ""}
+      </div>
+    </a>`).join("");
+}
+
+$("q").addEventListener("input", (e) => { query = e.target.value.trim().toLowerCase(); render(); });
+
+(async () => {
+  if (!userId) {
+    $("list").innerHTML = '<p class="empty">This browser hasn\'t talked to it yet. <a href="/chat" style="color:var(--live)">Start a conversation →</a></p>';
+    return;
+  }
+  try {
+    const r = await fetch("/api/conversations?userId=" + encodeURIComponent(userId)).then((r) => r.json());
+    if (r.error) throw new Error(r.error);
+    all = r.conversations ?? [];
+    render();
+  } catch (err) {
+    $("list").innerHTML = `<p class="empty">Couldn't read your conversations. ${esc(err.message ?? "")}</p>`;
+  }
+})();
+</script>
+</body>
+</html>
