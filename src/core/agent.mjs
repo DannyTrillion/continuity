@@ -111,9 +111,12 @@ export async function handleTurn({
     // five, looking like amnesia at the exact moment someone tests its memory.
     // This keeps a baseline of who the person is in context regardless of what
     // they just said.
-    Promise.all(namespaces.map((ns) =>
-      recall(ns, "who this person is: their name, work, setup and preferences", { limit: 5, maxTokens: 400 }),
-    )),
+    // Only the primary namespace gets the profile query. A merged one belongs
+    // to the same person and is covered by the message-specific recall above;
+    // querying both doubled the request cost of every turn for very little.
+    recall(namespaces[0], "who this person is: their name, work, setup and preferences", {
+      limit: 5, maxTokens: 400,
+    }).then((hits) => [hits]),
     // The shared knowledge base is supplementary, and it is the biggest
     // namespace we have — big enough that a slow recall can exhaust its budget
     // and throw. Sitting in the same Promise.all as the personal recall, that

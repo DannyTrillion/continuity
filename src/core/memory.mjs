@@ -348,7 +348,29 @@ export async function learnFrom(namespace, text, occurredAt = new Date()) {
  * so a recency weight buys very little and costs a footgun. Newest-wins reads
  * go through `readLatest` and its server-side `sort: "recent"` instead.
  */
+/**
+ * Answers for the shared knowledge base, cached in memory.
+ *
+ * Every turn spends several weighted requests — identity, personal recall,
+ * profile recall, the handbook, then the writes — against an account limit of
+ * 1000 an hour. The handbook is the one that repeats: it is the same corpus for
+ * everybody and only changes when it is re-seeded, so asking it the same
+ * question twice in ten minutes is pure waste.
+ */
+const KB_CACHE_MS = 10 * 60 * 1000;
+const kbCache = new Map();
+
+function cachedKb(query) {
+  const key = String(query).toLowerCase().replace(/\s+/g, " ").trim().slice(0, 120);
+  const hit = kbCache.get(key);
+  if (hit && hit.until > Date.now()) return { key, hits: hit.hits };
+  return { key, hits: null };
+}
+
 export async function recall(namespace, query, { limit = 8, maxTokens = 700, retries = 3 } = {}) {
+  const shared = namespace === KB_NS;
+  const cache = shared ? cachedKb(query) : null;
+  if (cache?.hits) return cache.hits;
   // The relayer intermittently answers a matching query with an empty result
   // set — measured at 6 empties in 14 identical calls against a namespace
   // holding 13 memories. An empty recall is indistinguishable from a namespace
@@ -379,6 +401,7 @@ export async function recall(namespace, query, { limit = 8, maxTokens = 700, ret
     if (hits.length) {
       rememberNamespace(namespace);
       observe("recallMs", Date.now() - started);
+      if (cache) kbCache.set(cache.key, { hits, until: Date.now() + KB_CACHE_MS });
       return hits;
     }
     // Nothing came back. Retry only if we know this namespace has content —

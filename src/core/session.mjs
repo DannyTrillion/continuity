@@ -35,7 +35,21 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
   const trimmed = (text ?? "").trim();
   if (!trimmed) return { reply: "Say something and I'll answer.", meta: {} };
 
-  let who = await person(surface, surfaceUserId, displayName);
+  let who;
+  try {
+    who = await person(surface, surfaceUserId, displayName);
+  } catch (err) {
+    // Without this the adapter reports a generic failure, and on a bad day
+    // an unreadable identity is how someone becomes a stranger.
+    console.error(`[${surface}] could not resolve identity:`, err.message);
+    return {
+      reply:
+        err?.status === 429
+          ? "I can't reach my memory right now — too many requests at once. Give it a minute and I'll know you again."
+          : "I can't reach my memory right now. Give it a moment and try again.",
+      meta: { error: err.message, rateLimited: err?.status === 429 },
+    };
+  }
 
   if (trimmed.startsWith("/")) {
     let cmd;
@@ -77,17 +91,23 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
     return { reply: turn.text, meta: { ...turn, personId: who.personId } };
   } catch (err) {
     console.error(`[${surface}] turn failed:`, err.message);
-    // Name what went wrong. "Something broke" tells the person nothing and
-    // makes a passing network blip look like the bot is unreliable.
-    const network = !err?.status;
+
+    // Being unable to READ someone's memory is not the same as not knowing
+    // them, and the reply has to make that distinction. Answering as though we
+    // had never met would be a lie about the one thing this bot is for.
     const rateLimited = err?.status === 429;
+    const wait = err?.retryAfterSeconds;
+    const network = !err?.status;
+
     return {
       reply: rateLimited
-        ? "I'm being rate-limited right now. Give it a few seconds and ask me again."
+        ? `I can't reach my memory right now — too many requests at once. ` +
+          `I still know who you are, I just can't read it back this second. ` +
+          `Try me again in ${wait ? (wait >= 60 ? `${Math.round(wait / 60)} minutes` : `${wait} seconds`) : "a minute"}.`
         : network
           ? "I lost my connection partway through that. Ask me again — I still know who you are."
-          : "That one didn't go through. Ask me again in a moment.",
-      meta: { error: err.message, personId: who.personId },
+          : "I couldn't get to my memory just then. Ask me again in a moment — nothing's lost.",
+      meta: { error: err.message, personId: who.personId, rateLimited },
     };
   }
 }
