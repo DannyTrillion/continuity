@@ -15,6 +15,8 @@ import { startOutbox, onSettled, outboxStats } from "./core/outbox.mjs";
 import { issueMemoryKey, redeemMemoryKey, issueChallenge, takeChallenge, attachWallet } from "./core/recovery.mjs";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { snapshot } from "./core/metrics.mjs";
+import { personaList, getPersona } from "./core/personas.mjs";
+import { demoAllowance, recordDemoTurn, budgetSnapshot } from "./core/budget.mjs";
 import { DEFAULT_MODEL } from "./core/llm.mjs";
 import { startTelegram } from "./adapters/telegram.mjs";
 import { startDiscord } from "./adapters/discord.mjs";
@@ -196,6 +198,77 @@ const server = createServer(async (req, res) => {
     });
   }
 
+  /* ── the live demo ── */
+
+  if (url.pathname === "/api/demo/personas") {
+    return json(res, 200, { personas: personaList(), budget: budgetSnapshot() });
+  }
+
+  // A visitor is a real person with real memories, kept on its own surface so
+  // demo traffic never mixes with people using the actual web chat.
+  if (url.pathname === "/api/demo/chat" && req.method === "POST") {
+    try {
+      const { personaId, visitorId, text } = await readBody(req);
+      const persona = getPersona(String(personaId));
+      if (!persona || !visitorId || !text) {
+        return json(res, 400, { error: "personaId, visitorId and text are required" });
+      }
+
+      const allowance = demoAllowance(String(visitorId));
+      if (!allowance.allowed) {
+        return json(res, 429, {
+          error:
+            allowance.turnsLeft === 0
+              ? "That's the demo limit for this hour — it shares a quota with the live bot. Open the real chat to keep going."
+              : "The hourly quota is nearly spent. Try again shortly.",
+          allowance,
+        });
+      }
+
+      const out = await respond({
+        surface: "demo",
+        surfaceUserId: `${persona.id}:${visitorId}`,
+        text: String(text),
+        persona,
+        // Under pressure the demo still answers from memory, it just stops
+        // adding to it. Saying so beats quietly forgetting the visitor.
+        remember: allowance.write,
+      });
+
+      recordDemoTurn(String(visitorId), { wrote: allowance.write });
+      return json(res, 200, {
+        ...withImage(out),
+        remembering: allowance.write,
+        allowance: demoAllowance(String(visitorId)),
+      });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
+  }
+
+  // Carry a demo conversation onto Telegram, which is the whole point.
+  if (url.pathname === "/api/demo/link" && req.method === "POST") {
+    try {
+      const { personaId, visitorId } = await readBody(req);
+      const persona = getPersona(String(personaId));
+      if (!persona || !visitorId) return json(res, 400, { error: "personaId and visitorId are required" });
+
+      const me = await lookupAccount("demo", `${persona.id}:${visitorId}`);
+      if (!me) return json(res, 409, { error: "Say something first — there's nothing to carry over yet." });
+
+      const { code, expiresInMinutes } = issueLinkCode(me.personId, "demo");
+      const bot = process.env.TELEGRAM_BOT_USERNAME ?? "walrusmemory_bot";
+      return json(res, 200, {
+        code,
+        expiresInMinutes,
+        telegram: `https://t.me/${bot}?start=${code}`,
+        discord: process.env.DISCORD_INVITE_URL ?? null,
+      });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
+  }
+
   /* ── carrying an existing web session onto another app ── */
 
   // A link code without going through the chat, so the landing page can hand a
@@ -330,6 +403,7 @@ const server = createServer(async (req, res) => {
 // "/" is the landing page; "/chat" is the app itself.
   const PAGES = {
     "/": "index.html", "/index.html": "index.html",
+    "/demo": "demo.html", "/demo.html": "demo.html",
     "/chat": "chat.html", "/chat.html": "chat.html",
     "/use-cases": "use-cases.html", "/use-cases.html": "use-cases.html",
   };

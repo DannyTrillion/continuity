@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const pages = ["index.html", "chat.html", "use-cases.html"];
+const pages = ["index.html", "chat.html", "use-cases.html", "demo.html"];
 let failed = 0;
 
 for (const page of pages) {

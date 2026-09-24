@@ -31,7 +31,7 @@ function pushHistory(personId, userText, replyText) {
  * Handle one inbound message from any surface.
  * Returns `{ reply, meta }`; never throws for ordinary failures.
  */
-export async function respond({ surface, surfaceUserId, displayName, text, onDelta }) {
+export async function respond({ surface, surfaceUserId, displayName, text, onDelta, persona, remember = true }) {
   const trimmed = (text ?? "").trim();
   if (!trimmed) return { reply: "Say something and I'll answer.", meta: {} };
 
@@ -86,6 +86,8 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
       history: history(who.personId),
       surface,
       onDelta,
+      persona,
+      remember,
     });
     pushHistory(who.personId, trimmed, turn.text);
     return { reply: turn.text, meta: { ...turn, personId: who.personId } };

@@ -1,0 +1,9 @@
+node_modules
+.env
+.env.railway
+outbox.json
+outbox.json.tmp
+known-namespaces.json
+kb-seeded.json
+blob-ledger.jsonl
+.git

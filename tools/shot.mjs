@@ -25,7 +25,8 @@ await page.setViewport({ width: Number(w), height: Number(h), deviceScaleFactor:
 if (process.env.AS_USER) {
   await page.evaluateOnNewDocument((id) => localStorage.setItem("ws8-user", id), process.env.AS_USER);
 }
-await page.goto("http://localhost:8080" + (process.env.PATH_ ?? "/"), { waitUntil: "networkidle2", timeout: 45000 });
+const BASE = process.env.BASE ?? "http://localhost:8080";
+await page.goto(BASE + (process.env.PATH_ ?? "/"), { waitUntil: "networkidle2", timeout: 60000 });
 // Let fonts, live panels and entry animations settle. Memory panels wait on a
 // Walrus recall, so WAIT buys them time when shooting a populated state.
 await new Promise((r) => setTimeout(r, Number(process.env.WAIT ?? 2500)));
