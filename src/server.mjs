@@ -328,7 +328,11 @@ const server = createServer(async (req, res) => {
   }
 
 // "/" is the landing page; "/chat" is the app itself.
-  const PAGES = { "/": "index.html", "/index.html": "index.html", "/chat": "chat.html", "/chat.html": "chat.html" };
+  const PAGES = {
+    "/": "index.html", "/index.html": "index.html",
+    "/chat": "chat.html", "/chat.html": "chat.html",
+    "/use-cases": "use-cases.html", "/use-cases.html": "use-cases.html",
+  };
   if (PAGES[url.pathname]) {
     try {
       const html = await readFile(join(here, "web", PAGES[url.pathname]));
@@ -336,6 +340,17 @@ const server = createServer(async (req, res) => {
       return res.end(html);
     } catch {
       return json(res, 500, { error: "page not built" });
+    }
+  }
+
+  // The captured transcripts behind the use-cases page.
+  if (url.pathname === "/cases.json") {
+    try {
+      const body = await readFile(join(here, "web", "cases.json"));
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" });
+      return res.end(body);
+    } catch {
+      return json(res, 200, []); // not captured yet
     }
   }
 
