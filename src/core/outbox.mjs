@@ -122,8 +122,10 @@ async function attempt(job) {
       );
       emit({ job, ok: false, error: err.message });
     } else {
-      // 5s, 10s, 20s … capped at 10 minutes.
-      const delay = Math.min(5000 * 2 ** (job.attempts - 1), 10 * 60 * 1000);
+      // 5s, 10s, 20s … capped at 10 minutes — unless the relayer named a wait,
+      // in which case it knows better than the backoff curve does.
+      const asked = (err.retryAfterSeconds ?? 0) * 1000;
+      const delay = Math.max(asked, Math.min(5000 * 2 ** (job.attempts - 1), 10 * 60 * 1000));
       job.nextAt = Date.now() + delay;
       console.warn(
         `[outbox] ${job.kind} to ${job.namespace} failed (attempt ${job.attempts}), retrying in ${Math.round(delay / 1000)}s: ${err.message.slice(0, 120)}`,

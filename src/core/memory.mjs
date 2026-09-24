@@ -108,6 +108,17 @@ async function withRetry(label, fn, { retries = 2, budgetMs = 30_000 } = {}) {
       lastErr = err;
       if (!isTransient(err) || attempt === retries) throw err;
       const hinted = err.retryAfterSeconds ? err.retryAfterSeconds * 1000 : 0;
+
+      // When the relayer states a wait, honour it. The account limit is 1000
+      // weighted requests an hour and a breach comes back asking for 300
+      // seconds; capping that to six and trying again is how a brief throttle
+      // becomes a sustained one. Nothing on a request path should wait that
+      // long, so give up here and let the outbox retry on its own horizon.
+      if (hinted > 15_000) {
+        console.warn(`[memory] ${label}: relayer asked for ${Math.round(hinted / 1000)}s — not retrying inline`);
+        throw err;
+      }
+
       // Jitter: synchronised retries from several surfaces are how a wobble
       // becomes a thundering herd.
       const backoff = Math.min(Math.max(hinted, 400 * 2 ** attempt), 6000) * (0.7 + Math.random() * 0.6);

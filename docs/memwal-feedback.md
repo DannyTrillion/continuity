@@ -192,6 +192,28 @@ outer retry wrapper cannot see a failure that arrives as a value.
 
 ---
 
+## Operational — the account rate limit is easy to hit and undocumented in the SDK
+
+`1000 weighted-requests/hour` per account (`layer: account_sustained`), returned
+as a 429 with `retry_after_seconds: 300`.
+
+Seeding a few hundred knowledge-base facts and capturing a dozen conversations
+reached it inside an hour, and the symptoms before the 429 finally surfaced were
+indirect: writes that never landed, recalls that returned empty, jobs that timed
+out. All of which look like the flakiness described above, so the limit is easy
+to mistake for instability.
+
+Two asks: surface the weighting (what counts as a weighted request, and what a
+recall or a bulk write costs), and mention the limit in the SDK docs next to the
+methods that consume it. A caller with no visibility into its own budget cannot
+pace itself.
+
+Worth noting for anyone building on this: a chatbot spends several weighted
+requests per turn — identity read, personal recall, knowledge recall, then the
+writes — so 1000/hour is a real ceiling, not a theoretical one.
+
+---
+
 ## Minor — client sends malformed bodies instead of validating
 
 `rememberAndWait` is positional (`text, namespace`). Passing the object form
