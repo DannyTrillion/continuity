@@ -22,6 +22,8 @@ export const PERSONAS = {
       "Registrars repeat themselves constantly, because every enquiry arrives with no history. " +
       "This one carries your programme, your standing and what you already asked.",
     kb: "ws8::persona::registrar",
+    caseId: null, // no captured transcript yet
+    proof: "Tell it your programme, then ask about a deadline — it answers for YOUR programme.",
     starters: [
       "I'm a second-year on the BSc Computer Science, part-time",
       "when's the deadline to drop a module?",
@@ -66,6 +68,8 @@ deadline, answer it for THEIR programme, not in general.`,
       "Teaching works when the teacher remembers what you already struggled with. " +
       "A fresh session every time means starting from zero, forever.",
     kb: "ws8::persona::tutor",
+    caseId: "learning",
+    proof: "Say what you're stuck on, then come back and ask — it picks up from where you got stuck.",
     starters: [
       "I'm learning Rust and lifetimes confuse me",
       "explain closures like I've never seen them",
@@ -107,6 +111,8 @@ Never pretend to remember something you do not. Ask instead.`,
       "Support tickets are mostly re-explaining your setup. This one already has it, " +
       "including the things that did not work.",
     kb: "ws8::kb",
+    caseId: "unstuck",
+    proof: "Describe your setup once. It won't ask again, on any app.",
     starters: [
       "my publisher keeps returning 403",
       "how long does a blob stay stored?",
@@ -125,8 +131,8 @@ them to repeat it. If they told you a fix did not work, do not suggest it again.
 };
 
 export const personaList = () =>
-  Object.values(PERSONAS).map(({ id, name, org, tagline, why, starters }) => ({
-    id, name, org, tagline, why, starters,
+  Object.values(PERSONAS).map(({ id, name, org, tagline, why, starters, caseId, proof }) => ({
+    id, name, org, tagline, why, starters, caseId, proof,
   }));
 
 export const getPersona = (id) => PERSONAS[id] ?? null;

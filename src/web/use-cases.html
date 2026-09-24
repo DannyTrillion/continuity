@@ -57,7 +57,35 @@
     border-radius:999px;background:var(--live-ghost);border:1px solid rgba(90,169,255,.25);
     color:var(--live);font-size:12.5px}
 
-  .case{margin-top:74px;border-top:1px solid var(--edge);padding-top:44px}
+  .tabs{display:flex;gap:8px;margin:40px 0 20px;flex-wrap:wrap}
+  .tab{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:999px;border:1px solid var(--edge);background:var(--glass);
+    color:var(--dim);font:500 14px var(--sans);cursor:pointer;transition:.22s var(--ease)}
+  .tab:hover{color:var(--soft);border-color:var(--edge-2)}
+  .tab.on{background:#fff;color:#0A0D12;border-color:transparent;font-weight:600}
+
+  .role{border:1px solid var(--edge);border-radius:var(--r);padding:30px 30px 28px;
+    background:linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.022) 48%);
+    backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);animation:rise .4s var(--ease) both}
+  .role h2{margin:0 0 4px;font:400 26px/1.15 var(--display);letter-spacing:-.018em}
+  .role .org{font:400 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .role .tag{margin:14px 0 0;color:var(--soft);font-size:15px;line-height:1.7;max-width:58ch}
+  .role .why{margin:12px 0 0;color:var(--dim);font-size:14px;line-height:1.7;max-width:58ch}
+  .proof{display:flex;gap:11px;align-items:flex-start;margin:22px 0 0;padding:14px 16px;
+    border-radius:var(--r-md);background:var(--live-ghost);border:1px solid rgba(90,169,255,.25);
+    color:var(--live);font-size:13.5px;line-height:1.6}
+  .proof svg{flex:none;margin-top:2px}
+  .actions{display:flex;gap:10px;align-items:center;margin-top:24px;flex-wrap:wrap}
+  .try{display:inline-flex;align-items:center;gap:9px;padding:13px 24px;border-radius:999px;border:0;
+    background:#fff;color:#0A0D12;font:600 14px var(--sans);cursor:pointer;
+    transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
+  .try:hover{transform:translateY(-2px);box-shadow:0 18px 38px -16px rgba(255,255,255,.55)}
+  .try svg{transition:transform .25s var(--ease)}
+  .try:hover svg{transform:translateX(3px)}
+  .askthis{padding:12px 18px;border-radius:999px;border:1px solid var(--edge-2);background:var(--glass);
+    color:var(--soft);font-size:13px;cursor:pointer;transition:.22s var(--ease)}
+  .askthis:hover{background:var(--glass-2);color:#fff;border-color:var(--live)}
+
+  .case{margin-top:34px;border-top:1px solid var(--edge);padding-top:34px}
   .case h2{margin:0 0 8px;font:400 27px/1.16 var(--display);letter-spacing:-.018em}
   .case .situation{margin:0 0 30px;max-width:58ch;color:var(--dim);font-size:14.5px;line-height:1.68}
 
@@ -159,17 +187,14 @@
   </nav>
 
   <header class="lede">
-    <h1>Told once.<br><em>Known everywhere.</em></h1>
-    <p>Each of these is one person talking to Continuity on one app, then picking it up days
-      later on another. Nothing is re-explained, because nothing was forgotten.</p>
-    <span class="realnote">
-      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.6 6.8l2.6 2.6 5.2-5.6"
-        stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Real transcripts, captured from the running bot
-    </span>
+    <h1>One memory.<br><em>Three jobs.</em></h1>
+    <p>Same assistant underneath, three different roles on top. What changes isn't the
+      model — it's that each one already knows who you are, and keeps knowing when you
+      move to Telegram or Discord.</p>
   </header>
 
-  <div id="cases"><p class="loading">Loading the transcripts…</p></div>
+  <div class="tabs" id="tabs"></div>
+  <div id="pane"><p class="loading">Loading…</p></div>
 
   <footer class="foot">
     <span class="tiny">Memories stored on Walrus mainnet</span>
@@ -243,36 +268,84 @@ const panel = (when, surface, turns) => `
     <div class="thread">${thread(turns)}</div>
   </div>`;
 
-fetch("/cases.json").then((r) => r.json()).then((cases) => {
-  const box = document.getElementById("cases");
-  if (!cases.length) {
-    box.innerHTML = '<p class="empty">No transcripts captured yet.</p>';
+let personas = [], cases = [], active = null;
+
+const ICONS = {
+  registrar: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2.4 5.2L8 2.4l5.6 2.8L8 8 2.4 5.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M4.4 6.6v3.2c0 1 1.6 1.8 3.6 1.8s3.6-.8 3.6-1.8V6.6" stroke="currentColor" stroke-width="1.3"/></svg>',
+  tutor: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 3.2h4.2c.8 0 1.4.6 1.4 1.4v8c0-.7-.6-1.3-1.4-1.3H3V3.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M13.6 3.2H9.4c-.8 0-1.4.6-1.4 1.4v8c0-.7.6-1.3 1.4-1.3h4.2V3.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+  support: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.6" stroke="currentColor" stroke-width="1.3"/><path d="M6.4 6.2A1.7 1.7 0 019.6 7c0 1.1-1.6 1.3-1.6 2.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" fill="currentColor"/></svg>',
+};
+
+function render(p) {
+  active = p;
+  for (const t of document.querySelectorAll(".tab")) t.classList.toggle("on", t.dataset.id === p.id);
+
+  const transcript = cases.find((c) => c.id === p.caseId);
+  document.getElementById("pane").innerHTML = `
+    <section class="role">
+      <span class="org">${esc(p.org ?? "")}</span>
+      <h2>${esc(p.name)}</h2>
+      <p class="tag">${esc(p.tagline)}</p>
+      <p class="why">${esc(p.why)}</p>
+      <div class="proof">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 8.4l3 3 7-7"
+          stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>${esc(p.proof ?? "")}</span>
+      </div>
+      <div class="actions">
+        <a class="try" href="/demo?persona=${encodeURIComponent(p.id)}">
+          Try this one live
+          <svg width="16" height="16" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13"
+            stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        ${(p.starters ?? []).slice(0, 2).map((sx) =>
+          `<a class="askthis" href="/demo?persona=${encodeURIComponent(p.id)}&ask=${encodeURIComponent(sx)}">“${esc(sx)}”</a>`).join("")}
+      </div>
+
+      ${transcript ? `
+        <div class="case">
+          <h2 style="font-size:19px;margin-bottom:6px">A real handoff</h2>
+          <p class="situation">${esc(transcript.situation)}</p>
+          <div class="pair">
+            ${panel("First conversation", transcript.firstSurface, transcript.first)}
+            ${panel("Later, somewhere else", transcript.laterSurface, transcript.later)}
+          </div>
+          ${transcript.carried?.length ? `
+            <div class="carried">
+              <h3>What it carried across</h3>
+              <ul>${transcript.carried.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+            </div>` : ""}
+        </div>` : ""}
+    </section>`;
+}
+
+Promise.all([
+  fetch("/api/demo/personas").then((r) => r.json()).catch(() => ({ personas: [] })),
+  fetch("/cases.json").then((r) => r.json()).catch(() => []),
+]).then(([d, c]) => {
+  personas = d.personas ?? [];
+  cases = c ?? [];
+  if (!personas.length) {
+    document.getElementById("pane").innerHTML = '<p class="empty">Couldn\'t load the roles.</p>';
     return;
   }
-  box.innerHTML = cases.map((c, i) => `
-    <section class="case" style="animation-delay:${Math.min(i * 90, 360)}ms">
-      <h2>${esc(c.title)}</h2>
-      <p class="situation">${esc(c.situation)}</p>
-      <div class="pair">
-        ${panel("First conversation", c.firstSurface, c.first)}
-        ${panel("Later, somewhere else", c.laterSurface, c.later)}
-      </div>
-      ${c.carried?.length ? `
-        <div class="carried">
-          <h3>What it carried across</h3>
-          <ul>${c.carried.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
-        </div>` : ""}
-    </section>`).join("");
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".more");
-    if (!btn) return;
-    const msg = btn.closest(".msg");
-    msg.classList.toggle("open");
-    btn.textContent = msg.classList.contains("open") ? "Show less" : "Read the rest";
+  document.getElementById("tabs").innerHTML = personas.map((p) =>
+    `<button class="tab" data-id="${p.id}">${ICONS[p.id] ?? ""} ${esc(p.name)}</button>`).join("");
+  document.getElementById("tabs").addEventListener("click", (e) => {
+    const t = e.target.closest(".tab");
+    if (t) render(personas.find((x) => x.id === t.dataset.id));
   });
-}).catch(() => {
-  document.getElementById("cases").innerHTML =
-    '<p class="empty">Couldn\'t load the transcripts.</p>';
+
+  const asked = new URLSearchParams(location.search).get("role");
+  render(personas.find((p) => p.id === asked) ?? personas[0]);
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".more");
+  if (!btn) return;
+  const msg = btn.closest(".msg");
+  msg.classList.toggle("open");
+  btn.textContent = msg.classList.contains("open") ? "Show less" : "Read the rest";
 });
 </script>
 </body>

@@ -420,9 +420,12 @@ const server = createServer(async (req, res) => {
   // The captured transcripts behind the use-cases page.
   if (url.pathname === "/cases.json") {
     try {
-      const body = await readFile(join(here, "web", "cases.json"));
+      const body = JSON.parse(await readFile(join(here, "web", "cases.json"), "utf8"));
+      // A capture where nothing carried across is a transcript of the bot
+      // forgetting. Keep it out rather than publish it as proof of memory.
+      const usable = body.filter((c) => (c.carried?.length ?? 0) > 0);
       res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" });
-      return res.end(body);
+      return res.end(JSON.stringify(usable));
     } catch {
       return json(res, 200, []); // not captured yet
     }
