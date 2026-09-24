@@ -76,9 +76,9 @@
     backdrop-filter:blur(22px);box-shadow:0 26px 60px -22px rgba(0,0,0,.9);display:none;text-align:left}
   .menu.on{display:block;animation:pop .16s ease both}
   @keyframes pop{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
-  .menu button{display:block;width:100%;text-align:left;padding:9px 12px;border:0;border-radius:9px;
+  .menu button,.menu a{display:block;width:100%;text-align:left;padding:9px 12px;border:0;border-radius:9px;
     background:none;color:var(--soft);font-size:13.5px;cursor:pointer}
-  .menu button:hover{background:var(--glass-2);color:#fff}
+  .menu button:hover,.menu a:hover{background:var(--glass-2);color:#fff}
 
   /* ── layout ── */
   .layout{flex:1;min-height:0;display:grid;gap:16px;grid-template-columns:minmax(0,1fr) 322px}
@@ -270,7 +270,7 @@
   .rail-h{text-align:center;padding:26px 20px 22px}
   .rail-h h2{margin:14px 0 5px;font:500 16px var(--display)}
   .rail-h p{margin:0;font-size:12.5px;color:var(--faint);line-height:1.55}
-  .viewbtn{margin-top:16px;width:100%;padding:12px;border-radius:999px;cursor:pointer;
+  .viewbtn{display:block;text-align:center;margin-top:16px;width:100%;padding:12px;border-radius:999px;cursor:pointer;
     border:1px solid var(--edge-2);background:var(--glass);color:var(--ink);
     font:500 13.5px var(--sans);transition:.22s}
   .viewbtn:hover{background:var(--glass-2);border-color:var(--live);color:#fff}
@@ -301,35 +301,6 @@
     .face{animation:none}.face .eyes,.face #eyes{animation:none}
   }
 
-  .memmodal{width:min(480px,100%)}
-  .memlist{max-height:46vh;overflow-y:auto;margin-top:18px;display:flex;
-    flex-direction:column;gap:9px;text-align:left}
-  .memlist::-webkit-scrollbar{width:6px}
-  .memlist::-webkit-scrollbar-thumb{background:var(--edge-2);border-radius:6px}
-  .memlist .memo{border:1px solid var(--edge);border-radius:var(--r-md);padding:12px 14px;
-    background:rgba(255,255,255,.03);font-size:13.5px;line-height:1.55;color:var(--soft);
-    animation:rise .3s both}
-  .memlist .memo time{display:block;margin-top:6px;font-size:11px;color:var(--faint)}
-  .memlist .nothing{padding:20px;text-align:center;color:var(--faint);font-size:13px}
-  .grouphead{margin:16px 0 8px;font:500 10.5px var(--sans);letter-spacing:.13em;
-    text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:8px}
-  .grouphead:first-child{margin-top:0}
-  .grouphead span{padding:2px 7px;border-radius:999px;background:rgba(255,255,255,.07);
-    font:500 10px var(--mono);letter-spacing:0}
-  .grouphead.open{color:var(--live)}
-  .grouphead.open span{background:var(--live-ghost)}
-  .memlist .memo p{margin:0}
-  .memofoot{display:flex;align-items:center;gap:10px;margin-top:9px;font-size:11px;color:var(--faint)}
-  .memofoot time{font-size:11px}
-  .verify{color:var(--faint);border-bottom:1px solid transparent;transition:.2s}
-  .verify:hover{color:var(--live);border-bottom-color:rgba(90,169,255,.4)}
-  .wrong{margin-left:auto;background:none;border:0;color:var(--faint);font:inherit;font-size:11px;
-    cursor:pointer;padding:2px 0;border-bottom:1px dashed var(--edge-2)}
-  .wrong:hover{color:#FF8E7F;border-bottom-color:rgba(255,142,127,.5)}
-  .wrong:disabled{opacity:.5;cursor:default}
-  .memo.dropped{opacity:.42}
-  .memo.dropped p{text-decoration:line-through;text-decoration-color:var(--faint)}
-  .dropnote{color:var(--faint);font-size:11px}
   .close{margin-top:22px;width:100%;padding:12px;border-radius:999px;border:1px solid var(--edge-2);
     background:var(--glass);color:var(--soft);cursor:pointer;font-size:13.5px}
   .close:hover{background:var(--glass-2);color:#fff}
@@ -377,7 +348,7 @@
       <div class="menu" id="menu">
         <button id="savekey">Save your memory key</button>
         <button id="restorekey">I have a key already</button>
-        <button id="showmem">Show everything you remember</button>
+        <a id="showmem" href="/memory">Open your memory dashboard</a>
         <button data-say="/forgetme">Stop remembering me</button>
         <button id="newchat">Clear this conversation</button>
       </div>
@@ -427,7 +398,7 @@
         </div>
         <h2 id="memcount">Getting to know you</h2>
         <p id="railsub">Tell me something and I'll hold on to it.</p>
-        <button class="viewbtn" id="viewmem" hidden>View what I remember</button>
+        <a class="viewbtn" id="viewmem" href="/memory" hidden>Open your memory dashboard →</a>
         <div class="surfaces" id="surfaces" hidden>
           <button class="sf" data-surface="web">Web</button>
           <button class="sf" data-surface="telegram">Telegram</button>
@@ -459,29 +430,6 @@
       <li>That's it. Same memory, both places.</li>
     </ol>
     <button class="close" id="closelink">Done</button>
-  </div>
-</div>
-
-<div class="scrim" id="memscrim">
-  <div class="modal memmodal">
-    <div class="face big" id="face2" aria-hidden="true">
-      <svg viewBox="0 0 64 64">
-        <defs><radialGradient id="fg2" cx="34%" cy="28%" r="76%">
-          <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#7CC0FF"/>
-          <stop offset="100%" stop-color="#1B4E85"/></radialGradient></defs>
-        <circle cx="32" cy="32" r="26" fill="url(#fg2)"/>
-        <g class="eyes" fill="#0A2745">
-          <ellipse cx="23" cy="28" rx="3.1" ry="4"/>
-          <ellipse cx="41" cy="28" rx="3.1" ry="4"/>
-        </g>
-        <path d="M22 40c3.4 4.6 16.6 4.6 20 0" fill="none" stroke="#0A2745"
-          stroke-width="3" stroke-linecap="round"/>
-      </svg>
-    </div>
-    <h3 id="memtitle">Here's everything</h3>
-    <p class="sub" id="memsub">Everything below follows you to Telegram and Discord.</p>
-    <div class="memlist" id="memlist"></div>
-    <button class="close" id="memclose">Close</button>
   </div>
 </div>
 
@@ -838,7 +786,6 @@ $("savekey").addEventListener("click", async () => {
   }
 });
 
-$("showmem").addEventListener("click", () => { $("menu").classList.remove("on"); openMemories(); });
 $("restorekey").addEventListener("click", () => { $("menu").classList.remove("on"); openKeyModal("restore"); });
 $("keyclose").addEventListener("click", () => keyScrim.classList.remove("on"));
 keyScrim.addEventListener("click", (e) => { if (e.target === keyScrim) keyScrim.classList.remove("on"); });
@@ -1040,101 +987,7 @@ $("surfaces").addEventListener("click", (e) => {
   if (chip && !chip.classList.contains("on")) $("linkbtn").click();
 });
 
-/**
- * Sort memories into the shapes people actually think in. Crude on purpose:
- * one flat list of sentences was the weakest possible presentation of the most
- * interesting thing here.
- */
-const GROUPS = [
-  { id: "open", label: "Still open", test: /\b(stuck|error|failing|broken|issue|problem|can't|cannot|trying to|403|404|500)\b/i },
-  { id: "prefs", label: "Preferences", test: /\b(prefer|likes?|dislikes?|doesn't like|don't like|favourite|favorite|vegetarian|allergic|rather)\b/i },
-  { id: "about", label: "About you", test: /\b(name is|work|works|working|building|builds|runs?|uses?|studies|studying|team|deploys?)\b/i },
-];
 
-function groupOf(text) {
-  for (const g of GROUPS) if (g.test.test(text)) return g.id;
-  return "other";
-}
-
-async function openMemories() {
-  const list = $("memlist");
-  $("memscrim").classList.add("on");
-
-  if (!allFacts.length) {
-    $("memtitle").textContent = "One moment";
-    $("memsub").textContent = "Fetching what I've got.";
-    list.innerHTML = '<div class="nothing"><span class="dots"><i></i><i></i><i></i></span></div>';
-    await refreshMemory();
-  }
-
-  $("memsub").textContent = allFacts.length
-    ? "Each one is a blob on Walrus. Open any of them to check it yourself."
-    : "";
-  $("memtitle").textContent = allFacts.length
-    ? `Here's everything — ${allFacts.length} thing${allFacts.length === 1 ? "" : "s"}`
-    : "Nothing yet";
-
-  if (!allFacts.length) {
-    list.innerHTML = '<div class="nothing">Tell me something and it\'ll show up here.</div>';
-    return;
-  }
-
-  const buckets = new Map([["open", []], ["prefs", []], ["about", []], ["other", []]]);
-  for (const f of allFacts) buckets.get(groupOf(f.text)).push(f);
-
-  const labels = { ...Object.fromEntries(GROUPS.map((g) => [g.id, g.label])), other: "Everything else" };
-  let html = "";
-  let i = 0;
-  for (const [id, facts] of buckets) {
-    if (!facts.length) continue;
-    html += `<h4 class="grouphead${id === "open" ? " open" : ""}">${labels[id]} <span>${facts.length}</span></h4>`;
-    html += facts.map((f) => {
-      const when = f.at ? new Date(f.at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
-      return `<div class="memo" style="animation-delay:${Math.min(i++ * 35, 380)}ms" data-text="${esc(f.text)}">
-        <p>${esc(secondPerson(f.text))}</p>
-        <div class="memofoot">
-          ${when ? `<time>${when}</time>` : ""}
-          ${f.blobId ? `<a class="verify" target="_blank" rel="noopener"
-             href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}"
-             title="${esc(f.blobId)}">on Walrus ↗</a>` : ""}
-          <button class="wrong" type="button">Not right</button>
-        </div>
-      </div>`;
-    }).join("");
-  }
-  list.innerHTML = html;
-}
-
-// Disowning a memory stops it being read back. It cannot unwrite the blob, and
-// the confirmation says so rather than implying a delete.
-$("memlist").addEventListener("click", async (e) => {
-  const btn = e.target.closest(".wrong");
-  if (!btn) return;
-  const card = btn.closest(".memo");
-  const text = card.dataset.text;
-  btn.disabled = true;
-  btn.textContent = "…";
-  try {
-    const r = await fetch("/api/memory/forget", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, text }),
-    }).then((r) => r.json());
-    if (r.ok) {
-      card.classList.add("dropped");
-      card.querySelector(".memofoot").innerHTML = '<span class="dropnote">Won\'t use this again</span>';
-      allFacts = allFacts.filter((f) => f.text !== text);
-      setTimeout(refreshMemory, 800);
-    } else {
-      btn.disabled = false; btn.textContent = "Not right";
-    }
-  } catch {
-    btn.disabled = false; btn.textContent = "Not right";
-  }
-});
-
-$("viewmem").addEventListener("click", openMemories);
-$("memclose").addEventListener("click", () => $("memscrim").classList.remove("on"));
-$("memscrim").addEventListener("click", (e) => { if (e.target === $("memscrim")) $("memscrim").classList.remove("on"); });
 
 async function refreshLedger() {
   try {

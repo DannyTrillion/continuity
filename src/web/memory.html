@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your memory — Continuity</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#05070A; --ink:#F2F6FA; --soft:#C3CEDB; --dim:#8695A6; --faint:#5A6674;
+    --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.19);
+    --glass:rgba(255,255,255,.05); --glass-2:rgba(255,255,255,.085);
+    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.12);
+    --wal:#7FE3D4; --warn:#F0A868; --hot:#FF8E7F;
+    --r:20px; --r-md:15px; --r-sm:11px;
+    --ease:cubic-bezier(.22,.7,.28,1);
+    --display:'Outfit',system-ui,sans-serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--void);color:var(--ink);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+  .ground,.bloom,.grain{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .ground{background-image:url("/assets/texture.jpg");background-size:cover;background-position:center;opacity:.9}
+  .bloom{background:radial-gradient(1000px 540px at 82% -14%, rgba(90,169,255,.14), transparent 62%),
+    radial-gradient(700px 460px at 4% 104%, rgba(127,227,212,.07), transparent 60%)}
+  .grain{opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit}
+
+  .wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:24px 22px 80px}
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:34px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+  .brand b{font:500 16px var(--display)}
+  .brand:hover{opacity:.75}
+  .tiny{font:400 10.5px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+  .cta{padding:10px 19px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
+    font:600 13px var(--sans);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
+  .cta:hover{transform:translateY(-1px);box-shadow:0 14px 30px -14px rgba(255,255,255,.5)}
+
+  h1{margin:0 0 8px;font:200 clamp(28px,4.2vw,42px)/1.1 var(--display);letter-spacing:-.028em}
+  h1 em{font-style:normal;font-weight:400;background:linear-gradient(96deg,#fff 20%,var(--live) 130%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{margin:0 0 26px;color:var(--soft);font-size:14.5px;max-width:62ch;line-height:1.7}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;margin-bottom:22px}
+  .stat{border:1px solid var(--edge);border-radius:var(--r-md);padding:14px 16px;
+    background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02) 50%)}
+  .stat .k{font:500 9.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+  .stat .v{font:400 25px/1.1 var(--display);margin-top:5px}
+  .stat .v small{font:400 11px var(--sans);color:var(--dim);margin-left:3px}
+  .stat.hi .v{color:var(--wal)}
+
+  .bar{display:flex;gap:9px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+  .search{flex:1;min-width:190px;display:flex;align-items:center;gap:9px;padding:10px 15px;
+    border-radius:999px;background:rgba(0,0,0,.32);border:1px solid var(--edge)}
+  .search input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:14px;outline:none}
+  .search input::placeholder{color:var(--faint)}
+  .filter{padding:9px 15px;border-radius:999px;border:1px solid var(--edge);background:var(--glass);
+    color:var(--dim);font:500 12.5px var(--sans);cursor:pointer;transition:.2s var(--ease)}
+  .filter:hover{color:var(--soft);border-color:var(--edge-2)}
+  .filter.on{background:#fff;color:#0A0D12;border-color:transparent;font-weight:600}
+
+  .conflicts{border:1px solid rgba(240,168,104,.34);border-radius:var(--r);background:rgba(240,168,104,.07);
+    padding:17px 19px;margin-bottom:20px}
+  .conflicts h2{margin:0 0 4px;font:500 14px var(--display);color:var(--warn)}
+  .conflicts p.note{margin:0 0 13px;color:var(--dim);font-size:12.5px;line-height:1.6}
+  .conflict{border-top:1px solid rgba(240,168,104,.2);padding:12px 0 2px}
+  .conflict:first-of-type{border-top:0}
+  .side{display:flex;gap:10px;align-items:baseline;padding:4px 0;font-size:13.5px}
+  .side .tag{flex:none;font:500 9.5px var(--sans);letter-spacing:.1em;text-transform:uppercase;
+    padding:3px 8px;border-radius:999px;min-width:74px;text-align:center}
+  .side.now .tag{background:rgba(127,227,212,.16);color:var(--wal)}
+  .side.was .tag{background:rgba(255,255,255,.07);color:var(--faint)}
+  .side.was span{color:var(--faint);text-decoration:line-through;text-decoration-color:rgba(255,255,255,.25)}
+  .differs{margin-top:8px;font:400 11px var(--mono);color:var(--faint)}
+
+  .list{display:flex;flex-direction:column;gap:10px}
+  .grouphead{margin:20px 0 4px;font:500 10.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;
+    color:var(--faint);display:flex;align-items:center;gap:9px}
+  .grouphead span{padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.07);font:500 10px var(--mono);letter-spacing:0}
+  .grouphead.open{color:var(--live)} .grouphead.open span{background:var(--live-ghost)}
+
+  .memo{border:1px solid var(--edge);border-radius:var(--r-md);padding:14px 16px;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.018) 50%);
+    transition:border-color .22s var(--ease);animation:rise .35s var(--ease) both}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .memo:hover{border-color:var(--edge-2)}
+  .memo p{margin:0;font-size:14.5px;line-height:1.55;color:var(--soft)}
+  .memofoot{display:flex;align-items:center;gap:9px;margin-top:11px;flex-wrap:wrap;font-size:11px;color:var(--faint)}
+  .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+    border:1px solid var(--edge);background:rgba(0,0,0,.26)}
+  .pill.cross{border-color:rgba(127,227,212,.32);color:var(--wal)}
+  .pill.cold{border-color:rgba(255,255,255,.08);color:var(--faint);opacity:.75}
+  .verify{color:var(--faint);border-bottom:1px solid transparent;font-family:var(--mono);font-size:10.5px}
+  .verify:hover{color:var(--wal);border-bottom-color:rgba(127,227,212,.4)}
+  .wrong{margin-left:auto;background:none;border:0;color:var(--faint);font-size:11px;cursor:pointer;
+    padding:2px 0;border-bottom:1px dashed var(--edge-2)}
+  .wrong:hover{color:var(--hot);border-bottom-color:rgba(255,142,127,.5)}
+  .wrong:disabled{opacity:.5;cursor:default}
+  .memo.dropped{opacity:.4}
+  .memo.dropped p{text-decoration:line-through;text-decoration-color:var(--faint)}
+  .memo.faded{opacity:.62}
+
+  .empty,.loading{padding:50px 20px;text-align:center;color:var(--faint);font-size:14px}
+  .foot{margin-top:40px;padding-top:22px;border-top:1px solid var(--edge);
+    display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  @media (prefers-reduced-motion:reduce){.memo{animation:none}.cta{transition:none}}
+</style>
+</head>
+<body>
+<div class="ground"></div><div class="bloom"></div><div class="grain"></div>
+
+<div class="wrap">
+  <nav class="top">
+    <a class="brand" href="/">
+      <svg width="26" height="26" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="mcore" cx="35%" cy="30%" r="74%">
+            <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#9BD0FF"/>
+            <stop offset="100%" stop-color="#2E7ACB"/></radialGradient>
+          <linearGradient id="marc" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff"/><stop offset="100%" stop-color="#5AA9FF"/></linearGradient>
+        </defs>
+        <circle cx="16" cy="16" r="11" fill="none" stroke="#5AA9FF" stroke-width="1.5" opacity=".22"/>
+        <path d="M16 5a11 11 0 0 1 11 11" fill="none" stroke="url(#marc)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 27A11 11 0 0 1 5 16" fill="none" stroke="url(#marc)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4.1" fill="url(#mcore)"/>
+      </svg>
+      <b>Continuity</b>
+    </a>
+    <span class="tiny">Your memory</span>
+    <a class="cta" href="/chat">Back to the chat</a>
+  </nav>
+
+  <h1 id="title">Everything it knows<br><em>about you.</em></h1>
+  <p class="sub">Each line below is a blob on Walrus mainnet that your account owns. You can check any
+    of them, and you can tell it when one is wrong.</p>
+
+  <div class="stats" id="stats"></div>
+  <div id="conflicts"></div>
+
+  <div class="bar">
+    <label class="search">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.4" stroke="#5A6674" stroke-width="1.3"/><path d="M9.4 9.4L12.5 12.5" stroke="#5A6674" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <input id="q" placeholder="Search everything it remembers…" autocomplete="off">
+    </label>
+    <button class="filter on" data-filter="all">All</button>
+    <button class="filter" data-filter="crossed">Crossed apps</button>
+    <button class="filter" data-filter="cold">Never used</button>
+  </div>
+
+  <div class="list" id="list"><p class="loading">Reading from Walrus…</p></div>
+
+  <footer class="foot">
+    <span class="tiny">Append-only storage · marking something wrong stops it being used, it cannot unwrite the blob</span>
+    <span class="tiny"><a href="/chat">Back to the chat →</a></span>
+  </footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+const userId = (() => {
+  try { return localStorage.getItem("ws8-user"); } catch { return null; }
+})();
+
+/** The extractor stores facts in the third person; this page addresses you. */
+const KEEP_S = new Set(["is", "was", "has", "does", "goes", "as", "always", "sometimes"]);
+function secondPerson(text) {
+  let t = String(text);
+  if (!/^(the\s+)?user\b/i.test(t)) return t;
+  t = t.replace(/^the\s+user/i, "User");
+  const pronouns = (x) => x.replace(/\btheir\b/gi, "your").replace(/\bthemselves\b/gi, "yourself")
+    .replace(/\bthem\b/gi, "you").replace(/\bthey\b/gi, "you");
+  if (/^User's\b/i.test(t)) return pronouns(t.replace(/^User's\b/i, "Your"));
+  if (/^User\s+is\b/i.test(t)) return pronouns(t.replace(/^User\s+is\b/i, "You're"));
+  if (/^User\s+was\b/i.test(t)) return pronouns(t.replace(/^User\s+was\b/i, "You were"));
+  if (/^User\s+has\b/i.test(t)) return pronouns(t.replace(/^User\s+has\b/i, "You have"));
+  return pronouns(t.replace(/^User\s+(\w+)/i, (m, verb) => {
+    const l = verb.toLowerCase();
+    if (KEEP_S.has(l) || !l.endsWith("s") || l.endsWith("ss")) return `You ${verb}`;
+    return `You ${verb.slice(0, -1)}`;
+  }));
+}
+
+const GROUPS = [
+  { id: "open", label: "Still open", test: /\b(stuck|error|failing|broken|issue|problem|can't|cannot|trying to|403|404|500)\b/i },
+  { id: "prefs", label: "Preferences", test: /\b(prefer|likes?|dislikes?|doesn't like|don't like|favourite|favorite|vegetarian|allergic|rather)\b/i },
+  { id: "about", label: "About you", test: /\b(name is|work|works|working|building|builds|runs?|uses?|studies|studying|team|deploys?)\b/i },
+];
+const groupOf = (t) => (GROUPS.find((g) => g.test.test(t)) ?? { id: "other" }).id;
+const LABELS = { ...Object.fromEntries(GROUPS.map((g) => [g.id, g.label])), other: "Everything else" };
+const SURFACE = { web: "Web", telegram: "Telegram", discord: "Discord", demo: "Demo" };
+
+let data = null, filter = "all", query = "";
+
+function statCard(k, v, small, hi) {
+  return `<div class="stat${hi ? " hi" : ""}"><div class="k">${k}</div>
+    <div class="v">${v}${small ? `<small>${small}</small>` : ""}</div></div>`;
+}
+
+function render() {
+  if (!data) return;
+  const s = data.stats;
+
+  $("title").innerHTML = data.name
+    ? `Everything it knows<br><em>about ${esc(data.name)}.</em>`
+    : `Everything it knows<br><em>about you.</em>`;
+
+  $("stats").innerHTML =
+    statCard("Memories", s.total) +
+    statCard("Crossed apps", s.crossSurface, "of " + s.total, s.crossSurface > 0) +
+    statCard("Apps connected", (data.connected ?? []).length) +
+    statCard("Never used again", s.neverRead) +
+    statCard("Duplicates collapsed", s.collapsed);
+
+  $("conflicts").innerHTML = data.conflicts?.length ? `
+    <div class="conflicts">
+      <h2>${data.conflicts.length} thing${data.conflicts.length === 1 ? "" : "s"} it has heard two ways</h2>
+      <p class="note">It uses the newer one. Normally that happens silently — here is what it decided.</p>
+      ${data.conflicts.map((c) => `
+        <div class="conflict">
+          <div class="side now"><span class="tag">Using</span><span>${esc(secondPerson(c.current.text))}</span></div>
+          <div class="side was"><span class="tag">Older</span><span>${esc(secondPerson(c.superseded.text))}</span></div>
+          <div class="differs">differs on: ${c.differsOn.map(esc).join(" · ")}</div>
+        </div>`).join("")}
+    </div>` : "";
+
+  const shown = data.facts.filter((f) => {
+    if (query && !f.text.toLowerCase().includes(query)) return false;
+    if (filter === "crossed") return f.provenance?.crossed;
+    if (filter === "cold") return (f.provenance?.readCount ?? 0) === 0;
+    return true;
+  });
+
+  if (!shown.length) {
+    $("list").innerHTML = `<p class="empty">${query || filter !== "all" ? "Nothing matches that." : "Nothing stored yet. Go and tell it something."}</p>`;
+    return;
+  }
+
+  const buckets = new Map([["open", []], ["prefs", []], ["about", []], ["other", []]]);
+  for (const f of shown) buckets.get(groupOf(f.text)).push(f);
+
+  let html = "", i = 0;
+  for (const [id, facts] of buckets) {
+    if (!facts.length) continue;
+    html += `<h3 class="grouphead${id === "open" ? " open" : ""}">${LABELS[id]} <span>${facts.length}</span></h3>`;
+    html += facts.map((f) => {
+      const p = f.provenance ?? {};
+      const when = f.at ? new Date(f.at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+      const cold = (p.readCount ?? 0) === 0;
+      return `<div class="memo${cold ? " faded" : ""}" data-text="${esc(f.text)}">
+        <p>${esc(secondPerson(f.text))}</p>
+        <div class="memofoot">
+          ${when ? `<span class="pill">${when}</span>` : ""}
+          ${p.wroteOn ? `<span class="pill">written on ${SURFACE[p.wroteOn] ?? p.wroteOn}</span>` : ""}
+          ${p.crossed ? `<span class="pill cross">read on ${p.surfaces.map((x) => SURFACE[x] ?? x).join(" + ")}</span>`
+            : cold ? '<span class="pill cold">never used again</span>' : ""}
+          ${f.blobId ? `<a class="verify" target="_blank" rel="noopener"
+            href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}">${esc(f.blobId.slice(0, 18))}… ↗</a>` : ""}
+          <button class="wrong" type="button">Not right</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  $("list").innerHTML = html;
+}
+
+async function load() {
+  if (!userId) {
+    $("list").innerHTML = '<p class="empty">This browser hasn\'t talked to it yet. <a href="/chat" style="color:var(--live)">Start a conversation →</a></p>';
+    return;
+  }
+  try {
+    data = await fetch("/api/memory/full?userId=" + encodeURIComponent(userId)).then((r) => r.json());
+    if (data.error) throw new Error(data.error);
+    render();
+  } catch (err) {
+    $("list").innerHTML = `<p class="empty">Couldn't read your memory just now. ${esc(err.message ?? "")}</p>`;
+  }
+}
+
+$("q").addEventListener("input", (e) => { query = e.target.value.trim().toLowerCase(); render(); });
+document.querySelector(".bar").addEventListener("click", (e) => {
+  const b = e.target.closest(".filter");
+  if (!b) return;
+  filter = b.dataset.filter;
+  for (const f of document.querySelectorAll(".filter")) f.classList.toggle("on", f === b);
+  render();
+});
+
+$("list").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".wrong");
+  if (!btn) return;
+  const card = btn.closest(".memo");
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const r = await fetch("/api/memory/forget", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, text: card.dataset.text }),
+    }).then((r) => r.json());
+    if (r.ok) {
+      card.classList.add("dropped");
+      card.querySelector(".memofoot").innerHTML =
+        '<span class="pill">Won\'t be used again · the blob stays on Walrus</span>';
+      data.facts = data.facts.filter((f) => f.text !== card.dataset.text);
+    } else { btn.disabled = false; btn.textContent = "Not right"; }
+  } catch { btn.disabled = false; btn.textContent = "Not right"; }
+});
+
+load();
+</script>
+</body>
+</html>

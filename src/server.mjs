@@ -9,12 +9,13 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { respond } from "./core/session.mjs";
-import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong } from "./core/memory.mjs";
+import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, findConflicts } from "./core/memory.mjs";
 import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
 import { startOutbox, onSettled, outboxStats } from "./core/outbox.mjs";
 import { issueMemoryKey, redeemMemoryKey, issueChallenge, takeChallenge, attachWallet } from "./core/recovery.mjs";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { snapshot } from "./core/metrics.mjs";
+import { noteWrite, provenanceFor, provenanceStats } from "./core/provenance.mjs";
 import { personaList, getPersona } from "./core/personas.mjs";
 import { demoAllowance, recordDemoTurn, budgetSnapshot } from "./core/budget.mjs";
 import { DEFAULT_MODEL } from "./core/llm.mjs";
@@ -37,6 +38,7 @@ onSettled(async ({ job, ok, stored = [], error }) => {
     return;
   }
   for (const s of stored) {
+    noteWrite(s.blobId, job.surface);
     const row = { at: new Date().toISOString(), blobId: s.blobId, namespace: s.namespace, kind: job.kind };
     recentWrites.unshift(row);
     recentWrites.length = Math.min(recentWrites.length, 50);
@@ -200,6 +202,56 @@ const server = createServer(async (req, res) => {
         ? `https://discord.com/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&permissions=84992&scope=bot%20applications.commands`
         : null,
     });
+  }
+
+  // Everything the dashboard needs, in one call.
+  if (url.pathname === "/api/memory/full") {
+    const userId = url.searchParams.get("userId");
+    if (!userId) return json(res, 400, { error: "userId is required" });
+    try {
+      const who = await resolvePerson("web", userId);
+      const [sets, suppressed, connected] = await Promise.all([
+        Promise.all(who.namespaces.map((ns) =>
+          recall(ns, "everything known about this person", { limit: 12, maxTokens: 1800 }))),
+        suppressionsFor(who.personId).catch(() => new Set()),
+        surfacesFor(who.personId).catch(() => []),
+      ]);
+
+      const live = withoutSuppressed(sets.flat(), suppressed);
+      // Conflicts come from the UNcollapsed set: dedupe's whole job is to hide
+      // these, and hiding them is what the dashboard exists to stop.
+      const conflicts = findConflicts(live);
+      const collapsed = dedupe(live);
+
+      const facts = collapsed
+        .sort((a, b) => Date.parse(b.created_at ?? 0) - Date.parse(a.created_at ?? 0))
+        .map((h) => ({
+          text: h.text,
+          at: h.created_at,
+          blobId: h.blob_id ?? null,
+          distance: Number((h.distance ?? 0).toFixed(3)),
+          provenance: h.blob_id ? provenanceFor(h.blob_id) : null,
+        }));
+
+      return json(res, 200, {
+        personId: who.personId,
+        name: nameFrom(facts),
+        connected,
+        facts,
+        conflicts,
+        stats: {
+          total: facts.length,
+          collapsed: live.length - collapsed.length,
+          suppressed: suppressed.size,
+          namespaces: who.namespaces.length,
+          crossSurface: facts.filter((f) => f.provenance?.crossed).length,
+          neverRead: facts.filter((f) => (f.provenance?.readCount ?? 0) === 0).length,
+          ...provenanceStats(),
+        },
+      });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
   }
 
   // "That's not right" — we cannot unwrite a blob, so we stop reading it back.
@@ -424,6 +476,7 @@ const server = createServer(async (req, res) => {
   const PAGES = {
     "/": "index.html", "/index.html": "index.html",
     "/demo": "demo.html", "/demo.html": "demo.html",
+    "/memory": "memory.html", "/memory.html": "memory.html",
     "/chat": "chat.html", "/chat.html": "chat.html",
     "/use-cases": "use-cases.html", "/use-cases.html": "use-cases.html",
   };

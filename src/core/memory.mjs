@@ -572,6 +572,97 @@ export function markWrong(personId, text) {
 export const withoutSuppressed = (hits, suppressed) =>
   suppressed?.size ? hits.filter((h) => !suppressed.has(fingerprint(h.text))) : hits;
 
+/**
+ * Memories that disagree with each other.
+ *
+ * `dedupe` already collapses near-identical facts and keeps the newest, which
+ * is the right default and also completely silent: "Node 20" quietly becomes
+ * "Node 22" and nobody is told a correction happened. These are the pairs that
+ * are about the same thing but say different things — same subject, different
+ * value — so the dashboard can show the disagreement rather than hide it.
+ *
+ * A heuristic, and presented as one. It finds the obvious contradictions, not
+ * every subtle one.
+ */
+export function findConflicts(hits) {
+  const words = (t) => new Set(fingerprintWords(t));
+  const out = [];
+
+  for (let i = 0; i < hits.length; i++) {
+    for (let j = i + 1; j < hits.length; j++) {
+      const a = words(hits[i].text);
+      const b = words(hits[j].text);
+      if (!a.size || !b.size) continue;
+
+      const shared = [...a].filter((w) => b.has(w)).length;
+      if (!shared) continue;
+
+      // Overlap against the SHORTER sentence. "You deploy on Railway" and "You
+      // deploy on Fly" share only one content word, but that word is most of
+      // both sentences — measuring against the longer one hid exactly the
+      // contradictions worth showing.
+      const overlap = shared / Math.min(a.size, b.size);
+      if (overlap < 0.5) continue;
+
+      const onlyA = [...a].filter((w) => !b.has(w));
+      const onlyB = [...b].filter((w) => !a.has(w));
+      // Both sides must say something the other does not. One side adding
+      // detail is elaboration, not disagreement.
+      if (!onlyA.length || !onlyB.length) continue;
+
+      // Two sentences can differ only in how they are phrased. "considering
+      // rewriting" versus "thinking of rewriting the whole" says the same
+      // thing twice, and flagging it as a contradiction turns the one feature
+      // people will look at into noise.
+      const meaningful = (list) => list.filter((w) => !HEDGE.has(w));
+      const realA = meaningful(onlyA);
+      const realB = meaningful(onlyB);
+      if (!realA.length || !realB.length) continue;
+
+      // A disagreement needs a value on both sides — a number, a version, a
+      // name — not just a different verb.
+      const valueish = (list) => list.some((w) => /\d/.test(w) || w.length >= 3);
+      if (!valueish(realA) || !valueish(realB)) continue;
+
+      const similarity = shared / Math.max(a.size, b.size);
+
+      const newer = Date.parse(hits[i].created_at ?? 0) >= Date.parse(hits[j].created_at ?? 0) ? hits[i] : hits[j];
+      const older = newer === hits[i] ? hits[j] : hits[i];
+      out.push({
+        current: { text: newer.text, at: newer.created_at, blobId: newer.blob_id },
+        superseded: { text: older.text, at: older.created_at, blobId: older.blob_id },
+        differsOn: [...new Set([...realA, ...realB])].slice(0, 6),
+        similarity: Number(similarity.toFixed(2)),
+      });
+    }
+  }
+  // Three near-identical memories produce three pairs and would list the same
+  // disagreement over and over. One entry per current value.
+  const seen = new Set();
+  return out.filter((c) => {
+    const key = fingerprintWords(c.current.text).join(" ");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Words that change the wording without changing the claim. */
+const HEDGE = new Set([
+  "thinking", "considering", "planning", "plans", "wants", "hoping", "maybe",
+  "might", "possibly", "currently", "actually", "whole", "entire", "really",
+  "also", "still", "just", "quite", "very", "some", "around",
+]);
+
+// Numbers are the most common thing two memories disagree about, and they are
+// short. Dropping tokens under three characters made "Node 22" and "Node 20"
+// identical, which is the one case this exists to catch.
+const fingerprintWords = (t) =>
+  String(t).toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)
+    .filter((w) => (w.length > 2 || /\d/.test(w)) && !STOP.has(w));
+
+const STOP = new Set(["the","and","for","you","your","with","that","this","are","was","has","have","had","not","but","they","their","them","its","from","into","about","user","assistant"]);
+
 export async function health() {
   return memwal.health();
 }

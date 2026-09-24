@@ -68,8 +68,8 @@ function enqueue(job) {
 }
 
 /** Queue a conversation turn for server-side fact extraction. */
-export function enqueueAnalyze(namespace, text, occurredAt = new Date()) {
-  enqueue({ kind: "analyze", namespace, text, occurredAt: new Date(occurredAt).toISOString() });
+export function enqueueAnalyze(namespace, text, occurredAt = new Date(), surface) {
+  enqueue({ kind: "analyze", namespace, text, occurredAt: new Date(occurredAt).toISOString(), surface });
 }
 
 /** Queue one verbatim record (identity links, opt-outs). */

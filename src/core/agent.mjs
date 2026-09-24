@@ -10,6 +10,7 @@
 
 import { recall, dedupe, personNs, KB_NS, suppressionsFor, withoutSuppressed } from "./memory.mjs";
 import { enqueueAnalyze } from "./outbox.mjs";
+import { noteRead } from "./provenance.mjs";
 import { observe, count } from "./metrics.mjs";
 import { readPage } from "./web.mjs";
 import { chat, DEFAULT_MODEL } from "./llm.mjs";
@@ -201,6 +202,13 @@ export async function handleTurn({
     Promise.all(links.map((u) => readPage(u))),
   ]);
 
+  // Record that THIS surface read these memories. Without it the dashboard can
+  // assert that Discord sees what Telegram wrote but cannot show it.
+  noteRead(
+    [...personalSets.flat(), ...profileSets.flat()].map((h) => h.blob_id),
+    surface,
+  );
+
   // Message-relevant hits first, then the profile baseline; dedupe collapses
   // anything the two queries both found.
   const personal = optedOut
@@ -261,7 +269,7 @@ export async function handleTurn({
   // told us. A memory of what we guessed is worse than no memory.
   if (!optedOut && remember) {
     const utterance = `On ${surface}, the user said: ${message}`;
-    enqueueAnalyze(personNs(personId), utterance);
+    enqueueAnalyze(personNs(personId), utterance, new Date(), surface);
   }
 
   return {
