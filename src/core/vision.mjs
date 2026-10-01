@@ -15,7 +15,12 @@ const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 // qwen3.8-flash rather than a cheaper flash model: GLM's endpoint makes
 // reasoning mandatory, so it spends the whole token budget thinking and
 // returns an empty answer — the same trap Kimi fell into on the chat path.
-const VISION_MODEL = process.env.VISION_MODEL ?? "qwen/qwen3.8-flash";
+//
+// Then two more, because one provider having a bad hour was enough to make
+// every photo sent that hour unfindable forever. All open-weight, so the
+// "no Claude, no GPT" line stays true whichever one answers.
+const VISION_MODELS = (process.env.VISION_MODEL ?? "qwen/qwen3.8-flash,qwen/qwen3-vl-8b-instruct,meta-llama/llama-4-scout")
+  .split(",").map((m) => m.trim()).filter(Boolean);
 
 export const canSee = (type) => /^image\/(png|jpe?g|gif|webp|bmp)$/i.test(String(type));
 
@@ -27,6 +32,17 @@ export async function describeImage(dataUrl, { hint } = {}) {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) return { ok: false, error: "No model key configured." };
 
+  let last;
+  for (const model of VISION_MODELS) {
+    const seen = await lookWith(model, key, dataUrl, hint);
+    if (seen.ok) return seen;
+    last = seen;
+    console.error(`[vision] ${model}: ${seen.error}`);
+  }
+  return last;
+}
+
+async function lookWith(model, key, dataUrl, hint) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 40_000);
   try {
@@ -40,7 +56,7 @@ export async function describeImage(dataUrl, { hint } = {}) {
         "X-Title": "Walrus Memory Chatbot",
       },
       body: JSON.stringify({
-        model: VISION_MODEL,
+        model,
         max_tokens: 400,
         temperature: 0.2,
         reasoning: { enabled: false },
@@ -68,11 +84,15 @@ export async function describeImage(dataUrl, { hint } = {}) {
 
     const body = await res.json().catch(() => ({}));
     if (!res.ok || body.error) {
-      return { ok: false, error: body?.error?.message ?? `vision model returned ${res.status}` };
+      // OpenRouter's own message is "Provider returned error", which says
+      // nothing; the provider's reason sits underneath it.
+      const raw = body?.error?.metadata?.raw;
+      const why = body?.error?.message ?? `vision model returned ${res.status}`;
+      return { ok: false, error: raw ? `${why}: ${String(raw).slice(0, 160)}` : why };
     }
     const text = body?.choices?.[0]?.message?.content?.trim();
     if (!text) return { ok: false, error: "The vision model returned nothing." };
-    return { ok: true, description: text, model: body.model ?? VISION_MODEL };
+    return { ok: true, description: text, model: body.model ?? model };
   } catch (err) {
     return { ok: false, error: err.name === "AbortError" ? "Looking at that took too long." : "Couldn't look at that image." };
   } finally {
