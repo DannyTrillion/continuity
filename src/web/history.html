@@ -30,7 +30,15 @@
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
   a{color:inherit;text-decoration:none}
 
-  .wrap{position:relative;z-index:1;max-width:900px;margin:0 auto;padding:24px 22px 80px}
+  /* 1244 = the 1200px top bar chat uses, plus this wrapper's 22px padding either
+     side. The bar has to be the same width in the same place on all three
+     pages: it is named as persistent furniture for the view transition, so any
+     difference in size shows up as the header snapping mid-navigation. It also
+     meant the nav pills you just clicked jumped sideways on arrival. */
+  .wrap{position:relative;z-index:1;max-width:1244px;margin:0 auto;padding:18px 22px 80px}
+  /* Content keeps its old reading width and its old position; only the bar
+     above it got wider. */
+  .wrap > *:not(.top){max-width:856px;margin-left:auto;margin-right:auto}
   .top{display:flex;align-items:center;gap:12px;margin-bottom:34px;flex-wrap:wrap}
   .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
   .brand b{font:500 16px var(--display)}
@@ -54,7 +62,7 @@
   }
   .cta{padding:10px 19px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
     font:600 13px var(--sans);transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
-  .cta:hover{transform:translateY(-1px);box-shadow:0 14px 30px -14px rgba(255,255,255,.5)}
+  .cta:hover{transform:scale(1.03)}
 
   h1{margin:0 0 8px;font:200 clamp(28px,4.2vw,40px)/1.1 var(--display);letter-spacing:-.028em}
   h1 em{font-style:normal;font-weight:400;background:linear-gradient(96deg,#fff 20%,var(--live) 130%);
@@ -86,6 +94,8 @@
     display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
   @media (prefers-reduced-motion:reduce){.convo{animation:none;transition:none}}
 </style>
+  <link rel="stylesheet" href="/assets/motion.css">
+  <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
 </head>
 <body>
 <div class="ground"></div><div class="bloom"></div><div class="grain"></div>
@@ -134,7 +144,7 @@
     <input id="q" placeholder="Search your conversations…" autocomplete="off">
   </label>
 
-  <div class="list" id="list"><p class="loading">Reading from Walrus…</p></div>
+  <div class="list" id="list"><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div></div>
 
   <footer class="foot">
     <span class="tiny">A conversation saves itself once it goes quiet</span>
@@ -142,6 +152,7 @@
   </footer>
 </div>
 
+<script src="/assets/app.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -183,42 +194,31 @@ function render() {
 
 $("q").addEventListener("input", (e) => { query = e.target.value.trim().toLowerCase(); render(); });
 
-(async () => {
+/**
+ * Paint from what this tab saw last, then correct it from the network. Reading
+ * conversations back off Walrus takes a few seconds, and opening this page on
+ * "Reading from Walrus…" every time was the single thing that made switching
+ * sections feel like the site had fallen over.
+ */
+function start() {
   if (!userId) {
     $("list").innerHTML = '<p class="empty">This browser hasn\'t talked to it yet. <a href="/chat" style="color:var(--live)">Start a conversation →</a></p>';
     return;
   }
-  try {
-    const r = await fetch("/api/conversations?userId=" + encodeURIComponent(userId)).then((r) => r.json());
-    if (r.error) throw new Error(r.error);
+  WS8.live("conversations", WS8.conversations, (r) => {
+    if (r.error) {
+      // Only worth saying if there is nothing already on screen to keep.
+      if (!all.length) WS8.problem($("list"), r.error, () => location.reload());
+      return;
+    }
     all = r.conversations ?? [];
     render();
-  } catch (err) {
-    $("list").innerHTML = `<p class="empty">Couldn't read your conversations. ${esc(err.message ?? "")}</p>`;
-  }
-})();
+  });
+}
+start();
 
-/* ── shared nav: mark the current page, and show what is behind each tab ── */
-(() => {
-  const here = location.pathname.replace(/\.html$/, "") || "/chat";
-  for (const a of document.querySelectorAll(".nav a")) {
-    a.classList.toggle("on", a.getAttribute("href") === here);
-  }
-  let who = null;
-  try { who = localStorage.getItem("ws8-user"); } catch {}
-  if (!who) return;
-
-  const badge = (id, n) => {
-    const el = document.getElementById(id);
-    if (!el || !n) return;
-    el.textContent = n;
-    el.hidden = false;
-  };
-  fetch("/api/memory?userId=" + encodeURIComponent(who))
-    .then((r) => r.json()).then((m) => badge("nav-mem", m.facts?.length)).catch(() => {});
-  fetch("/api/conversations?userId=" + encodeURIComponent(who))
-    .then((r) => r.json()).then((c) => badge("nav-hist", c.conversations?.length)).catch(() => {});
-})();
+/* Nav state, counts and the shared request cache live in /assets/app.js. */
+WS8.nav();
 </script>
 </body>
 </html>

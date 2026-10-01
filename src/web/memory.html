@@ -32,16 +32,19 @@
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
   a{color:inherit;text-decoration:none}
   button{font:inherit}
+  img{display:block}
 
-  .wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:24px 22px 80px}
+  /* 1244 = the 1200px top bar chat uses, plus this wrapper's 22px padding either
+     side. The bar has to be the same width in the same place on all three
+     pages: it is named as persistent furniture for the view transition, so any
+     difference in size shows up as the header snapping mid-navigation. */
+  .wrap{position:relative;z-index:1;max-width:1244px;margin:0 auto;padding:18px 22px 80px}
+  .wrap > *:not(.top){max-width:1036px;margin-left:auto;margin-right:auto}
   .top{display:flex;align-items:center;gap:12px;margin-bottom:34px;flex-wrap:wrap}
   .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
   .brand b{font:500 16px var(--display)}
   .brand:hover{opacity:.75}
   .tiny{font:400 10.5px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
-  /* One nav, the same on every page. Chat, memory and history are three views
-     of the same thing, and hiding two of them behind an overflow menu meant
-     nobody found them. */
   .nav{display:flex;gap:5px;padding:4px;border-radius:999px;background:rgba(255,255,255,.04);
     border:1px solid var(--edge)}
   .nav a{display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:999px;
@@ -56,8 +59,8 @@
     .nav a{padding:8px 12px}
   }
   .cta{padding:10px 19px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
-    font:600 13px var(--sans);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
-  .cta:hover{transform:translateY(-1px);box-shadow:0 14px 30px -14px rgba(255,255,255,.5)}
+    font:600 13px var(--sans);cursor:pointer;transition:transform .25s var(--ease)}
+  .cta:hover{transform:scale(1.03)}
 
   h1{margin:0 0 8px;font:200 clamp(28px,4.2vw,42px)/1.1 var(--display);letter-spacing:-.028em}
   h1 em{font-style:normal;font-weight:400;background:linear-gradient(96deg,#fff 20%,var(--live) 130%);
@@ -72,7 +75,7 @@
   .stat .v small{font:400 11px var(--sans);color:var(--dim);margin-left:3px}
   .stat.hi .v{color:var(--wal)}
 
-  .bar{display:flex;gap:9px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+  .bar{display:flex;gap:9px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
   .search{flex:1;min-width:190px;display:flex;align-items:center;gap:9px;padding:10px 15px;
     border-radius:999px;background:rgba(0,0,0,.32);border:1px solid var(--edge)}
   .search input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:14px;outline:none}
@@ -81,6 +84,8 @@
     color:var(--dim);font:500 12.5px var(--sans);cursor:pointer;transition:.2s var(--ease)}
   .filter:hover{color:var(--soft);border-color:var(--edge-2)}
   .filter.on{background:#fff;color:#0A0D12;border-color:transparent;font-weight:600}
+  .filters[hidden]{display:none}
+  .filters{display:flex;gap:9px}
 
   .conflicts{border:1px solid rgba(240,168,104,.34);border-radius:var(--r);background:rgba(240,168,104,.07);
     padding:17px 19px;margin-bottom:20px}
@@ -96,11 +101,60 @@
   .side.was span{color:var(--faint);text-decoration:line-through;text-decoration-color:rgba(255,255,255,.25)}
   .differs{margin-top:8px;font:400 11px var(--mono);color:var(--faint)}
 
+  /* ── the shelf: one cover per collection ── */
+  .shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:14px}
+  .cover{position:relative;display:flex;flex-direction:column;text-align:left;padding:0;overflow:hidden;
+    border:1px solid var(--edge);border-radius:var(--r);cursor:pointer;color:inherit;
+    background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02) 55%);
+    transition:transform .3s var(--ease),border-color .3s var(--ease);animation:rise .5s var(--ease) both}
+  .cover:hover{transform:scale(1.02);border-color:var(--edge-2)}
+  .cover:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+  .art{position:relative;height:150px;overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 20% 0%, color-mix(in srgb, var(--tint) 30%, transparent), transparent 60%),
+      radial-gradient(90% 80% at 100% 100%, color-mix(in srgb, var(--tint) 14%, transparent), transparent 60%),
+      rgba(0,0,0,.3)}
+  /* Two layers of type: a field of faint characters filling the whole cover,
+     and the figure drawn over it in the shelf's colour. */
+  .art pre{position:absolute;margin:0;font-family:var(--mono);white-space:pre;pointer-events:none;user-select:none}
+  .art .field{inset:0;font-size:10.5px;line-height:14px;letter-spacing:.1em;color:var(--tint);opacity:.26;
+    padding:2px 0 0 4px}
+  /* max-content: an absolutely placed box otherwise shrinks to the space
+     left of its own `left`, which is half the cover, and the drawing slides. */
+  .art .figure{left:50%;top:50%;transform:translate(-50%,-50%);width:max-content;font-size:11.5px;line-height:13px;
+    color:var(--tint);text-shadow:0 0 16px color-mix(in srgb, var(--tint) 65%, transparent),0 0 2px rgba(0,0,0,.6)}
+  .cover:hover .figure{text-shadow:0 0 22px color-mix(in srgb, var(--tint) 85%, transparent)}
+  .cover.bare .figure{opacity:.7}
+  .art .n{position:absolute;right:12px;top:12px;padding:3px 9px;border-radius:999px;
+    background:rgba(6,9,13,.7);border:1px solid var(--edge);font:600 10.5px var(--mono);color:var(--soft)}
+  /* Photos get a real collage rather than an icon. */
+  .collage{position:absolute;inset:0;display:grid;gap:2px;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+  .collage img{width:100%;height:100%;object-fit:cover}
+  .collage.one{grid-template-columns:1fr;grid-template-rows:1fr}
+  .collage.two{grid-template-rows:1fr}
+  .collage.three img:first-child{grid-row:span 2}
+  .collage::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(5,7,10,.75))}
+  .cover-body{padding:13px 15px 14px}
+  .cover-body b{display:block;font:500 16px var(--display)}
+  .cover-body p{margin:5px 0 0;color:var(--dim);font-size:12.5px;line-height:1.5;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .cover-body p em{font-style:normal;color:var(--soft)}
+  .cover.bare .cover-body p{color:var(--faint)}
+
+  /* ── inside a collection ── */
+  .colhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 18px}
+  .back{display:inline-flex;align-items:center;gap:7px;padding:8px 14px 8px 11px;border-radius:999px;
+    border:1px solid var(--edge);background:var(--glass);color:var(--soft);font:500 12.5px var(--sans);cursor:pointer;
+    transition:.2s var(--ease)}
+  .back:hover{background:var(--glass-2);color:#fff;transform:translateX(-2px)}
+  .colhead h2{margin:0;font:300 24px var(--display);letter-spacing:-.02em;display:flex;align-items:baseline;gap:9px}
+  .colhead h2 span{font:500 11px var(--mono);color:var(--faint);padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.07)}
+  .colhead .blurb{width:100%;margin:-6px 0 0;color:var(--dim);font-size:13px}
+
   .list{display:flex;flex-direction:column;gap:10px}
   .grouphead{margin:20px 0 4px;font:500 10.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;
     color:var(--faint);display:flex;align-items:center;gap:9px}
   .grouphead span{padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.07);font:500 10px var(--mono);letter-spacing:0}
-  .grouphead.open{color:var(--live)} .grouphead.open span{background:var(--live-ghost)}
 
   .memo{border:1px solid var(--edge);border-radius:var(--r-md);padding:14px 16px;
     background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.018) 50%);
@@ -123,11 +177,27 @@
   .memo.dropped p{text-decoration:line-through;text-decoration-color:var(--faint)}
   .memo.faded{opacity:.62}
 
+  /* ── the photo grid ── */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+  .photo{margin:0;border:1px solid var(--edge);border-radius:var(--r-md);overflow:hidden;cursor:zoom-in;
+    background:rgba(0,0,0,.3);transition:transform .3s var(--ease),border-color .3s var(--ease);animation:rise .4s var(--ease) both}
+  .photo:hover{transform:scale(1.02);border-color:var(--edge-2)}
+  .photo .img{aspect-ratio:4/3;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:12px}
+  .photo img{width:100%;height:100%;object-fit:cover}
+  .photo figcaption{padding:10px 12px 11px}
+  .photo figcaption p{margin:0;font-size:12.5px;line-height:1.5;color:var(--soft);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .photo .memofoot{margin-top:8px}
+
+
   .empty,.loading{padding:50px 20px;text-align:center;color:var(--faint);font-size:14px}
+  .empty a{color:var(--live)}
   .foot{margin-top:40px;padding-top:22px;border-top:1px solid var(--edge);
     display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
-  @media (prefers-reduced-motion:reduce){.memo{animation:none}.cta{transition:none}}
+  @media (prefers-reduced-motion:reduce){.memo,.cover,.photo{animation:none}.cta{transition:none}}
 </style>
+  <link rel="stylesheet" href="/assets/motion.css">
+  <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
 </head>
 <body>
 <div class="ground"></div><div class="bloom"></div><div class="grain"></div>
@@ -168,10 +238,10 @@
   </nav>
 
   <h1 id="title">Everything it knows<br><em>about you.</em></h1>
-  <p class="sub">Each line below is a blob on Walrus mainnet that your account owns. You can check any
-    of them, and you can tell it when one is wrong.</p>
+  <p class="sub">Sorted into collections. Open one to read each memory, check the blob it lives in on
+    Walrus mainnet, and tell it when one is wrong.</p>
 
-  <div class="stats" id="stats"></div>
+  <div class="stats" id="stats"><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div></div>
   <div id="conflicts"></div>
 
   <div class="bar">
@@ -179,12 +249,14 @@
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.4" stroke="#5A6674" stroke-width="1.3"/><path d="M9.4 9.4L12.5 12.5" stroke="#5A6674" stroke-width="1.3" stroke-linecap="round"/></svg>
       <input id="q" placeholder="Search everything it remembers…" autocomplete="off">
     </label>
-    <button class="filter on" data-filter="all">All</button>
-    <button class="filter" data-filter="crossed">Crossed apps</button>
-    <button class="filter" data-filter="cold">Never used</button>
+    <div class="filters" id="filters" hidden>
+      <button class="filter on" data-filter="all">All</button>
+      <button class="filter" data-filter="crossed">Crossed apps</button>
+      <button class="filter" data-filter="cold">Never used</button>
+    </div>
   </div>
 
-  <div class="list" id="list"><p class="loading">Reading from Walrus…</p></div>
+  <div id="stage"><div class="shelf"><div class="sk-row"><div class="sk sk-line w85"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w85"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w85"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w85"></div><div class="sk sk-line w40"></div></div></div></div>
 
   <footer class="foot">
     <span class="tiny">Append-only storage · marking something wrong stops it being used, it cannot unwrite the blob</span>
@@ -192,9 +264,10 @@
   </footer>
 </div>
 
+<script src="/assets/app.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const userId = (() => {
   try { return localStorage.getItem("ws8-user"); } catch { return null; }
@@ -219,25 +292,245 @@ function secondPerson(text) {
   }));
 }
 
-const GROUPS = [
-  { id: "open", label: "Still open", test: /\b(stuck|error|failing|broken|issue|problem|can't|cannot|trying to|403|404|500)\b/i },
-  { id: "prefs", label: "Preferences", test: /\b(prefer|likes?|dislikes?|doesn't like|don't like|favourite|favorite|vegetarian|allergic|rather)\b/i },
-  { id: "about", label: "About you", test: /\b(name is|work|works|working|building|builds|runs?|uses?|studies|studying|team|deploys?)\b/i },
+/**
+ * The collections. A memory lands in the first one whose test matches, so
+ * the order is the tie-break: something "stuck" is Still open before it is
+ * anything else, a date beats the tools it mentions, and a tool you use is your
+ * setup before it is a preference.
+ * Keyword tests, not a model — they run on every render and being wrong
+ * costs a memory sitting one shelf over, not a wrong answer.
+ */
+/**
+ * Each shelf's cover is drawn in type. String.raw, because half of these are
+ * backslashes and a template literal would eat them.
+ */
+const ART = {
+  photos: String.raw`
+       ____
+  .---|____|---------.
+  |     .----.       |
+  |    /  ()  \      |
+  |    \      /      |
+  |     '----'       |
+  '------------------'
+`,
+  about: String.raw`
+      .-""""-.
+     /  o  o  \
+    |    ..    |
+     \  \__/  /
+      '.____.'
+    .-'        '-.
+   /  /|      |\  \
+  /__/ |______| \__\
+`,
+  prefs: String.raw`
+    .-~~-.   .-~~-.
+   /      \ /      \
+  |        '        |
+  |                 |
+   \               /
+    '.           .'
+      '.       .'
+        '.   .'
+          '.'
+`,
+  setup: String.raw`
+   .--------------------.
+   | >_ node 22         |
+   |    pnpm, never npm |
+   |    macOS      _    |
+   |               █    |
+   '--------------------'
+        _______|_______
+`,
+  work: String.raw`
+         .-------.
+     .---|       |---.
+     |   '-------'   |
+     |===============|
+     |     [___]     |
+     |               |
+     '---------------'
+`,
+  plans: String.raw`
+     _______________
+    |_o___________o_|
+    |  1   2   3   4 |
+    |  5   6  [7]  8 |
+    |  9  10  11  12 |
+    |  13  14  15  . |
+    '----------------'
+`,
+  open: String.raw`
+      __________
+      \::::::::/
+       \::::::/
+        \::::/
+         \::/
+          )(
+         /  \
+        /    \
+       / .... \
+      /________\
+`,
+  other: String.raw`
+   ----  --------  ---
+   ------  ----  -----
+   ---  -------  ----
+   ------  ---  ------
+   --  ---------  ---
+`,
+};
+
+/* The faint field behind each figure: characters scattered on a seed, so
+   every cover is different and every reload draws the same one. */
+function field(seed, rows = 12, cols = 56) {
+  let x = 0;
+  for (const ch of seed) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 2 ** 32; };
+  const glyphs = " .·:+*";
+  let out = "";
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const v = rnd();
+      out += v < .78 ? " " : glyphs[1 + Math.floor((v - .78) / .22 * (glyphs.length - 1))];
+    }
+    out += "\n";
+  }
+  return out;
+}
+
+const COLLECTIONS = [
+  { id: "photos", label: "Photos", tint: "#5AA9FF", blurb: "Pictures you've sent it, on any app. Ask for one by describing it." },
+  { id: "open", label: "Still open", tint: "#F0A868", blurb: "Things you were stuck on the last time you spoke.",
+    test: /\b(stuck|error|failing|broken|issue|problem|can't|cannot|trying to|403|404|500)\b/i },
+  { id: "plans", label: "Plans", tint: "#C7A6FF", blurb: "Dates and things coming up.",
+    test: /\b(trip|travel|travelling|traveling|flight|visit|visiting|planning|plans? to|next (week|month)|on (mon|tues|wednes|thurs|fri|satur|sun)day|tomorrow|deadline|appointment|meeting|exam|birthday|wedding|holiday|vacation)\b/i },
+  { id: "setup", label: "Your setup", tint: "#7FE3D4", blurb: "Tools, versions and machines. It stops asking once it knows.",
+    test: /\b(node|npm|pnpm|yarn|bun|mac|macos|windows|linux|ubuntu|vs ?code|python|typescript|javascript|react|next\.?js|postgres|docker|iphone|android|chrome|safari|version|v\d+|uses?|using|runs? on|installed)\b/i },
+  { id: "work", label: "Projects & work", tint: "#FFB86B", blurb: "What you're building and where you work.",
+    test: /\b(building|builds?|project|side project|app|startup|company|client|launch|hackathon|interview|job|role|team|deploys?|deployed|shipping|working on|works? (at|for|as))\b/i },
+  { id: "prefs", label: "Preferences", tint: "#FF8EB4", blurb: "How you like things done.",
+    test: /\b(prefer|prefers|likes?|loves?|dislikes?|hates?|doesn't like|don't like|favourite|favorite|vegetarian|vegan|allergic|rather|always|never|short answers|no emoji)\b/i },
+  { id: "about", label: "About you", tint: "#9BD0FF", blurb: "Who you are: name, where you live, what you do.",
+    test: /\b(name is|named|called|lives? in|from|born|years old|age|studies|studying|student|wife|husband|partner|girlfriend|boyfriend|kids?|children|daughter|son|family|speaks?|language)\b/i },
+  { id: "other", label: "Everything else", tint: "#8695A6", blurb: "Things it kept that don't fit a shelf." },
 ];
-const groupOf = (t) => (GROUPS.find((g) => g.test.test(t)) ?? { id: "other" }).id;
-const LABELS = { ...Object.fromEntries(GROUPS.map((g) => [g.id, g.label])), other: "Everything else" };
+const BY_ID = Object.fromEntries(COLLECTIONS.map((c) => [c.id, c]));
+const groupOf = (t) => /^(the )?user'?s preference\b/i.test(t) ? "prefs"
+  : (COLLECTIONS.find((g) => g.test?.test(t)) ?? BY_ID.other).id;
 const SURFACE = { web: "Web", telegram: "Telegram", discord: "Discord", demo: "Demo" };
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
 
 let data = null, filter = "all", query = "";
 
+/* Which collection is open lives in the hash, so the browser's back button
+   steps out of it and a link to it can be shared. Buttons, not anchors: the
+   app shell intercepts every same-origin link and would swallow the hash. */
+const openCollection = () => new URLSearchParams(location.hash.slice(1)).get("c");
+function go(id) {
+  history.pushState(null, "", location.pathname + (id ? "#c=" + id : ""));
+  render();
+  if (id) window.scrollTo({ top: Math.max(0, $("stage").getBoundingClientRect().top + window.scrollY - 96), behavior: "smooth" });
+}
+addEventListener("popstate", render);
+
 function statCard(k, v, small, hi) {
+  const n = Number(v);
+  const body = Number.isFinite(n) ? `<span class="num" data-to="${n}">0</span>` : v;
   return `<div class="stat${hi ? " hi" : ""}"><div class="k">${k}</div>
-    <div class="v">${v}${small ? `<small>${small}</small>` : ""}</div></div>`;
+    <div class="v">${body}${small ? `<small>${small}</small>` : ""}</div></div>`;
+}
+
+function countUp() {
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  for (const el of document.querySelectorAll("#stats .num")) {
+    const to = Number(el.dataset.to);
+    if (!Number.isFinite(to)) continue;
+    if (still || to === 0) { el.textContent = String(to); continue; }
+    const started = performance.now();
+    const tick = (now) => {
+      const p = Math.min(1, (now - started) / 620);
+      el.textContent = String(Math.round(to * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+}
+
+/* ── pieces ── */
+
+function memoHtml(f, i) {
+  const p = f.provenance ?? {};
+  const cold = (p.readCount ?? 0) === 0;
+  const when = fmtDate(f.at);
+  return `<div class="memo${cold ? " faded" : ""}" data-text="${esc(f.text)}" style="animation-delay:${Math.min(i * 35, 280)}ms">
+    <p>${esc(secondPerson(f.text))}</p>
+    <div class="memofoot">
+      ${when ? `<span class="pill">${when}</span>` : ""}
+      ${p.wroteOn ? `<span class="pill">written on ${SURFACE[p.wroteOn] ?? p.wroteOn}</span>` : ""}
+      ${p.crossed ? `<span class="pill cross">read on ${p.surfaces.map((x) => SURFACE[x] ?? x).join(" + ")}</span>`
+        : cold ? '<span class="pill cold">never used again</span>' : ""}
+      ${f.blobId ? `<a class="verify" target="_blank" rel="noopener"
+        href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}">${esc(f.blobId.slice(0, 18))}… ↗</a>` : ""}
+      <button class="wrong" type="button">Not right</button>
+    </div>
+  </div>`;
+}
+
+function photoHtml(p, i) {
+  return `<figure class="photo" data-file="${esc(p.file)}" style="animation-delay:${Math.min(i * 40, 320)}ms">
+    <div class="img">${p.available ? `<img src="${esc(p.url)}" alt="${esc(p.description)}" loading="lazy">` : "file no longer on this server"}</div>
+    <figcaption>
+      <p>${esc(p.description || p.said || "A picture")}</p>
+      <div class="memofoot">
+        ${p.at ? `<span class="pill">${fmtDate(p.at)}</span>` : ""}
+        ${p.surface ? `<span class="pill">sent on ${SURFACE[p.surface] ?? p.surface}</span>` : ""}
+      </div>
+    </figcaption>
+  </figure>`;
+}
+
+function coverHtml(c, items, i) {
+  const n = items.length;
+  const drawn = `<pre class="field" aria-hidden="true">${field(c.id)}</pre><pre class="figure" aria-hidden="true">${esc(ART[c.id].replace(/^\n|\n$/g, ""))}</pre>`;
+  let art = drawn;
+  if (c.id === "photos") {
+    // Real pictures beat a drawing of a camera, when there are any.
+    const shots = items.filter((p) => p.available).slice(0, 4);
+    const cls = ["", "one", "two", "three", ""][shots.length] ?? "";
+    if (shots.length) art = `<div class="collage ${cls}">${shots.map((p) => `<img src="${esc(p.url)}" alt="">`).join("")}</div>`;
+  }
+  const preview = c.id === "photos"
+    ? (n ? `${n} picture${n === 1 ? "" : "s"} it can bring back when you ask.` : "None yet. Send one in the chat and ask for it later.")
+    : items.slice(0, 2).map((f) => `<em>${esc(secondPerson(f.text))}</em>`).join(" · ");
+  return `<button class="cover${n ? "" : " bare"}" data-col="${c.id}" style="--tint:${c.tint};animation-delay:${i * 45}ms">
+    <div class="art">${art}<span class="n">${n}</span></div>
+    <div class="cover-body"><b>${c.label}</b><p>${preview}</p></div>
+  </button>`;
+}
+
+/* ── views ── */
+
+function buckets(facts) {
+  const b = new Map(COLLECTIONS.map((c) => [c.id, []]));
+  for (const f of facts) b.get(groupOf(f.text)).push(f);
+  b.set("photos", data.pictures ?? []);
+  return b;
+}
+
+function passes(f) {
+  if (filter === "crossed") return !!f.provenance?.crossed;
+  if (filter === "cold") return (f.provenance?.readCount ?? 0) === 0;
+  return true;
 }
 
 function render() {
   if (!data) return;
   const s = data.stats;
+  const stage = $("stage");
+  const open = openCollection();
 
   $("title").innerHTML = data.name
     ? `Everything it knows<br><em>about ${esc(data.name)}.</em>`
@@ -245,10 +538,11 @@ function render() {
 
   $("stats").innerHTML =
     statCard("Memories", s.total) +
+    statCard("Pictures", (data.pictures ?? []).length) +
     statCard("Crossed apps", s.crossSurface, "of " + s.total, s.crossSurface > 0) +
     statCard("Apps connected", (data.connected ?? []).length) +
-    statCard("Never used again", s.neverRead) +
-    statCard("Duplicates collapsed", s.collapsed);
+    statCard("Never used again", s.neverRead);
+  countUp();
 
   $("conflicts").innerHTML = data.conflicts?.length ? `
     <div class="conflicts">
@@ -262,62 +556,116 @@ function render() {
         </div>`).join("")}
     </div>` : "";
 
-  const shown = data.facts.filter((f) => {
-    if (query && !f.text.toLowerCase().includes(query)) return false;
-    if (filter === "crossed") return f.provenance?.crossed;
-    if (filter === "cold") return (f.provenance?.readCount ?? 0) === 0;
-    return true;
-  });
+  const all = buckets(data.facts);
 
-  if (!shown.length) {
-    $("list").innerHTML = `<p class="empty">${query || filter !== "all" ? "Nothing matches that." : "Nothing stored yet. Go and tell it something."}</p>`;
+  // Searching cuts across every shelf and shows a flat list, grouped by shelf.
+  if (query) {
+    $("filters").hidden = false;
+    let html = "", i = 0;
+    for (const c of COLLECTIONS) {
+      const items = all.get(c.id).filter((x) => c.id === "photos"
+        ? `${x.description} ${x.said ?? ""}`.toLowerCase().includes(query)
+        : x.text.toLowerCase().includes(query) && passes(x));
+      if (!items.length) continue;
+      html += `<h3 class="grouphead">${c.label} <span>${items.length}</span></h3>`;
+      html += c.id === "photos"
+        ? `<div class="grid">${items.map((p) => photoHtml(p, i++)).join("")}</div>`
+        : `<div class="list">${items.map((f) => memoHtml(f, i++)).join("")}</div>`;
+    }
+    stage.innerHTML = html || '<p class="empty">Nothing matches that.</p>';
     return;
   }
 
-  const buckets = new Map([["open", []], ["prefs", []], ["about", []], ["other", []]]);
-  for (const f of shown) buckets.get(groupOf(f.text)).push(f);
-
-  let html = "", i = 0;
-  for (const [id, facts] of buckets) {
-    if (!facts.length) continue;
-    html += `<h3 class="grouphead${id === "open" ? " open" : ""}">${LABELS[id]} <span>${facts.length}</span></h3>`;
-    html += facts.map((f) => {
-      const p = f.provenance ?? {};
-      const when = f.at ? new Date(f.at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
-      const cold = (p.readCount ?? 0) === 0;
-      return `<div class="memo${cold ? " faded" : ""}" data-text="${esc(f.text)}">
-        <p>${esc(secondPerson(f.text))}</p>
-        <div class="memofoot">
-          ${when ? `<span class="pill">${when}</span>` : ""}
-          ${p.wroteOn ? `<span class="pill">written on ${SURFACE[p.wroteOn] ?? p.wroteOn}</span>` : ""}
-          ${p.crossed ? `<span class="pill cross">read on ${p.surfaces.map((x) => SURFACE[x] ?? x).join(" + ")}</span>`
-            : cold ? '<span class="pill cold">never used again</span>' : ""}
-          ${f.blobId ? `<a class="verify" target="_blank" rel="noopener"
-            href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}">${esc(f.blobId.slice(0, 18))}… ↗</a>` : ""}
-          <button class="wrong" type="button">Not right</button>
-        </div>
-      </div>`;
-    }).join("");
+  // Inside one collection.
+  if (open && BY_ID[open]) {
+    const c = BY_ID[open];
+    const items = c.id === "photos" ? all.get("photos") : all.get(c.id).filter(passes);
+    $("filters").hidden = c.id === "photos";
+    const body = c.id === "photos"
+      ? (items.length
+        ? `<div class="grid">${items.map(photoHtml).join("")}</div>`
+        : '<p class="empty">No pictures yet. Attach one in the <a href="/chat">chat</a>, on Telegram or on Discord, and it will be here — and it can bring it back when you describe it.</p>')
+      : (items.length
+        ? `<div class="list">${items.map(memoHtml).join("")}</div>`
+        : `<p class="empty">${filter !== "all" ? "Nothing here matches that filter." : "Nothing on this shelf yet."}</p>`);
+    stage.innerHTML = `
+      <div class="colhead">
+        <button class="back" type="button" data-back>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          All memories
+        </button>
+        <h2>${c.label} <span>${items.length}</span></h2>
+        <p class="blurb">${c.blurb}</p>
+      </div>${body}`;
+    return;
   }
-  $("list").innerHTML = html;
+
+  // The shelf. Empty collections stay off it, except Photos, which is the one
+  // people do not know to expect.
+  $("filters").hidden = true;
+  const covers = COLLECTIONS.filter((c) => c.id === "photos" || all.get(c.id).length);
+  stage.innerHTML = data.facts.length || (data.pictures ?? []).length
+    ? `<div class="shelf">${covers.map((c, i) => coverHtml(c, all.get(c.id), i)).join("")}</div>`
+    : '<p class="empty">Nothing stored yet. <a href="/chat">Go and tell it something.</a></p>';
 }
 
-async function load() {
+/* ── the lightbox ──
+   Built here and hung off <body>, not written in the markup: the app shell
+   lifts only the page's .wrap into its panel, so anything outside it would
+   never arrive — and a panel mid-animation is a transformed ancestor, which
+   would pin a fixed overlay to the panel instead of the screen. */
+const lb = document.createElement("div");
+lb.className = "lb"; lb.id = "lb"; lb.setAttribute("role", "dialog"); lb.setAttribute("aria-modal", "true"); lb.setAttribute("aria-label", "Picture");
+lb.innerHTML = '<button class="lb-close" id="lbclose" aria-label="Close">×</button><div class="lb-card" id="lbcard"></div>';
+document.body.appendChild(lb);
+function showPicture(file) {
+  const p = (data?.pictures ?? []).find((x) => x.file === file);
+  if (!p) return;
+  $("lbcard").innerHTML = `
+    <img src="${esc(p.url)}" alt="${esc(p.description)}">
+    <div class="lb-side">
+      <h3>${p.name ? esc(p.name) : "A picture you sent"}</h3>
+      <p>${esc(p.description || "No description was saved for this one.")}</p>
+      ${p.said ? `<p class="said">You said: ${esc(p.said)}</p>` : ""}
+      <div class="memofoot">
+        ${p.at ? `<span class="pill">${fmtDate(p.at)}</span>` : ""}
+        ${p.surface ? `<span class="pill">sent on ${SURFACE[p.surface] ?? p.surface}</span>` : ""}
+        ${p.blobId ? `<a class="verify" target="_blank" rel="noopener" href="https://walruscan.com/mainnet/blob/${encodeURIComponent(p.blobId)}">${esc(p.blobId.slice(0, 18))}… ↗</a>` : ""}
+      </div>
+    </div>`;
+  $("lb").classList.add("on");
+}
+const closePicture = () => $("lb").classList.remove("on");
+$("lbclose").addEventListener("click", closePicture);
+$("lb").addEventListener("click", (e) => { if (e.target === $("lb")) closePicture(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape") closePicture(); });
+
+/**
+ * The dashboard is the slowest read in the app — a few seconds against the
+ * relayer. It opens on whatever this tab last saw and quietly corrects itself.
+ */
+function load() {
   if (!userId) {
-    $("list").innerHTML = '<p class="empty">This browser hasn\'t talked to it yet. <a href="/chat" style="color:var(--live)">Start a conversation →</a></p>';
+    $("stage").innerHTML = '<p class="empty">This browser hasn\'t talked to it yet. <a href="/chat">Start a conversation →</a></p>';
+    $("stats").innerHTML = "";
     return;
   }
-  try {
-    data = await fetch("/api/memory/full?userId=" + encodeURIComponent(userId)).then((r) => r.json());
-    if (data.error) throw new Error(data.error);
-    render();
-  } catch (err) {
-    $("list").innerHTML = `<p class="empty">Couldn't read your memory just now. ${esc(err.message ?? "")}</p>`;
-  }
+  return WS8.live(
+    "memory-full",
+    () => WS8.api("/api/memory/full?userId=" + encodeURIComponent(userId)),
+    (fresh) => {
+      if (fresh.error) {
+        if (!data) { WS8.problem($("stage"), fresh.error, load); $("stats").innerHTML = ""; }
+        return;
+      }
+      data = fresh;
+      render();
+    },
+  );
 }
 
 $("q").addEventListener("input", (e) => { query = e.target.value.trim().toLowerCase(); render(); });
-document.querySelector(".bar").addEventListener("click", (e) => {
+$("filters").addEventListener("click", (e) => {
   const b = e.target.closest(".filter");
   if (!b) return;
   filter = b.dataset.filter;
@@ -325,7 +673,13 @@ document.querySelector(".bar").addEventListener("click", (e) => {
   render();
 });
 
-$("list").addEventListener("click", async (e) => {
+$("stage").addEventListener("click", async (e) => {
+  const cover = e.target.closest(".cover");
+  if (cover) return go(cover.dataset.col);
+  if (e.target.closest("[data-back]")) return go(null);
+  const photo = e.target.closest(".photo");
+  if (photo) return showPicture(photo.dataset.file);
+
   const btn = e.target.closest(".wrong");
   if (!btn) return;
   const card = btn.closest(".memo");
@@ -346,27 +700,8 @@ $("list").addEventListener("click", async (e) => {
 
 load();
 
-/* ── shared nav: mark the current page, and show what is behind each tab ── */
-(() => {
-  const here = location.pathname.replace(/\.html$/, "") || "/chat";
-  for (const a of document.querySelectorAll(".nav a")) {
-    a.classList.toggle("on", a.getAttribute("href") === here);
-  }
-  let who = null;
-  try { who = localStorage.getItem("ws8-user"); } catch {}
-  if (!who) return;
-
-  const badge = (id, n) => {
-    const el = document.getElementById(id);
-    if (!el || !n) return;
-    el.textContent = n;
-    el.hidden = false;
-  };
-  fetch("/api/memory?userId=" + encodeURIComponent(who))
-    .then((r) => r.json()).then((m) => badge("nav-mem", m.facts?.length)).catch(() => {});
-  fetch("/api/conversations?userId=" + encodeURIComponent(who))
-    .then((r) => r.json()).then((c) => badge("nav-hist", c.conversations?.length)).catch(() => {});
-})();
+/* Nav state, counts and the shared request cache live in /assets/app.js. */
+WS8.nav();
 </script>
 </body>
 </html>

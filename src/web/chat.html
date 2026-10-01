@@ -17,6 +17,7 @@
     --r:24px; --r-md:18px; --r-sm:13px;
     --display:'Outfit',system-ui,sans-serif;
     --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
     color-scheme:dark;
   }
   *{box-sizing:border-box}
@@ -43,9 +44,12 @@
     animation:arrive .5s cubic-bezier(.22,.7,.28,1) both}
   /* Picks up where the landing page's fade-out left off. */
   @keyframes arrive{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-  .top{animation:arrive .55s cubic-bezier(.22,.7,.28,1) .04s both}
-  .chat{animation:arrive .6s cubic-bezier(.22,.7,.28,1) .1s both}
-  .rail{animation:arrive .6s cubic-bezier(.22,.7,.28,1) .18s both}
+  /* The bar deliberately has no entry animation. It is named as persistent
+     furniture for the view transition — held still while the page changes
+     underneath — and an element cannot both hold still and animate itself in.
+     That contradiction was the header glitching on every navigation. */
+  .chat{animation:arrive .34s cubic-bezier(.22,.7,.28,1) .02s both}
+  .rail{animation:arrive .34s cubic-bezier(.22,.7,.28,1) .06s both}
   @media (prefers-reduced-motion:reduce){
     .app,.top,.chat,.rail{animation:none}
   }
@@ -66,19 +70,31 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   .white{padding:10px 20px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
     font:600 13.5px var(--sans);cursor:pointer;transition:.18s}
-  .white:hover{transform:translateY(-1px);box-shadow:0 14px 32px -14px rgba(255,255,255,.55)}
+  .white:hover{transform:scale(1.03)}
   /* One nav, the same on every page. Chat, memory and history are three views
      of the same thing, and hiding two of them behind an overflow menu meant
      nobody found them. */
-  .nav{display:flex;gap:5px;padding:4px;border-radius:999px;background:rgba(255,255,255,.04);
+  .nav{position:relative;display:flex;gap:5px;padding:4px;border-radius:999px;background:rgba(255,255,255,.04);
     border:1px solid var(--edge)}
-  .nav a{display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:999px;
-    color:var(--dim);font:500 13px var(--sans);transition:.2s cubic-bezier(.22,.7,.28,1);white-space:nowrap}
+  .nav a{position:relative;z-index:1;display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:999px;
+    color:var(--dim);font:500 13px var(--sans);transition:color .22s cubic-bezier(.22,.7,.28,1);white-space:nowrap}
   .nav a:hover{color:var(--soft)}
-  .nav a.on{background:#fff;color:#0A0D12;font-weight:600}
+  .nav a.on{color:#0A0D12;font-weight:600}
+  /* The moving pill. One element that travels between tabs, rather than each
+     tab fading its own background in and out — two cross-fades never read as
+     one motion, however they are timed. */
+  .glide{position:absolute;top:4px;left:0;height:calc(100% - 8px);border-radius:999px;background:#fff;
+    z-index:0;opacity:0;pointer-events:none;
+    transition:transform .38s cubic-bezier(.22,.7,.28,1),width .38s cubic-bezier(.22,.7,.28,1),opacity .2s ease}
+  .nav.glided a.on{background:none}
+  /* Placed before it has ever been shown, so it appears under the right tab
+     instead of flying in from the left on load. */
+  .glide.placing{transition:none}
+  @media (prefers-reduced-motion:reduce){.glide{transition:opacity .2s ease}}
   .nav a .n{padding:1px 6px;border-radius:999px;background:rgba(0,0,0,.14);
     font:600 10px var(--mono);letter-spacing:0}
   .nav a.on .n{background:rgba(0,0,0,.1)}
+  .nav:not(.glided) a.on{background:#fff}
   @media (max-width:720px){
     .nav a span.label{display:none}
     .nav a{padding:8px 12px}
@@ -119,15 +135,41 @@
     animation:rise .3s cubic-bezier(.2,.75,.3,1) both}
   @keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
   .turn.me{align-self:flex-end;align-items:flex-end}
-  .bubble{padding:13px 18px;border-radius:20px;white-space:pre-wrap;overflow-wrap:anywhere;
-    font-size:15px;line-height:1.62}
-  .me .bubble{background:#fff;color:#0A0D12;border-bottom-right-radius:7px;font-weight:450}
-  .bot .bubble{background:var(--glass-2);border:1px solid var(--edge);
-    border-bottom-left-radius:7px;color:var(--soft)}
+  /* Every message is a pane of glass. What makes it read as glass rather
+     than a grey box: what is behind it shows through blurred, the top edge
+     catches light, and a little colour is caught in one corner — blue for
+     what you said, white for what it said back. */
+  .bubble{position:relative;overflow:hidden;padding:14px 19px;border-radius:22px;white-space:pre-wrap;
+    overflow-wrap:anywhere;font-size:15px;line-height:1.62;
+    backdrop-filter:blur(14px) saturate(145%);-webkit-backdrop-filter:blur(14px) saturate(145%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(255,255,255,.03),0 22px 44px -28px rgba(0,0,0,.85)}
+  .bubble::before{content:"";position:absolute;z-index:0;width:180px;height:180px;top:-100px;border-radius:50%;
+    pointer-events:none;filter:blur(6px);opacity:.5}
+  .bubble::after{content:"";position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(118deg,rgba(255,255,255,.13),transparent 28%,transparent 74%,rgba(255,255,255,.04))}
+  .bubble > *{position:relative;z-index:1}
+  .me .bubble{color:#fff;font-weight:450;border:1px solid rgba(150,200,255,.42);border-bottom-right-radius:8px;
+    background:linear-gradient(150deg,rgba(90,169,255,.42),rgba(90,169,255,.2) 50%,rgba(70,120,230,.16))}
+  .me .bubble::before{right:-60px;background:radial-gradient(circle,rgba(190,225,255,.9),transparent 68%)}
+  .bot .bubble{color:var(--soft);border:1px solid rgba(255,255,255,.15);border-bottom-left-radius:8px;
+    background:linear-gradient(155deg,rgba(255,255,255,.115),rgba(255,255,255,.045) 42%,rgba(255,255,255,.022))}
+  .bot .bubble::before{left:-70px;background:radial-gradient(circle,rgba(90,169,255,.55),transparent 68%);opacity:.32}
+  /* Who is speaking, above what it said. */
+  .who{display:flex;align-items:center;gap:8px;font:500 11px var(--sans);letter-spacing:.04em;color:var(--dim)}
+  .who i{width:16px;height:16px;border-radius:50%;flex:none;
+    background:radial-gradient(circle at 35% 30%,#fff,#9BD0FF 45%,#2E7ACB);
+    box-shadow:0 0 0 1px rgba(255,255,255,.18)}
+  .turn.me .who{color:var(--faint);padding-right:4px}
+  .turn.bot{align-items:flex-start}
+  .bubble .aside{margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.1);font-size:12px;line-height:1.5;color:var(--dim)}
   .bubble code{font:13px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.4);
     border:1px solid var(--edge);padding:1.5px 6px;border-radius:6px;color:var(--live)}
-  .me .bubble code{background:rgba(0,0,0,.07);border-color:rgba(0,0,0,.1);color:#0A4C8F}
+  .me .bubble code{background:rgba(0,0,0,.28);border-color:rgba(255,255,255,.18);color:#DDEEFF}
   .bubble b{color:#fff;font-weight:600}
+  @media (prefers-reduced-transparency:reduce){
+    .bubble{backdrop-filter:none;-webkit-backdrop-filter:none}
+    .bot .bubble{background:rgba(22,28,36,.96)} .me .bubble{background:rgba(38,84,150,.96)}
+  }
   .shot{display:block;margin-top:11px;border-radius:12px;overflow:hidden;border:1px solid var(--edge);
     transition:border-color .22s,transform .22s}
   .shot:hover{border-color:var(--live);transform:translateY(-1px)}
@@ -137,12 +179,12 @@
   .bubble ul,.bubble ol{margin:5px 0 9px;padding-left:20px}
   .bubble li{margin:3px 0}
   .bubble li::marker{color:var(--live)}
-  .me .bubble li::marker{color:#4A5866}
+  .me .bubble li::marker{color:#CFE6FF}
   .bubble br+br{display:none}
   .bubble pre{margin:8px 0;padding:12px 14px;border-radius:12px;background:rgba(0,0,0,.45);
     border:1px solid var(--edge);overflow-x:auto}
   .bubble pre code{background:none;border:0;padding:0;color:var(--soft);font-size:12.5px;line-height:1.55}
-  .me .bubble b{color:#000}
+  .me .bubble b{color:#fff}
 
   .recalled{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;
     padding:5px 12px;border-radius:999px;background:var(--live-ghost);
@@ -184,6 +226,53 @@
     color:var(--soft);font-size:13px;cursor:pointer;transition:.2s}
   .seed:hover{border-color:var(--edge-2);color:#fff;background:var(--glass-2);transform:translateY(-2px)}
 
+  /* ── what it offered to do next ──
+     The same actions the bots draw as buttons, drawn here as chips under the
+     reply that offered them. */
+  .offer{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;animation:rise .45s cubic-bezier(.22,1,.36,1) both}
+  .offer .chip{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;
+    border:1px solid rgba(90,169,255,.3);background:var(--live-ghost);color:var(--live);
+    font:500 12.5px var(--sans);cursor:pointer;transition:.3s var(--ease)}
+  .offer .chip:hover{background:rgba(90,169,255,.2);color:#fff;transform:scale(1.03)}
+
+  /* ── the invitation to be introduced ── */
+  .invite{margin:26px auto 0;max-width:430px;padding:16px 18px;border-radius:18px;text-align:left;
+    border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.26);animation:rise .6s cubic-bezier(.22,1,.36,1) .3s both}
+  .invite b{display:block;font:400 16px var(--display);color:#fff}
+  .invite span{display:block;margin-top:4px;color:var(--dim);font-size:13px;line-height:1.5}
+  .invite .row{display:flex;gap:9px;align-items:center;margin-top:13px}
+  .invite .white{padding:9px 17px;font-size:13px}
+  .invite .no{background:none;border:0;color:var(--faint);font-size:12.5px;cursor:pointer;padding:8px 6px;
+    transition:color .4s cubic-bezier(.22,1,.36,1)}
+  .invite .no:hover{color:var(--soft)}
+
+  /* ── quick controls: one row of chips above the composer ── */
+  .quick{flex:none;display:flex;gap:7px;flex-wrap:wrap;padding:0 18px 4px}
+  .quick[hidden]{display:none}
+  .qc{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;border:1px solid var(--edge);
+    background:var(--glass);color:var(--dim);font:500 12px var(--sans);cursor:pointer;transition:.2s var(--ease)}
+  .qc:hover{color:#fff;border-color:var(--edge-2);background:var(--glass-2)}
+  .qc svg{opacity:.8}
+  .qc.new{color:var(--soft);border-color:var(--edge-2)}
+  .qc.new:hover{background:#fff;color:#0A0D12;border-color:transparent}
+
+  /* ── the slate: what it is doing before the first word ── */
+  .slate{display:flex;flex-direction:column;gap:7px;min-width:220px}
+  .step{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--faint);transition:color .25s var(--ease)}
+  .step i{flex:none;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--faint);transition:.25s var(--ease)}
+  .step.on{color:var(--soft)}
+  .step.on i{border-color:var(--live);background:var(--live);box-shadow:0 0 0 0 rgba(90,169,255,.5);animation:ping 1.3s ease-out infinite}
+  @keyframes ping{to{box-shadow:0 0 0 7px rgba(90,169,255,0)}}
+  .step.done{color:var(--dim)}
+  .step.done i{border-color:var(--wal,#7FE3D4);background:var(--wal,#7FE3D4);animation:none}
+  .step em{margin-left:auto;font:400 11px var(--mono);font-style:normal;color:var(--faint);padding-left:12px}
+  .step.on em{color:var(--live)}
+  .slate .bar{height:2px;border-radius:2px;margin-top:3px;background:rgba(255,255,255,.07);overflow:hidden}
+  .slate .bar::after{content:"";display:block;width:40%;height:100%;border-radius:2px;
+    background:linear-gradient(90deg,transparent,var(--live),transparent);animation:sweep 1.4s var(--ease) infinite}
+  @keyframes sweep{from{transform:translateX(-120%)}to{transform:translateX(280%)}}
+  @media (prefers-reduced-motion:reduce){.step.on i,.slate .bar::after{animation:none}}
+
   .composer{flex:none;display:flex;gap:11px;align-items:flex-end;padding:16px 18px 18px}
   .clip{width:44px;height:44px;flex:none;border-radius:50%;border:1px solid var(--edge-2);
     background:var(--glass-2);color:var(--soft);cursor:pointer;display:grid;place-items:center;
@@ -215,7 +304,7 @@
   #input:focus{border-color:rgba(90,169,255,.45);background:rgba(0,0,0,.46)}
   #send{width:48px;height:48px;border-radius:50%;border:0;background:#fff;color:#0A0D12;
     cursor:pointer;flex:none;display:grid;place-items:center;transition:.18s}
-  #send:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 14px 30px -14px rgba(255,255,255,.6)}
+  #send:hover:not(:disabled){transform:scale(1.03)}
   #send:disabled{opacity:.3;cursor:default}
 
   /* ── memory rail ── */
@@ -241,13 +330,38 @@
     50%{background:var(--live-ghost)}100%{background:rgba(255,255,255,.028);transform:none;opacity:1}}
   .nothing{padding:26px 16px;text-align:center;color:var(--faint);font-size:13px;line-height:1.6}
 
+  /* Takes the empty space under the memory card. flex:1 means it uses whatever
+     is going and scrolls past that, so the rail never grows unbounded and the
+     Walrus strip below it stays put. */
+  .recents{flex:1;min-height:0;display:flex;flex-direction:column;border-top:1px solid var(--edge)}
+  /* `display` outranks the hidden attribute, so an empty rail would show an
+     empty "Recent" header without this. Caught by tools/check-pages.mjs. */
+  .recents[hidden]{display:none}
+  .recents-h{flex:none;display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+    padding:12px 18px 7px;font:600 10px var(--mono);letter-spacing:.11em;text-transform:uppercase;
+    color:var(--faint)}
+  .recents-h .seeall{font:500 11.5px var(--sans);letter-spacing:0;text-transform:none;color:var(--dim);
+    transition:color .2s cubic-bezier(.22,.7,.28,1)}
+  .recents-h .seeall:hover{color:var(--live)}
+  .recents-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    padding:0 10px 10px;display:flex;flex-direction:column;gap:1px}
+  .rc{display:block;padding:8px 10px;border-radius:11px;border:1px solid transparent;cursor:pointer;
+    transition:background .18s cubic-bezier(.22,.7,.28,1),border-color .18s cubic-bezier(.22,.7,.28,1)}
+  .rc:hover{background:var(--glass);border-color:var(--edge)}
+  .rc b{display:block;font:500 13px var(--sans);color:var(--soft);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rc span{display:block;margin-top:1px;font-size:11px;color:var(--faint)}
+  /* Whichever conversation is open in the chat beside it. */
+  .rc.on{background:var(--live-ghost);border-color:rgba(90,169,255,.28)}
+  .rc.on b{color:#fff}
   .proof{flex:none;border-top:1px solid var(--edge);padding:13px 18px;font-size:12.5px;color:var(--faint)}
   .proof summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
     color:var(--dim);transition:.2s}
   .proof summary::-webkit-details-marker{display:none}
   .proof summary:hover{color:var(--live)}
   .proof summary b{font-weight:500;color:var(--soft)}
-  .proof-list{margin-top:10px;max-height:132px;overflow-y:auto}
+  .proof-note{margin:0 0 8px;font-size:11.5px;line-height:1.45;color:var(--dim);opacity:.85}
+    .proof-list{margin-top:10px;max-height:132px;overflow-y:auto}
   .proof-list a{display:block;padding:6px 0;border-top:1px solid var(--edge);
     font:11px ui-monospace,Menlo,monospace;color:var(--faint);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -305,7 +419,11 @@
   /* The rail is a summary now: a count and a way in. A scrolling list of every
      memory crammed into a 320px column was unreadable once there were more than
      a handful. */
-  .rail{align-self:start}
+  /* Starts compact, but never taller than the row: capped at the grid area
+     so the recents list inside gets a real height to scroll within. Without
+     the cap the rail just grew with the list and the bottom went off-screen,
+     unreachable. */
+  .rail{align-self:start;max-height:100%}
   .rail-h{text-align:center;padding:26px 20px 22px}
   .rail-h h2{margin:14px 0 5px;font:500 16px var(--display)}
   .rail-h p{margin:0;font-size:12.5px;color:var(--faint);line-height:1.55}
@@ -345,17 +463,43 @@
     background:var(--glass);color:var(--soft);cursor:pointer;font-size:13.5px}
   .close:hover{background:var(--glass-2);color:#fff}
 
-  @media (max-width:980px){
-    body{overflow:auto}
-    .app{height:auto;min-height:100%}
+  .menu .phone-only{display:none}
+  /* A phone or a small tablet: the chat is the whole screen.
+     The app stays exactly as tall as the window here too — header at the top,
+     composer at the bottom, the conversation scrolling between them — rather
+     than becoming a long page you scroll to find the box you type in. The
+     rail is put away: what it offers is one tap off, in the Memory tab and
+     the ⋯ menu, and on a screen this size the conversation needs the room. */
+  @media (max-width:860px){
+    .app{height:100dvh;padding:12px 14px 14px;gap:12px}
     .layout{grid-template-columns:minmax(0,1fr)}
-    .chat{min-height:66vh}
-    .rail{max-height:420px}
+    .rail{display:none}
+    .chat{min-height:0}
+    #log{padding:18px 16px 8px}
+    .welcome{padding:6px}
+    .welcome h2{font-size:26px}
     .brand span{display:none}
     .status{display:none}
     .turn{max-width:90%}
+    .composer{padding:12px 14px 14px}
+    .menu .phone-only{display:block}
+  }
+  /* A phone. The bar has to hold the mark, the connect button, two tabs and
+     the menu in 400px, and it did — until the Memory tab grew a count, which
+     pushed the menu off the right edge where nobody could reach it. */
+  @media (max-width:560px){
+    .app{padding-left:12px;padding-right:12px}
+    .top{gap:7px}
+    .brand b{display:none}
+    .white{padding:9px 13px;font-size:12.5px;white-space:nowrap}
+    .nav a{padding:8px 10px;gap:5px}
+    .quick{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+    .quick::-webkit-scrollbar{display:none}
+    .qc{flex:none}
   }
 </style>
+  <link rel="stylesheet" href="/assets/motion.css">
+  <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
 </head>
 <body>
 <div class="ground"></div><div class="bloom"></div><div class="grain"></div>
@@ -384,6 +528,7 @@
     <span class="status"><span class="ping" id="ping"></span><span id="pingtext">Connecting…</span></span>
     <button class="white" id="linkbtn">Connect another app</button>
     <nav class="nav">
+      <span class="glide" id="glide" aria-hidden="true"></span>
       <a href="/chat" data-nav="chat" title="Chat">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2.4 7.4c0-2.6 2.5-4.6 5.6-4.6s5.6 2 5.6 4.6-2.5 4.6-5.6 4.6c-.7 0-1.4-.1-2-.3l-3 1.3.9-2.4c-.9-.8-1.5-1.9-1.5-3.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
         <span class="label">Chat</span>
@@ -392,14 +537,13 @@
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><ellipse cx="8" cy="4.2" rx="5.2" ry="2.2" stroke="currentColor" stroke-width="1.3"/><path d="M2.8 4.2v7.6c0 1.2 2.3 2.2 5.2 2.2s5.2-1 5.2-2.2V4.2" stroke="currentColor" stroke-width="1.3"/></svg>
         <span class="label">Memory</span><span class="n" id="nav-mem" hidden></span>
       </a>
-      <a href="/history" data-nav="history" title="Past conversations">
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.6" stroke="currentColor" stroke-width="1.3"/><path d="M8 4.8V8l2.2 1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-        <span class="label">History</span><span class="n" id="nav-hist" hidden></span>
-      </a>
     </nav>
     <div class="morewrap">
       <button class="more" id="morebtn" aria-label="More options">⋯</button>
       <div class="menu" id="menu">
+        <a class="phone-only" href="/history">Past conversations</a>
+        <a class="phone-only" href="/docs">Docs</a>
+        <a href="/welcome">Tell me about yourself</a>
         <button id="savekey">Save your memory key</button>
         <button id="restorekey">I have a key already</button>
         <button data-say="/forgetme">Stop remembering me</button>
@@ -423,8 +567,24 @@
         </div>
       </div>
       <div class="attached" id="attached" hidden></div>
+      <!-- Quick controls. New chat first, because it was buried in the ⋯ menu
+           and nobody found it; the rest are the questions people type most. -->
+      <div class="quick" id="quick">
+        <button type="button" class="qc new" id="newchat-q">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 2.5v9M2.5 7h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          New chat
+        </button>
+        <button type="button" class="qc" data-ask="What do you know about me?">What do you know about me?</button>
+        <button type="button" class="qc" data-prefill="Show me the picture of ">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.3"/><circle cx="6" cy="7" r="1.3" fill="currentColor"/><path d="M3 12l3.5-3.5 2.5 2.5 2-2L14 12" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          Bring back a picture
+        </button>
+        <button type="button" class="qc" data-ask="/mode">How you work</button>
+        <button type="button" class="qc" data-ask="Summarise what we've talked about so far">Summarise this chat</button>
+        <button type="button" class="qc" data-link>Link Telegram or Discord</button>
+      </div>
       <form class="composer" id="form">
-        <input type="file" id="file" accept="image/*,.pdf,.txt,.md" hidden>
+        <input type="file" id="file" accept="image/*,.txt,.md,.csv,.json,.log,.yml,.yaml" hidden>
         <button type="button" class="clip" id="clip" aria-label="Attach a file" title="Attach a file">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
             <path d="M14.5 9.2l-4.9 4.9a3 3 0 0 1-4.2-4.2l5.6-5.6a2 2 0 1 1 2.8 2.8l-5.6 5.6a1 1 0 0 1-1.4-1.4l5.1-5.1"
@@ -465,13 +625,27 @@
           <button class="sf" data-surface="discord">Discord</button>
         </div>
       </div>
+
+      <!-- Past conversations, where you actually want them: one click from the
+           thing you were doing, rather than a separate page you had to know
+           about. The archive with its search is still behind "See all". -->
+      <div class="recents" id="recents" hidden>
+        <div class="recents-h">
+          <span>Recent</span>
+          <a class="seeall" href="/history">See all &rarr;</a>
+        </div>
+        <div class="recents-list" id="recentlist"></div>
+      </div>
+
       <details class="proof">
         <summary>
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
             <path d="M6.5 1.2l4.3 2v3.4c0 2.6-1.8 4.4-4.3 5.2-2.5-.8-4.3-2.6-4.3-5.2V3.2l4.3-2z"
               stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
-          <span><b id="proofn">Saved permanently</b> on Walrus</span>
+          <span><b id="proofn">Live writes</b> to Walrus</span>
         </summary>
+        <p class="proof-note">Every memory this bot saves, as it lands — from everyone using it,
+          not just you. Open any one on Walruscan to see the blob really exists.</p>
         <div class="proof-list" id="blobs"></div>
       </details>
     </aside>
@@ -520,6 +694,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/assets/app.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 
@@ -567,6 +742,11 @@ function fmt(src) {
     } else if (!line.trim()) {
       closeList();
       out.push("<br>");
+    } else if (/^-#\s+/.test(line)) {
+      // Discord's small-print marker. The bot uses it for asides about its
+      // own memory; anywhere else it showed up as a literal "-#".
+      closeList();
+      out.push(`<p class="aside">${inline(line.replace(/^-#\s+/, ""))}</p>`);
     } else {
       closeList();
       out.push(`<p>${inline(line.replace(/^#{1,6}\s*/, ""))}</p>`);
@@ -578,6 +758,83 @@ function fmt(src) {
 
 /* ── chat ── */
 const log = $("log");
+
+/* ── what the introduction told us ──
+   Kept in this browser so the welcome can use it at once; the memory itself
+   is on Walrus and arrives with the first read. */
+const PROFILE = (() => { try { return JSON.parse(localStorage.getItem("ws8-profile") || "null"); } catch { return null; } })();
+const STARTERS = {
+  tutor: "Teach me something new, one step at a time",
+  coding: "Help me debug something",
+  planner: "Help me plan my week",
+  reader: "Read a link for me and tell me what matters",
+  record: "What do you know about me?",
+  support: "I need help with a problem",
+};
+function personalise() {
+  const w = log.querySelector(".welcome");
+  if (!w || !PROFILE) return;
+  if (PROFILE.name) w.querySelector("h2").innerHTML = `Good to see you, ${esc(PROFILE.name)}.<br><em>I know you already.</em>`;
+  w.querySelector("p").textContent = "What you told me in the introduction is in my memory. Ask me anything, or start with one of these.";
+  const seeds = (PROFILE.jobs ?? []).map((j) => STARTERS[j]).filter(Boolean).slice(0, 3);
+  if (!seeds.includes(STARTERS.record)) seeds.push(STARTERS.record);
+  w.querySelector(".seeds").innerHTML = seeds.map((s) => `<button class="seed">${esc(s)}</button>`).join("");
+}
+/** Offered once, to someone it knows nothing about, and never in the way. */
+function maybeInvite() {
+  let flag = null;
+  try { flag = localStorage.getItem("ws8-onboarded"); } catch {}
+  const w = log.querySelector(".welcome");
+  if (flag || !w || w.querySelector(".invite")) return;
+  w.insertAdjacentHTML("beforeend", `
+    <div class="invite">
+      <b>Want me to know you in a minute?</b>
+      <span>Five quick questions, all optional. Your first message gets answered by someone who already knows your name and how you like to be answered.</span>
+      <div class="row"><a class="white" href="/welcome">Introduce yourself</a><button class="no" id="noinvite" type="button">No thanks, I'll just talk</button></div>
+    </div>`);
+  $("noinvite").addEventListener("click", () => {
+    try { localStorage.setItem("ws8-onboarded", "skipped"); } catch {}
+    w.querySelector(".invite")?.remove();
+    $("input").focus();
+  });
+}
+
+/* ── the transcript survives a reload ──
+   Kept in this browser, per user, and put back on screen before anything
+   else loads. Reloading used to wipe the chat to the welcome screen, which
+   read as the bot forgetting the last five minutes — the one impression this
+   product cannot afford. */
+const SESSION_KEY = "ws8-session:" + userId;
+let session = { convo: null, turns: [] };
+try {
+  const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+  if (saved && Array.isArray(saved.turns)) session = saved;
+} catch {}
+function saveSession() {
+  session.turns = session.turns.slice(-60);
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch {}
+}
+function resetSession(convo = null, turns = []) { session = { convo, turns }; saveSession(); }
+function recordTurn(you, bot, { attached = null, picture = null } = {}) {
+  if (!you || you.startsWith("/")) return; // commands and their codes stay off the record
+  session.turns.push({ you, bot, attached, picture });
+  saveSession();
+}
+const shotHtml = (f, alt) => f?.file
+  ? `<a class="shot" href="/uploads/${encodeURIComponent(f.file)}" target="_blank" rel="noopener"><img src="/uploads/${encodeURIComponent(f.file)}" alt="${esc(alt ?? "")}" loading="lazy"></a>`
+  : "";
+/** Draw saved turns: the picture they sent under theirs, the one it found under its own. */
+function renderTurns(turns) {
+  for (const t of turns) {
+    if (t.you) bubble(turn("me"), esc(t.you) + shotHtml(t.attached, t.attached?.name));
+    if (t.bot) bubble(turn("bot"), fmt(t.bot) + shotHtml(t.picture, "picture it found"));
+  }
+  // A picture has no height until it loads, so the bottom moves after the
+  // list was scrolled to it. Follow it down.
+  for (const img of log.querySelectorAll(".shot img")) {
+    if (!img.complete) img.addEventListener("load", () => scroll(true), { once: true });
+  }
+}
 const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 90;
 function scroll(force) { if (force || atBottom()) log.scrollTop = log.scrollHeight; }
 
@@ -585,9 +842,25 @@ function turn(who) {
   log.querySelector(".welcome")?.remove();
   const el = document.createElement("div");
   el.className = "turn " + who;
+  el.innerHTML = who === "bot" ? '<span class="who"><i></i>Continuity</span>' : '<span class="who">You</span>';
   log.appendChild(el);
   return el;
 }
+/**
+ * What it offered to do next. The offer is made by the reply in words; these
+ * are the same words made tappable, and they go away once one is taken.
+ */
+function offer(el, actions) {
+  if (!actions?.length) return;
+  const row = document.createElement("div");
+  row.className = "offer";
+  row.innerHTML = actions.map((a) => a.url
+    ? `<a class="chip" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.label)}</a>`
+    : `<button class="chip" type="button" data-say="${esc(a.say)}">${esc(a.label)}</button>`).join("");
+  el.appendChild(row);
+  scroll(true);
+}
+
 function bubble(el, html) {
   const b = document.createElement("div");
   b.className = "bubble"; b.innerHTML = html;
@@ -644,6 +917,8 @@ let busy = false;
 async function ask(text, { silent = false } = {}) {
   if (busy || !text) return;
   busy = true; $("send").disabled = true;
+  // Let the attachment finish being looked at before reading it.
+  if (describing) await describing;
   const sending = pending;
   if (!silent) {
     const mine = bubble(turn("me"), esc(text));
@@ -656,7 +931,8 @@ async function ask(text, { silent = false } = {}) {
   $("attached").hidden = true;
   $("attached").innerHTML = "";
   const t = turn("bot");
-  const b = bubble(t, '<span class="dots"><i></i><i></i><i></i></span>');
+  const b = bubble(t, slateHtml());
+  const slate = slateCtl(b);
 
   let acc = "";
   let final = null;
@@ -665,7 +941,12 @@ async function ask(text, { silent = false } = {}) {
     const res = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, text, attachment: pending }),
+      // `sending`, not `pending`: pending is cleared above so the composer can
+      // reset while the turn is in flight. Sending it instead meant every
+      // attachment arrived as null and the bot answered, quite reasonably,
+      // that it could not see images — while the image sat in the bubble
+      // right above it, already described and already on disk.
+      body: JSON.stringify({ userId, text, attachment: sending }),
     });
     if (!res.ok || !res.body) throw new Error("stream unavailable");
 
@@ -684,7 +965,9 @@ async function ask(text, { silent = false } = {}) {
         if (!frame.startsWith("data:")) continue;
         let event;
         try { event = JSON.parse(frame.slice(5)); } catch { continue; }
+        if (event.s) slate.stage(event.s);
         if (event.t) {
+          if (!acc) slate.stop();
           acc += event.t;
           b.innerHTML = esc(acc) + '<span class="caret"></span>';
           scroll();
@@ -697,6 +980,11 @@ async function ask(text, { silent = false } = {}) {
     b.innerHTML = fmt(reply || final?.error || "Something went wrong.");
     if (final?.image) attachImage(b, final.image, reply);
     if (final?.meta) addRecalled(t, final.meta);
+    offer(t, final?.actions);
+    if (reply) recordTurn(text, reply, {
+      attached: sending?.file ? { file: sending.file, name: sending.name ?? null } : null,
+      picture: final?.image && final?.meta?.picture?.file ? { file: final.meta.picture.file } : null,
+    });
     scroll(true);
     setTimeout(refreshAll, 2500);
     setTimeout(refreshAll, 40000);
@@ -711,6 +999,11 @@ async function ask(text, { silent = false } = {}) {
       b.innerHTML = fmt(res.reply ?? res.error ?? "Something went wrong.");
       if (res.image) attachImage(b, res.image, res.reply);
       addRecalled(t, res.meta ?? {});
+      offer(t, res.actions);
+      if (res.reply) recordTurn(text, res.reply, {
+        attached: sending?.file ? { file: sending.file, name: sending.name ?? null } : null,
+        picture: res.image && res.meta?.picture?.file ? { file: res.meta.picture.file } : null,
+      });
       scroll(true);
       setTimeout(refreshAll, 2500);
       return res;
@@ -718,15 +1011,114 @@ async function ask(text, { silent = false } = {}) {
       b.textContent = "I couldn't reach the server. Try again in a moment.";
     }
   } finally {
+    slate.stop();
     busy = false; $("send").disabled = false; $("input").focus();
   }
+}
+
+/**
+ * What it is doing, while it is doing it.
+ *
+ * Three dots said "wait". This says what for: reading your memory first, then
+ * thinking — and how long each has taken, because a slow relayer read looks
+ * exactly like a hung page without a clock on it. The server sends one stage
+ * event when recall finishes, with what it found; the first streamed word
+ * replaces the whole thing.
+ */
+function slateHtml() {
+  return `<div class="slate">
+    <div class="step on" data-step="recall"><i></i><span>Reading your memory</span><em>0.0s</em></div>
+    <div class="step" data-step="think"><i></i><span>Thinking</span><em></em></div>
+    <div class="step" data-step="write"><i></i><span>Saving to Walrus</span><em>after the reply</em></div>
+    <div class="bar"></div>
+  </div>`;
+}
+function slateCtl(el) {
+  const started = performance.now();
+  let stageAt = started;
+  let stopped = false;
+  const tick = () => {
+    if (stopped) return;
+    const on = el.querySelector(".step.on em");
+    if (on) {
+      const secs = (performance.now() - stageAt) / 1000;
+      on.textContent = secs.toFixed(1) + "s";
+      // Past six seconds it is the relayer, not the page; say so.
+      const label = el.querySelector(".step.on span");
+      if (label && secs > 6 && label.dataset.slow !== "1") {
+        label.dataset.slow = "1";
+        label.textContent = label.textContent.startsWith("Reading") ? "Memory is slow right now" : "Still thinking";
+      }
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return {
+    stage(st) {
+      const recall = el.querySelector('[data-step="recall"]');
+      if (recall && st.stage === "thinking") {
+        recall.classList.remove("on"); recall.classList.add("done");
+        const n = st.recalled ?? 0, pics = st.pictures ?? 0;
+        recall.querySelector("span").textContent =
+          n ? `Found ${n} thing${n === 1 ? "" : "s"} about you${pics ? ` and ${pics} picture${pics === 1 ? "" : "s"}` : ""}` : "Nothing stored about you yet";
+        recall.querySelector("em").textContent = ((st.ms ?? 0) / 1000).toFixed(1) + "s";
+        el.querySelector('[data-step="think"]')?.classList.add("on");
+        stageAt = performance.now();
+      }
+    },
+    stop() { stopped = true; },
+  };
 }
 
 /* ── attachments ── */
 
 let pending = null; // { id, url, name, description, type, sawIt }
+/**
+ * The in-flight look at an attachment, if there is one.
+ *
+ * `pending` is only filled in once the vision model has answered, so anyone
+ * who attached something and pressed send while it still said "Looking at
+ * it…" lost the attachment silently — no description, no thumbnail, and a
+ * bot that quite reasonably said it could not see any image. Sending now
+ * waits for the look to finish rather than racing it.
+ */
+let describing = null;
 
 $("clip").addEventListener("click", () => $("file").click());
+
+/**
+ * Shrink a big photo before it leaves the browser.
+ *
+ * A 2MB phone screenshot took the vision model past its 40-second limit and
+ * came back as "could not read"; the same picture at 1600px is described in
+ * four seconds and looks no different in the chat. Small files go untouched,
+ * and anything that is not an image goes as it is.
+ */
+const MAX_SIDE = 1600;
+async function prepare(file) {
+  const asDataUrl = (blob) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+  const isPhoto = /^image\/(png|jpe?g|webp|bmp)$/.test(file.type);
+  if (!isPhoto || file.size < 600 * 1024) return { data: await asDataUrl(file), type: file.type };
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+    if (scale === 1 && file.size < 1.5 * 1024 * 1024) return { data: await asDataUrl(file), type: file.type };
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * scale);
+    c.height = Math.round(bmp.height * scale);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.86));
+    if (!blob) throw new Error("no blob");
+    return { data: await asDataUrl(blob), type: "image/jpeg" };
+  } catch {
+    return { data: await asDataUrl(file), type: file.type };
+  }
+}
 
 $("file").addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
@@ -739,17 +1131,14 @@ $("file").addEventListener("change", async (e) => {
 
   showAttached({ name: file.name, pending: true });
   $("clip").disabled = true;
+  let settle;
+  describing = new Promise((r) => { settle = r; });
   try {
-    const data = await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = reject;
-      r.readAsDataURL(file);
-    });
+    const { data, type } = await prepare(file);
 
     const out = await fetch("/api/attach", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, name: file.name, type: file.type, data }),
+      body: JSON.stringify({ userId, name: file.name, type, data }),
     }).then((r) => r.json());
 
     if (out.error) { showAttached({ name: file.name, error: out.error }); return; }
@@ -759,6 +1148,8 @@ $("file").addEventListener("change", async (e) => {
     showAttached({ name: file.name, error: "Couldn't upload that." });
   } finally {
     $("clip").disabled = false;
+    describing = null;
+    settle();
   }
 });
 
@@ -793,6 +1184,15 @@ $("form").addEventListener("submit", (e) => {
   input.value = ""; autosize(); ask(v);
 });
 log.addEventListener("click", (e) => { if (e.target.classList.contains("seed")) ask(e.target.textContent); });
+// Taking an offer removes it: the same row answered twice would be two turns
+// about one question.
+log.addEventListener("click", (e) => {
+  const chip = e.target.closest(".offer .chip[data-say]");
+  if (!chip) return;
+  const say = chip.dataset.say;
+  chip.closest(".offer").remove();
+  ask(say);
+});
 
 /* ── menu ── */
 $("morebtn").addEventListener("click", (e) => {
@@ -806,11 +1206,35 @@ $("menu").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-say]");
   if (b) { ask(b.dataset.say); $("menu").classList.remove("on"); }
 });
-$("newchat").addEventListener("click", () => {
+function startNewChat() {
+  // Starting fresh means no past conversation is open any more, so nothing in
+  // the rail should still look selected.
+  openConvo = null;
+  resetSession();
+  if (typeof markOpenConversation === "function") markOpenConversation();
   log.innerHTML = `<div class="welcome"><div class="orb"></div>
     <h2>Still here.<br><em>Still remembering.</em></h2>
     <p>Cleared the screen, not my memory. Everything you told me is still with me.</p></div>`;
   $("menu").classList.remove("on");
+  $("input").focus();
+}
+$("newchat").addEventListener("click", startNewChat);
+$("newchat-q").addEventListener("click", startNewChat);
+$("quick").addEventListener("click", (e) => {
+  const b = e.target.closest(".qc");
+  if (!b || b.id === "newchat-q") return;
+  if (b.dataset.ask) return ask(b.dataset.ask);
+  if (b.dataset.link) return $("linkbtn").click();
+  if (b.dataset.prefill) {
+    const inp = $("input");
+    inp.value = b.dataset.prefill;
+    inp.focus();
+    inp.setSelectionRange(inp.value.length, inp.value.length);
+  }
+});
+// ⌘K / Ctrl+K starts a new chat from anywhere on the page.
+addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); startNewChat(); }
 });
 
 /* ── linking ── */
@@ -1043,10 +1467,11 @@ async function reopen(id) {
     if (!r.conversation) return;
 
     log.innerHTML = "";
-    for (const t of r.conversation.turns) {
-      if (t.you) bubble(turn("me"), esc(t.you));
-      if (t.bot) bubble(turn("bot"), fmt(t.bot));
-    }
+    const turns = r.conversation.turns.map((t) => ({
+      you: t.you, bot: t.bot, attached: t.attached ?? null, picture: t.picture ?? null,
+    }));
+    renderTurns(turns);
+    resetSession(id, turns);
     const note = document.createElement("div");
     note.className = "resumed";
     note.textContent = "Picking up where you left off";
@@ -1056,8 +1481,45 @@ async function reopen(id) {
   } catch { /* a failed reopen just leaves a fresh chat */ }
 }
 
+// A question handed over by another page ("Try: …" on the capabilities page).
+// Put in the composer, not sent: what gets said to it is still their call.
+const askParam = new URLSearchParams(location.search).get("ask");
+if (askParam) {
+  const inp = $("input");
+  inp.value = askParam.slice(0, 600);
+  inp.dispatchEvent(new Event("input"));
+  setTimeout(() => { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }, 60);
+  history.replaceState(null, "", "/chat");
+}
+
 const convoParam = new URLSearchParams(location.search).get("convo");
+if (!convoParam && !session.turns.length) {
+  personalise();
+  // Offered straight away, not once the first read comes back: for someone
+  // new that read is the slowest one there is — their identity is being
+  // created — and the offer arrived eight seconds after the page did. Anyone
+  // this browser has evidence of knowing is not asked.
+  if (!PROFILE && !(WS8.cached("memory")?.facts?.length)) maybeInvite();
+}
 if (convoParam) reopen(convoParam);
+else if (session.turns.length) {
+  log.innerHTML = "";
+  renderTurns(session.turns);
+  scroll(true);
+  // The server may have restarted since; give it the last few turns back so
+  // the next message still continues the thread. It keeps its own if it has them.
+  fetch("/api/session/restore", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, turns: session.turns.slice(-12).map((t) => ({ you: t.you, bot: t.bot })) }),
+  }).catch(() => {});
+  // `openConvo` is declared further down; by the time this runs it exists.
+  setTimeout(() => { openConvo = session.convo; markOpenConversation(); }, 0);
+}
+
+// In the app shell, opening a conversation from the history panel or the rail
+// never reloads the page, so the router hands the id over directly. Re-marking
+// the rail afterwards is what keeps the open one highlighted.
+window.__reopen = (id) => { openConvo = id; reopen(id); markOpenConversation(); };
 
 /* ── live panels ── */
 let knownFacts = new Set();
@@ -1072,7 +1534,9 @@ async function refreshHealth() {
     if (!h.known) { $("ping").className = "ping"; $("pingtext").textContent = "Connecting…"; return; }
     const ok = h.ok !== false;
     $("ping").className = "ping " + (ok ? "ok" : "bad");
-    $("pingtext").textContent = ok ? "Saving your memory" : "Reconnecting…";
+    $("pingtext").textContent = !ok ? "Reconnecting…"
+      : h.relayer === "busy" ? "Busy — still saving"
+      : "Saving your memory";
   } catch {
     $("ping").className = "ping bad";
     $("pingtext").textContent = "Offline";
@@ -1081,12 +1545,31 @@ async function refreshHealth() {
 
 let allFacts = [];
 
+// The first read shares the one the nav pills already started; every read
+// after a turn forces a new one, because by then the answer has changed.
+let memLoaded = false;
+
 async function refreshMemory() {
   try {
-    const m = await fetch("/api/memory?userId=" + encodeURIComponent(userId)).then((r) => r.json());
+    // Arriving from another section with a recent answer already in hand: use
+    // it. This is the last read that fired on every single navigation, and
+    // dropping it is what makes moving between sections cost nothing at all.
+    const warm = !memLoaded && WS8.age("memory") < WS8.FRESH_MS && WS8.cached("memory");
+    const m = warm || await WS8.memories({ fresh: memLoaded });
+    memLoaded = true;
+    if (!warm && !m.error) WS8.remember("memory", m); // so /memory opens already filled in
     const facts = m.facts ?? [];
     allFacts = facts;
-    if (!facts.length) return;
+    if (!facts.length) {
+      // Nothing known yet. If they have just been introduced, say the answers
+      // are on their way; if they have not, offer to be.
+      if (PROFILE?.name) { $("memcount").textContent = `Hi ${PROFILE.name} — saving what you told me`; $("tagline").textContent = `remembers ${PROFILE.name}`; }
+      else if (!m.error) maybeInvite();
+      return;
+    }
+
+    // It knows them after all (a linked account, a restored key): no need to ask.
+    log.querySelector(".invite")?.remove();
 
     const n = facts.length;
     const name = m.name ? esc(m.name) : null;
@@ -1152,8 +1635,12 @@ async function refreshLedger() {
   try {
     const r = await fetch("/api/ledger").then((r) => r.json());
     const n = r.writes?.length ?? 0;
+    // This is the PUBLIC ledger — every write the bot makes, by anyone. It used
+    // to be labelled "N saved permanently" directly under the personal memory
+    // panel, so a first-time visitor with nothing stored was told two things
+    // had been saved about them. True number, wrong subject.
+    $("proofn").textContent = n ? `${n} recent write${n === 1 ? "" : "s"}` : "Live writes";
     if (!n) return;
-    $("proofn").textContent = `${n} saved permanently`;
     $("blobs").innerHTML = r.writes.slice(0, 20).map((w) =>
       `<a target="_blank" rel="noopener" href="https://walruscan.com/mainnet/blob/${encodeURIComponent(w.blobId)}"
         title="Open on Walruscan">${esc(w.blobId)}</a>`).join("");
@@ -1175,33 +1662,91 @@ function maybeNudge(factCount) {
   $("viewmem").insertAdjacentElement("afterend", b);
 }
 
-const refreshAll = () => { refreshMemory(); refreshLedger(); };
+/* ── recent conversations, in the rail ── */
+
+const SURFACE_NAME = { web: "Web", telegram: "Telegram", discord: "Discord", demo: "Demo" };
+
+function ago(iso) {
+  if (!iso) return "";
+  const mins = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
+  if (mins < 60 * 24 * 7) return `${Math.round(mins / 1440)}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/**
+ * Which app a conversation happened on is the whole point of this project made
+ * visible: seeing "Telegram · 2h ago" listed in the web sidebar says more about
+ * what this thing does than a paragraph explaining it would.
+ */
+function renderRecents(list) {
+  const box = $("recents");
+  if (!box) return;
+  if (!list.length) { box.hidden = true; return; }
+  box.hidden = false;
+  $("recentlist").innerHTML = list.slice(0, 20).map((c) => `
+    <a class="rc" href="/chat?convo=${encodeURIComponent(c.id)}" data-convo="${esc(c.id)}">
+      <b>${esc(c.title)}</b>
+      <span>${esc(SURFACE_NAME[c.surface] ?? c.surface)} · ${ago(c.endedAt)}</span>
+    </a>`).join("");
+  markOpenConversation();
+}
+
+/**
+ * Highlight the one currently open in the chat beside it.
+ *
+ * Tracked in a variable rather than read from the URL, because `reopen` clears
+ * the ?convo= param on purpose so that reloading gives you a fresh chat. The
+ * URL is therefore only right for the instant after a click.
+ */
+let openConvo = null;
+
+function markOpenConversation() {
+  const open = openConvo ?? new URLSearchParams(location.search).get("convo");
+  for (const el of document.querySelectorAll(".rc")) {
+    el.classList.toggle("on", !!open && el.dataset.convo === open);
+  }
+}
+
+/**
+ * Costs nothing on arrival: the nav counts already read this, and WS8 shares
+ * one request per endpoint and treats an answer under twenty seconds old as
+ * still true.
+ */
+function refreshRecents() {
+  if (!userId) return;
+
+  // Show the shape of the list while the relayer is answering, but only when
+  // there is reason to think there IS a list — a skeleton that appears and
+  // then vanishes tells a brand-new person their history failed to load.
+  const seen = WS8.cached("conversations");
+  if (!seen && $("recentlist") && !$("recentlist").children.length) {
+    $("recents").hidden = false;
+    $("recentlist").innerHTML = '<div class="sk-row"><div class="sk sk-line w60"></div>'
+      + '<div class="sk sk-line w40"></div></div>'.repeat(1)
+      + '<div class="sk-row"><div class="sk sk-line w85"></div>'
+      + '<div class="sk sk-line w40"></div></div>';
+  }
+
+  WS8.live("conversations", WS8.conversations, (r) => {
+    if (r.error) { // the rail is not the place to report a failed read
+      if (!document.querySelector(".rc")) $("recents").hidden = true;
+      return;
+    }
+    renderRecents(r.conversations ?? []);
+  });
+}
+
+const refreshAll = () => { refreshMemory(); refreshLedger(); refreshRecents(); };
 refreshHealth(); refreshAll();
 setInterval(refreshHealth, 25000);
 setInterval(refreshAll, 20000);
 fetch("/api/stats").then((r) => r.json()).then((s) => { botUser = s.botUsername ?? botUser; }).catch(() => {});
 
-/* ── shared nav: mark the current page, and show what is behind each tab ── */
-(() => {
-  const here = location.pathname.replace(/\.html$/, "") || "/chat";
-  for (const a of document.querySelectorAll(".nav a")) {
-    a.classList.toggle("on", a.getAttribute("href") === here);
-  }
-  let who = null;
-  try { who = localStorage.getItem("ws8-user"); } catch {}
-  if (!who) return;
-
-  const badge = (id, n) => {
-    const el = document.getElementById(id);
-    if (!el || !n) return;
-    el.textContent = n;
-    el.hidden = false;
-  };
-  fetch("/api/memory?userId=" + encodeURIComponent(who))
-    .then((r) => r.json()).then((m) => badge("nav-mem", m.facts?.length)).catch(() => {});
-  fetch("/api/conversations?userId=" + encodeURIComponent(who))
-    .then((r) => r.json()).then((c) => badge("nav-hist", c.conversations?.length)).catch(() => {});
-})();
+/* Nav state, counts and the shared request cache live in /assets/app.js. */
+WS8.nav();
 </script>
 </body>
 </html>

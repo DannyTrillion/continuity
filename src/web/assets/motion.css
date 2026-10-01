@@ -1,0 +1,357 @@
+/**
+ * How one section becomes another.
+ *
+ * Chat, Memory and History are three separate documents, so moving between
+ * them used to tear the page down and rebuild it: a black flash, the texture
+ * repainting, every element arriving at a slightly different moment. It read
+ * as the site breaking rather than the site navigating.
+ *
+ * Cross-document view transitions fix that without turning this into a single
+ * page app. The browser snapshots the outgoing page, loads the incoming one,
+ * and animates between the two. Shared furniture — the background, the top bar
+ * — is named so it is lifted out of that animation and simply stays put, which
+ * is the whole trick: if the frame never moves, only the contents change, and
+ * that is what reading as "an app" actually means.
+ *
+ * One file, linked by all three pages, because the names have to match exactly
+ * across documents. Two copies would drift and the transition would silently
+ * stop working.
+ */
+
+@view-transition {
+  navigation: auto;
+}
+
+/* The first thing painted, before any stylesheet has finished: dark, like
+   everything after it. A cold load used to flash the browser's white for a
+   frame, which read as a blink on every navigation that was not a transition. */
+html { background: #05070A; }
+
+/* ── the furniture that never moves ───────────────────────────────────── */
+
+/* The texture, glow and grain are identical on every page. Naming them pulls
+   each out of the page snapshot; killing the animation holds them perfectly
+   still while the content changes behind. */
+.ground { view-transition-name: bg-ground; }
+.bloom  { view-transition-name: bg-bloom; }
+.grain  { view-transition-name: bg-grain; }
+
+/* `.top` is a <header> on chat and a <nav> on the other two. The tag does not
+   matter — a matching name is what makes the browser treat them as the same
+   thing and leave the bar alone instead of fading it out and back in.
+
+   The z-index is not decoration. Naming an element for a view transition makes
+   it a stacking context, which trapped the ⋯ menu's own z-index inside the
+   header — and since the panels come after the header in the document, they
+   painted straight over the open menu. Lifting the whole bar above them puts
+   the menu back on top, where a menu belongs. */
+.top {
+  view-transition-name: topbar;
+  position: relative;
+  z-index: 50;
+}
+
+::view-transition-group(bg-ground),
+::view-transition-group(bg-bloom),
+::view-transition-group(bg-grain) {
+  animation: none;
+}
+
+::view-transition-old(bg-ground), ::view-transition-new(bg-ground),
+::view-transition-old(bg-bloom),  ::view-transition-new(bg-bloom),
+::view-transition-old(bg-grain),  ::view-transition-new(bg-grain) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* ── the content that does ────────────────────────────────────────────── */
+
+/* Outgoing settles down and dissolves; incoming rises the last few pixels into
+   place. They overlap, so there is never an empty frame between them. The
+   incoming curve is slower and eased harder out, so the arrival lands softly
+   instead of snapping. */
+/* Short on purpose. This is a navigation people make constantly, and anything
+   long enough to notice is long enough to get in the way. The old pair ran
+   200ms out and a delayed 280ms in, which read as the page thinking about it. */
+/* ── leaving, then arriving ───────────────────────────────────────────────
+
+   The background never moves (above). Against it, the page you are leaving
+   lifts away and fades, and the page you are going to rises into place a
+   region at a time: the main thing first, what sits beside it a beat later.
+   That order is the transition — a plain cross-fade between two dark pages
+   finished before anyone could see it, and read as no transition at all.
+
+   Each page tags itself (<html data-page>) and names its regions here. The
+   names are different on every kind of page on purpose: a name that exists on
+   both sides makes the browser morph one box into the other, and a landing
+   hero stretching into a chat panel is not a transition anyone asked for. A
+   name that exists on one side only gets a clean exit or a clean entrance. */
+[data-page="landing"] main            { view-transition-name: land-main; }
+[data-page="landing"] .foot           { view-transition-name: land-foot; }
+[data-page="app"] .chat               { view-transition-name: app-main; }
+[data-page="app"] .rail               { view-transition-name: app-side; }
+[data-page="app"] #p-memory .wrap,
+[data-page="app"] #p-history .wrap    { view-transition-name: app-page; }
+[data-page="cases"] .lede             { view-transition-name: cases-lede; }
+[data-page="cases"] .board            { view-transition-name: cases-board; }
+[data-page="docs"] .hero              { view-transition-name: docs-hero; }
+[data-page="docs"] .stage             { view-transition-name: docs-stage; }
+[data-page="docs"] .dots              { view-transition-name: docs-dots; }
+[data-page="demo"] .grid              { view-transition-name: demo-main; }
+[data-page="welcome"] .flow           { view-transition-name: welcome-main; }
+[data-page="welcome"] .tray           { view-transition-name: welcome-tray; }
+
+/* Whatever is not named: fades out quickly, fades back in under the rest. */
+::view-transition-old(root) { animation: 240ms cubic-bezier(.4, 0, 1, 1) both vt-out; }
+::view-transition-new(root) { animation: 520ms cubic-bezier(.16, 1, .3, 1) 120ms both vt-in-soft; }
+::view-transition-old(topbar) { animation: 200ms ease both vt-out-flat; }
+::view-transition-new(topbar) { animation: 360ms ease 80ms both vt-in-flat; }
+
+/* Leaving. */
+::view-transition-old(land-main), ::view-transition-old(land-foot),
+::view-transition-old(app-main),  ::view-transition-old(app-side), ::view-transition-old(app-page),
+::view-transition-old(cases-lede), ::view-transition-old(cases-board),
+::view-transition-old(docs-hero), ::view-transition-old(docs-stage), ::view-transition-old(docs-dots),
+::view-transition-old(demo-main),
+::view-transition-old(welcome-main), ::view-transition-old(welcome-tray) {
+  animation: 260ms cubic-bezier(.4, 0, 1, 1) both vt-out;
+}
+
+/* Arriving: the lead region, then its companions, each a beat behind. */
+::view-transition-new(land-main), ::view-transition-new(app-main), ::view-transition-new(app-page),
+::view-transition-new(cases-lede), ::view-transition-new(docs-hero), ::view-transition-new(demo-main),
+::view-transition-new(welcome-main) {
+  animation: 680ms cubic-bezier(.16, 1, .3, 1) 140ms both vt-in;
+}
+::view-transition-new(app-side), ::view-transition-new(cases-board), ::view-transition-new(docs-stage) {
+  animation: 720ms cubic-bezier(.16, 1, .3, 1) 240ms both vt-in;
+}
+::view-transition-new(land-foot), ::view-transition-new(docs-dots), ::view-transition-new(welcome-tray) {
+  animation: 600ms cubic-bezier(.16, 1, .3, 1) 340ms both vt-in-soft;
+}
+
+/* ── one entrance, not two ────────────────────────────────────────────────
+
+   A page arriving through a view transition is already being animated in by
+   the browser. Its own entrance animations — the panel contents staging up,
+   the chat and rail rising, the landing's copy revealing — all start from
+   opacity 0, and the transition's snapshot of the new page is taken at that
+   first frame. So the old page dissolved into an EMPTY new one, and the
+   contents then rose in on top: a blink, then a second arrival. `.vt-in` is
+   set from `pagereveal`, which fires only when there is a transition and
+   before the first frame, so on those arrivals the page simply appears in its
+   finished state and the transition does the moving. A cold load keeps its
+   own entrance, because then there is nothing else animating. */
+/* Only the once-per-load entrances are gated here. The panel stagger is
+   handled by the router (it drops the class from the arriving panel on
+   `pagereveal`), so later section switches still get their motion — gating
+   it by this class, which stays on for the life of the page, had switched
+   every in-app transition off. */
+.vt-in .chat,
+.vt-in .rail,
+.vt-in .lede,
+.vt-in .tile,
+.vt-in .carry.revealing,
+.vt-in .nav a .n {
+  animation: none !important;
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes vt-out      { to   { opacity: 0; transform: translateY(-14px) scale(.985); } }
+@keyframes vt-in       { from { opacity: 0; transform: translateY(26px) scale(.985); } }
+@keyframes vt-in-soft  { from { opacity: 0; transform: translateY(10px); } }
+@keyframes vt-out-flat { to   { opacity: 0; } }
+@keyframes vt-in-flat  { from { opacity: 0; } }
+
+/* Motion is decoration here; the navigation still works entirely without it. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* ── the counts on the nav pills ──────────────────────────────────────── */
+
+/* These arrive with the network on a cold load and used to flip straight from
+   hidden to visible, nudging the bar sideways after the page had settled. They
+   come from cache on any later navigation, so this only softens the first one. */
+.nav a .n {
+  animation: count-in 260ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes count-in {
+  from { opacity: 0; transform: scale(.7); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav a .n { animation: none; }
+}
+
+/* ── the way out of a failure ─────────────────────────────────────────── */
+
+/* Paired with WS8.problem(): when a panel cannot load, it says so in plain
+   words and offers this rather than leaving the person on a dead end with a
+   server error printed across the middle of the page. */
+.empty .again {
+  margin-left: 8px;
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .06);
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms cubic-bezier(.16, 1, .3, 1);
+}
+
+.empty .again:hover {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .28);
+}
+
+.empty .again:active { transform: scale(.97); }
+
+@media (prefers-reduced-motion: reduce) {
+  .empty .again { transition: none; }
+}
+
+/* ── arriving through a transition ────────────────────────────────────── */
+
+/* The entry animations on these pages exist for a cold load, where content
+   sliding into place reads as the page assembling itself. Replaying them after
+   a view transition is motion on top of motion: the section fades in, and then
+   everything inside it slides up again on a stagger. That doubling is what made
+   switching sections feel slow and glitchy rather than quick.
+   `.vt-in` is set from a `pagereveal` listener, which only fires with a
+   transition attached — so a genuine first visit keeps its entrance. */
+/* Only the list rows. The panels themselves now stage their contents in on
+   open (see shell.css), which is the entrance — replaying each row's own rise
+   underneath it is the doubling this was written to prevent. */
+/* (memo and convo are covered by the entrance rule above) */
+
+/* ═══ how a section opens ═════════════════════════════════════════════════
+
+   Lifted from commonsmade.com, which does this without a library: the section
+   itself appears instantly and its CONTENTS rise into place on a short
+   stagger. That reads as the section opening, where a cross-fade of the whole
+   panel only ever reads as one page replacing another.
+
+   Their exact numbers: 10px of travel, half a second, expo-out easing, and
+   80ms between each child. Kept as written rather than approximated, because
+   the specific curve is most of why it feels expensive.                      */
+
+:root {
+  --rise: cubic-bezier(.22, 1, .36, 1);
+  /* Their curve exactly. The duration is a little shorter and the step a
+     little tighter than commonsmade's 0.5s/80ms, because theirs stages a
+     handful of blocks once on a marketing page, and this stages seven in a
+     panel you switch to constantly. Expo-out is front-loaded, so most of the
+     movement is over well before the clock runs out either way. */
+  --rise-time: .42s;
+  --rise-step: 55ms;
+}
+
+@keyframes enter-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The chat panel has two children worth staging; the reading panels stage the
+   contents of their wrapper. Applied on open and removed when it finishes, so
+   nothing is left carrying an animation it no longer needs. */
+
+/* ═══ skeletons ═══════════════════════════════════════════════════════════
+
+   A section opens immediately and shows the shape of what is coming while the
+   relayer is still answering. The wait does not disappear — reading from
+   Walrus takes the time it takes — but it stops being a blank panel, and the
+   layout never jumps when the real rows land because the skeleton is the same
+   height as the thing it stands in for.                                      */
+
+@keyframes sk-sweep {
+  to { background-position: -200% 0; }
+}
+
+.sk {
+  border-radius: 8px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, .045) 0%,
+    rgba(255, 255, 255, .10) 45%,
+    rgba(255, 255, 255, .045) 90%);
+  background-size: 200% 100%;
+  animation: sk-sweep 1.5s linear infinite;
+}
+
+.sk-row { display: flex; flex-direction: column; gap: 7px; padding: 14px 16px;
+  border: 1px solid var(--edge); border-radius: var(--r-md); }
+.sk-line { height: 11px; }
+.sk-line.w40 { width: 40%; }
+.sk-line.w60 { width: 60%; }
+.sk-line.w85 { width: 85%; }
+
+/* Each skeleton row fades in very slightly after the one above, so a list
+   arrives as a list rather than as a block appearing all at once. */
+.sk-row:nth-child(2) { animation-delay: 60ms; }
+.sk-row:nth-child(3) { animation-delay: 120ms; }
+.sk-row:nth-child(4) { animation-delay: 180ms; }
+.sk-row:nth-child(5) { animation-delay: 240ms; }
+
+/* ── the docs button ──────────────────────────────────────────────────── */
+
+/* A small fixed glass circle, bottom right, on every page. Quiet enough not
+   to compete with anything; always in the same place, so it is findable
+   without being looked for. */
+.docs-fab{
+  position:fixed;right:18px;bottom:18px;z-index:60;
+  width:44px;height:44px;border-radius:50%;
+  display:grid;place-items:center;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.07);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  color:#C9D3DF;text-decoration:none;
+  box-shadow:0 18px 40px -20px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.08);
+  transition:transform .45s cubic-bezier(.22,1,.36,1),border-color .45s,background .45s,color .45s;
+}
+.docs-fab:hover,.docs-fab:focus-visible{
+  transform:scale(1.08);color:#fff;outline:none;
+  border-color:rgba(255,255,255,.34);background:rgba(255,255,255,.12);
+}
+.docs-fab svg{display:block}
+/* A tooltip that only appears when asked for. */
+.docs-fab::after{
+  content:"Docs";position:absolute;right:calc(100% + 10px);top:50%;transform:translateY(-50%);
+  font:500 11px ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:#8695A6;
+  opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;
+}
+.docs-fab:hover::after{opacity:1}
+@media (max-width:860px){.docs-fab{right:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px))}}
+
+/* ── the memory page's picture lightbox ──
+   Lives on <body>, outside the panels, so it is styled here and not in the
+   page's own (scoped) stylesheet. */
+@keyframes lb-fade{from{opacity:0}to{opacity:1}}
+@keyframes lb-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .lb{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:24px;
+  background:rgba(4,6,9,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.lb.on{display:flex;animation:lb-fade .25s cubic-bezier(.22,.7,.28,1) both}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.lb-card{max-width:min(920px,100%);max-height:100%;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr);
+  border:1px solid rgba(255,255,255,.19);border-radius:20px;overflow:hidden;background:#0B0F15;animation:lb-rise .35s cubic-bezier(.22,.7,.28,1) both}
+.lb-card img{width:100%;height:100%;max-height:80vh;object-fit:contain;background:#000}
+.lb-side{padding:22px 22px 20px;display:flex;flex-direction:column;gap:12px;overflow:auto}
+.lb-side h3{margin:0;font:400 18px 'Outfit',system-ui,sans-serif}
+.lb-side p{margin:0;color:#C3CEDB;font-size:13.5px;line-height:1.6}
+.lb-side .said{color:#8695A6;font-size:12.5px;border-left:2px solid rgba(255,255,255,.19);padding-left:10px}
+.lb-side .memofoot{margin-top:auto}
+.lb-close{position:absolute;top:18px;right:18px;width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.19);
+  background:rgba(6,9,13,.7);color:#fff;font-size:18px;cursor:pointer}
+@media (max-width:700px){.lb-card{grid-template-columns:1fr;max-height:92vh;overflow:auto}.lb-card img{max-height:50vh}}
+.lb .memofoot{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:11px;color:#5A6674}
+.lb .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.26)}
+.lb .verify{color:#5A6674;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:10.5px}
+.lb .verify:hover{color:#7FE3D4}
+@media (prefers-reduced-motion:reduce){.lb-card,.lb.on{animation:none}}

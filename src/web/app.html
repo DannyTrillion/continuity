@@ -1,0 +1,2564 @@
+<!doctype html>
+<html lang="en" data-page="app">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Continuity — the assistant that remembers you</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet">
+  <style>
+
+  :root{
+    --void:#05070A; --glass:rgba(255,255,255,.055); --glass-2:rgba(255,255,255,.088);
+    --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.18);
+    --ink:#fff; --soft:#C9D3DF; --dim:#8695A6; --faint:#5A6674;
+    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.13);
+    --r:24px; --r-md:18px; --r-sm:13px;
+    --display:'Outfit',system-ui,sans-serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--void);color:var(--ink);font:15px/1.6 var(--sans);
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  /* The same ceramic/suede ground the landing page uses, so arriving here reads
+     as moving across one surface rather than loading a different site. */
+  .ground,.bloom,.grain{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .ground{background-image:url("/assets/texture.jpg");background-size:cover;
+    background-position:center;opacity:.9}
+  .bloom{background:
+    radial-gradient(1000px 560px at 82% -14%, rgba(90,169,255,.16), transparent 62%),
+    radial-gradient(700px 480px at 6% 104%, rgba(120,90,255,.11), transparent 60%),
+    radial-gradient(1200px 900px at 50% 48%, rgba(0,0,0,.3), transparent 72%)}
+  .grain{opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit}
+  ::selection{background:rgba(90,169,255,.3)}
+
+  .app{position:relative;z-index:1;height:100%;max-width:1240px;margin:0 auto;
+    padding:18px 20px 20px;display:flex;flex-direction:column;gap:16px;
+    animation:arrive .5s cubic-bezier(.22,.7,.28,1) both}
+  /* Picks up where the landing page's fade-out left off. */
+  @keyframes arrive{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  /* The bar deliberately has no entry animation. It is named as persistent
+     furniture for the view transition — held still while the page changes
+     underneath — and an element cannot both hold still and animate itself in.
+     That contradiction was the header glitching on every navigation. */
+  .chat{animation:arrive .34s cubic-bezier(.22,.7,.28,1) .02s both}
+  .rail{animation:arrive .34s cubic-bezier(.22,.7,.28,1) .06s both}
+  @media (prefers-reduced-motion:reduce){
+    .app,.top,.chat,.rail{animation:none}
+  }
+
+  /* ── top ── */
+  .top{display:flex;align-items:center;gap:10px;flex:none}
+  .brand{display:flex;align-items:center;gap:10px;margin-right:auto;
+    transition:opacity .25s cubic-bezier(.22,.7,.28,1)}
+  .brand:hover{opacity:.72}
+  .brand b{font:500 17px var(--display);letter-spacing:.005em}
+  .brand span{font-size:13px;color:var(--faint);padding-left:10px;margin-left:2px;
+    border-left:1px solid var(--edge)}
+  .status{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;
+    background:var(--glass);border:1px solid var(--edge);font-size:12.5px;color:var(--dim);white-space:nowrap}
+  .ping{width:6px;height:6px;border-radius:50%;background:var(--faint);flex:none}
+  .ping.ok{background:var(--live);box-shadow:0 0 0 3px var(--live-ghost);animation:pulse 3s ease-in-out infinite}
+  .ping.bad{background:#FF6B5A;box-shadow:0 0 0 3px rgba(255,107,90,.15)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .white{padding:10px 20px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
+    font:600 13.5px var(--sans);cursor:pointer;transition:.18s}
+  .white:hover{transform:scale(1.03)}
+  /* One nav, the same on every page. Chat, memory and history are three views
+     of the same thing, and hiding two of them behind an overflow menu meant
+     nobody found them. */
+  .nav{position:relative;display:flex;gap:5px;padding:4px;border-radius:999px;background:rgba(255,255,255,.04);
+    border:1px solid var(--edge)}
+  .nav a{position:relative;z-index:1;display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:999px;
+    color:var(--dim);font:500 13px var(--sans);transition:color .22s cubic-bezier(.22,.7,.28,1);white-space:nowrap}
+  .nav a:hover{color:var(--soft)}
+  .nav a.on{color:#0A0D12;font-weight:600}
+  /* The moving pill. One element that travels between tabs, rather than each
+     tab fading its own background in and out — two cross-fades never read as
+     one motion, however they are timed. */
+  .glide{position:absolute;top:4px;left:0;height:calc(100% - 8px);border-radius:999px;background:#fff;
+    z-index:0;opacity:0;pointer-events:none;
+    transition:transform .38s cubic-bezier(.22,.7,.28,1),width .38s cubic-bezier(.22,.7,.28,1),opacity .2s ease}
+  .nav.glided a.on{background:none}
+  /* Placed before it has ever been shown, so it appears under the right tab
+     instead of flying in from the left on load. */
+  .glide.placing{transition:none}
+  @media (prefers-reduced-motion:reduce){.glide{transition:opacity .2s ease}}
+  .nav a .n{padding:1px 6px;border-radius:999px;background:rgba(0,0,0,.14);
+    font:600 10px var(--mono);letter-spacing:0}
+  .nav a.on .n{background:rgba(0,0,0,.1)}
+  .nav:not(.glided) a.on{background:#fff}
+  @media (max-width:720px){
+    .nav a span.label{display:none}
+    .nav a{padding:8px 12px}
+  }
+  .morewrap{position:relative;flex:none}
+  .more{width:38px;height:38px;border-radius:50%;border:1px solid var(--edge);background:var(--glass);
+    color:var(--dim);cursor:pointer;transition:.2s;line-height:1}
+  .more:hover{background:var(--glass-2);color:#fff}
+  .menu{position:absolute;top:46px;right:0;min-width:186px;padding:6px;z-index:40;
+    border:1px solid var(--edge-2);border-radius:var(--r-sm);background:rgba(12,16,22,.97);
+    backdrop-filter:blur(22px);box-shadow:0 26px 60px -22px rgba(0,0,0,.9);display:none;text-align:left}
+  .menu.on{display:block;animation:pop .16s ease both}
+  @keyframes pop{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+  .menu button,.menu a{display:block;width:100%;text-align:left;padding:9px 12px;border:0;border-radius:9px;
+    background:none;color:var(--soft);font-size:13.5px;cursor:pointer}
+  .menu button:hover,.menu a:hover{background:var(--glass-2);color:#fff}
+
+  /* ── layout ── */
+  .layout{flex:1;min-height:0;display:grid;gap:16px;grid-template-columns:minmax(0,1fr) 322px}
+
+  .chat{display:flex;flex-direction:column;min-height:0;border:1px solid var(--edge);
+    border-radius:var(--r);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
+    overflow:hidden;position:relative;
+    background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.032) 42%);
+    box-shadow:0 40px 110px -46px rgba(0,0,0,.95), inset 0 1px 0 rgba(255,255,255,.08)}
+  /* a soft sheen at the top edge, so the panel catches light like real glass */
+  .chat::before{content:"";position:absolute;inset:0 0 auto;height:180px;pointer-events:none;
+    background:radial-gradient(70% 100% at 50% 0%, rgba(90,169,255,.09), transparent 70%)}
+  #log{flex:1;min-height:0;overflow-y:auto;padding:26px 26px 8px;
+    display:flex;flex-direction:column;gap:18px;scroll-behavior:smooth}
+  /* A flex spacer that eats leftover height, so a short conversation sits at
+     the bottom by the composer rather than stranded at the top. */
+  #log::before{content:"";margin-top:auto}
+  #log::-webkit-scrollbar{width:7px}
+  #log::-webkit-scrollbar-thumb{background:var(--edge-2);border-radius:7px}
+
+  .turn{display:flex;flex-direction:column;gap:7px;max-width:76%;
+    animation:rise .3s cubic-bezier(.2,.75,.3,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+  .turn.me{align-self:flex-end;align-items:flex-end}
+  /* Every message is a pane of glass. What makes it read as glass rather
+     than a grey box: what is behind it shows through blurred, the top edge
+     catches light, and a little colour is caught in one corner — blue for
+     what you said, white for what it said back. */
+  .bubble{position:relative;overflow:hidden;padding:14px 19px;border-radius:22px;white-space:pre-wrap;
+    overflow-wrap:anywhere;font-size:15px;line-height:1.62;
+    backdrop-filter:blur(14px) saturate(145%);-webkit-backdrop-filter:blur(14px) saturate(145%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(255,255,255,.03),0 22px 44px -28px rgba(0,0,0,.85)}
+  .bubble::before{content:"";position:absolute;z-index:0;width:180px;height:180px;top:-100px;border-radius:50%;
+    pointer-events:none;filter:blur(6px);opacity:.5}
+  .bubble::after{content:"";position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(118deg,rgba(255,255,255,.13),transparent 28%,transparent 74%,rgba(255,255,255,.04))}
+  .bubble > *{position:relative;z-index:1}
+  .me .bubble{color:#fff;font-weight:450;border:1px solid rgba(150,200,255,.42);border-bottom-right-radius:8px;
+    background:linear-gradient(150deg,rgba(90,169,255,.42),rgba(90,169,255,.2) 50%,rgba(70,120,230,.16))}
+  .me .bubble::before{right:-60px;background:radial-gradient(circle,rgba(190,225,255,.9),transparent 68%)}
+  .bot .bubble{color:var(--soft);border:1px solid rgba(255,255,255,.15);border-bottom-left-radius:8px;
+    background:linear-gradient(155deg,rgba(255,255,255,.115),rgba(255,255,255,.045) 42%,rgba(255,255,255,.022))}
+  .bot .bubble::before{left:-70px;background:radial-gradient(circle,rgba(90,169,255,.55),transparent 68%);opacity:.32}
+  /* Who is speaking, above what it said. */
+  .who{display:flex;align-items:center;gap:8px;font:500 11px var(--sans);letter-spacing:.04em;color:var(--dim)}
+  .who i{width:16px;height:16px;border-radius:50%;flex:none;
+    background:radial-gradient(circle at 35% 30%,#fff,#9BD0FF 45%,#2E7ACB);
+    box-shadow:0 0 0 1px rgba(255,255,255,.18)}
+  .turn.me .who{color:var(--faint);padding-right:4px}
+  .turn.bot{align-items:flex-start}
+  .bubble .aside{margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.1);font-size:12px;line-height:1.5;color:var(--dim)}
+  .bubble code{font:13px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.4);
+    border:1px solid var(--edge);padding:1.5px 6px;border-radius:6px;color:var(--live)}
+  .me .bubble code{background:rgba(0,0,0,.28);border-color:rgba(255,255,255,.18);color:#DDEEFF}
+  .bubble b{color:#fff;font-weight:600}
+  @media (prefers-reduced-transparency:reduce){
+    .bubble{backdrop-filter:none;-webkit-backdrop-filter:none}
+    .bot .bubble{background:rgba(22,28,36,.96)} .me .bubble{background:rgba(38,84,150,.96)}
+  }
+  .shot{display:block;margin-top:11px;border-radius:12px;overflow:hidden;border:1px solid var(--edge);
+    transition:border-color .22s,transform .22s}
+  .shot:hover{border-color:var(--live);transform:translateY(-1px)}
+  .shot img{display:block;width:100%;height:auto}
+  .bubble p{margin:0 0 7px}
+  .bubble p:last-child{margin-bottom:0}
+  .bubble ul,.bubble ol{margin:5px 0 9px;padding-left:20px}
+  .bubble li{margin:3px 0}
+  .bubble li::marker{color:var(--live)}
+  .me .bubble li::marker{color:#CFE6FF}
+  .bubble br+br{display:none}
+  .bubble pre{margin:8px 0;padding:12px 14px;border-radius:12px;background:rgba(0,0,0,.45);
+    border:1px solid var(--edge);overflow-x:auto}
+  .bubble pre code{background:none;border:0;padding:0;color:var(--soft);font-size:12.5px;line-height:1.55}
+  .me .bubble b{color:#fff}
+
+  .recalled{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;
+    padding:5px 12px;border-radius:999px;background:var(--live-ghost);
+    border:1px solid rgba(90,169,255,.22);color:var(--live);font-size:11.5px;cursor:pointer;
+    transition:.2s}
+  .recalled:hover{background:rgba(90,169,255,.2)}
+  .recalled svg{flex:none}
+  .used{display:none;align-self:flex-start;max-width:100%;border:1px solid var(--edge);
+    border-radius:var(--r-sm);background:rgba(0,0,0,.26);padding:11px 14px}
+  .used.on{display:block;animation:rise .2s both}
+  .used p{margin:0;padding:5px 0;font-size:13.5px;color:var(--soft);border-top:1px solid var(--edge)}
+  .used p:first-of-type{border-top:0}
+  .used h5{margin:0 0 5px;font:500 10.5px var(--sans);letter-spacing:.12em;
+    text-transform:uppercase;color:var(--faint)}
+
+  .caret{display:inline-block;width:2px;height:1.02em;margin-left:2px;vertical-align:-2px;
+    background:var(--live);border-radius:1px;animation:blink 1.05s steps(2,start) infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  .dots{display:inline-flex;gap:5px;align-items:center;height:20px}
+  .dots i{width:6px;height:6px;border-radius:50%;background:var(--live);animation:bl 1.1s infinite}
+  .dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+  @keyframes bl{0%,72%,100%{opacity:.22;transform:translateY(0)}34%{opacity:1;transform:translateY(-3px)}}
+
+  /* welcome */
+  .welcome{margin:auto;text-align:center;max-width:46ch;padding:14px}
+  .orb{width:64px;height:64px;margin:0 auto 20px;border-radius:50%;position:relative;
+    background:radial-gradient(circle at 34% 30%, #fff, #5AA9FF 46%, #1B3F6B 100%);
+    box-shadow:0 0 44px rgba(90,169,255,.4)}
+  .orb::after{content:"";position:absolute;inset:-11px;border-radius:50%;
+    border:1px solid rgba(90,169,255,.28);animation:halo 3.4s ease-in-out infinite}
+  @keyframes halo{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.1);opacity:.25}}
+  .welcome h2{margin:0 0 10px;font:300 31px/1.18 var(--display);letter-spacing:-.02em}
+  .welcome h2 em{font-style:normal;font-weight:500;
+    background:linear-gradient(96deg,#fff 26%,var(--live) 128%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .welcome p{color:var(--dim);font-size:14.5px;margin:0 0 22px;line-height:1.6}
+  .seeds{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
+  .seed{padding:10px 16px;border-radius:999px;border:1px solid var(--edge);background:var(--glass);
+    color:var(--soft);font-size:13px;cursor:pointer;transition:.2s}
+  .seed:hover{border-color:var(--edge-2);color:#fff;background:var(--glass-2);transform:translateY(-2px)}
+
+  /* ── what it offered to do next ──
+     The same actions the bots draw as buttons, drawn here as chips under the
+     reply that offered them. */
+  .offer{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;animation:rise .45s cubic-bezier(.22,1,.36,1) both}
+  .offer .chip{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;
+    border:1px solid rgba(90,169,255,.3);background:var(--live-ghost);color:var(--live);
+    font:500 12.5px var(--sans);cursor:pointer;transition:.3s var(--ease)}
+  .offer .chip:hover{background:rgba(90,169,255,.2);color:#fff;transform:scale(1.03)}
+
+  /* ── the invitation to be introduced ── */
+  .invite{margin:26px auto 0;max-width:430px;padding:16px 18px;border-radius:18px;text-align:left;
+    border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.26);animation:rise .6s cubic-bezier(.22,1,.36,1) .3s both}
+  .invite b{display:block;font:400 16px var(--display);color:#fff}
+  .invite span{display:block;margin-top:4px;color:var(--dim);font-size:13px;line-height:1.5}
+  .invite .row{display:flex;gap:9px;align-items:center;margin-top:13px}
+  .invite .white{padding:9px 17px;font-size:13px}
+  .invite .no{background:none;border:0;color:var(--faint);font-size:12.5px;cursor:pointer;padding:8px 6px;
+    transition:color .4s cubic-bezier(.22,1,.36,1)}
+  .invite .no:hover{color:var(--soft)}
+
+  /* ── quick controls: one row of chips above the composer ── */
+  .quick{flex:none;display:flex;gap:7px;flex-wrap:wrap;padding:0 18px 4px}
+  .quick[hidden]{display:none}
+  .qc{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;border:1px solid var(--edge);
+    background:var(--glass);color:var(--dim);font:500 12px var(--sans);cursor:pointer;transition:.2s var(--ease)}
+  .qc:hover{color:#fff;border-color:var(--edge-2);background:var(--glass-2)}
+  .qc svg{opacity:.8}
+  .qc.new{color:var(--soft);border-color:var(--edge-2)}
+  .qc.new:hover{background:#fff;color:#0A0D12;border-color:transparent}
+
+  /* ── the slate: what it is doing before the first word ── */
+  .slate{display:flex;flex-direction:column;gap:7px;min-width:220px}
+  .step{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--faint);transition:color .25s var(--ease)}
+  .step i{flex:none;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--faint);transition:.25s var(--ease)}
+  .step.on{color:var(--soft)}
+  .step.on i{border-color:var(--live);background:var(--live);box-shadow:0 0 0 0 rgba(90,169,255,.5);animation:ping 1.3s ease-out infinite}
+  @keyframes ping{to{box-shadow:0 0 0 7px rgba(90,169,255,0)}}
+  .step.done{color:var(--dim)}
+  .step.done i{border-color:var(--wal,#7FE3D4);background:var(--wal,#7FE3D4);animation:none}
+  .step em{margin-left:auto;font:400 11px var(--mono);font-style:normal;color:var(--faint);padding-left:12px}
+  .step.on em{color:var(--live)}
+  .slate .bar{height:2px;border-radius:2px;margin-top:3px;background:rgba(255,255,255,.07);overflow:hidden}
+  .slate .bar::after{content:"";display:block;width:40%;height:100%;border-radius:2px;
+    background:linear-gradient(90deg,transparent,var(--live),transparent);animation:sweep 1.4s var(--ease) infinite}
+  @keyframes sweep{from{transform:translateX(-120%)}to{transform:translateX(280%)}}
+  @media (prefers-reduced-motion:reduce){.step.on i,.slate .bar::after{animation:none}}
+
+  .composer{flex:none;display:flex;gap:11px;align-items:flex-end;padding:16px 18px 18px}
+  .clip{width:44px;height:44px;flex:none;border-radius:50%;border:1px solid var(--edge-2);
+    background:var(--glass-2);color:var(--soft);cursor:pointer;display:grid;place-items:center;
+    transition:.2s cubic-bezier(.22,.7,.28,1)}
+  .clip:hover{color:#fff;border-color:var(--live);background:var(--live-ghost);transform:translateY(-1px)}
+  .clip:disabled{opacity:.4;cursor:default}
+
+  /* A class that sets display beats the hidden attribute, so the empty tray
+     sat above the composer as a thin bar until something was attached. Same
+     trap the surface chips fell into. */
+  .attached[hidden]{display:none}
+  .attached{flex:none;display:flex;align-items:center;gap:11px;margin:0 18px;padding:10px 12px;
+    border:1px solid var(--edge);border-radius:var(--r-md);background:var(--glass);
+    animation:rise .25s both}
+  .attached img{width:42px;height:42px;object-fit:cover;border-radius:8px;flex:none}
+  .attached .what{flex:1;min-width:0}
+  .attached .what b{display:block;font:500 13px var(--sans);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .attached .what span{font-size:11.5px;color:var(--faint)}
+  .attached .drop{background:none;border:0;color:var(--faint);cursor:pointer;font-size:18px;
+    line-height:1;padding:4px 6px}
+  .attached .drop:hover{color:#FF8E7F}
+  .shot{display:block;margin-top:10px;border-radius:12px;overflow:hidden;border:1px solid var(--edge);max-width:280px}
+  .shot img{display:block;width:100%;height:auto}
+  #input{flex:1;min-width:0;max-height:132px;padding:14px 20px;border-radius:22px;
+    border:1px solid var(--edge);background:rgba(0,0,0,.32);color:var(--ink);
+    font:inherit;font-size:15px;outline:none;resize:none;transition:.2s;line-height:1.5}
+  #input::placeholder{color:var(--faint)}
+  #input:focus{border-color:rgba(90,169,255,.45);background:rgba(0,0,0,.46)}
+  #send{width:48px;height:48px;border-radius:50%;border:0;background:#fff;color:#0A0D12;
+    cursor:pointer;flex:none;display:grid;place-items:center;transition:.18s}
+  #send:hover:not(:disabled){transform:scale(1.03)}
+  #send:disabled{opacity:.3;cursor:default}
+
+  /* ── memory rail ── */
+  .rail{display:flex;flex-direction:column;min-height:0;border:1px solid var(--edge);
+    border-radius:var(--r);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);
+    overflow:hidden;
+    background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.028) 46%);
+    box-shadow:0 30px 80px -44px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.07)}
+  .rail-h{flex:none;padding:18px 20px 14px}
+  .rail-h h2{margin:0;font:500 15px var(--display);letter-spacing:.005em}
+  .rail-h p{margin:4px 0 0;font-size:12.5px;color:var(--faint);line-height:1.5}
+  .list{flex:1;min-height:0;overflow-y:auto;padding:0 14px 8px;display:flex;
+    flex-direction:column;gap:9px}
+  .list::-webkit-scrollbar{width:6px}
+  .list::-webkit-scrollbar-thumb{background:var(--edge-2);border-radius:6px}
+  .memo{border:1px solid var(--edge);border-radius:var(--r-md);padding:12px 14px;
+    background:rgba(255,255,255,.028);font-size:13.5px;line-height:1.55;color:var(--soft);
+    transition:.22s;animation:rise .3s both}
+  .memo:hover{background:var(--glass-2);border-color:var(--edge-2)}
+  .memo time{display:block;margin-top:7px;font-size:11px;color:var(--faint)}
+  .memo.new{border-color:rgba(90,169,255,.4);animation:flash 1.6s ease both}
+  @keyframes flash{0%{background:var(--live-ghost);transform:translateX(-5px);opacity:0}
+    50%{background:var(--live-ghost)}100%{background:rgba(255,255,255,.028);transform:none;opacity:1}}
+  .nothing{padding:26px 16px;text-align:center;color:var(--faint);font-size:13px;line-height:1.6}
+
+  /* Takes the empty space under the memory card. flex:1 means it uses whatever
+     is going and scrolls past that, so the rail never grows unbounded and the
+     Walrus strip below it stays put. */
+  .recents{flex:1;min-height:0;display:flex;flex-direction:column;border-top:1px solid var(--edge)}
+  /* `display` outranks the hidden attribute, so an empty rail would show an
+     empty "Recent" header without this. Caught by tools/check-pages.mjs. */
+  .recents[hidden]{display:none}
+  .recents-h{flex:none;display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+    padding:12px 18px 7px;font:600 10px var(--mono);letter-spacing:.11em;text-transform:uppercase;
+    color:var(--faint)}
+  .recents-h .seeall{font:500 11.5px var(--sans);letter-spacing:0;text-transform:none;color:var(--dim);
+    transition:color .2s cubic-bezier(.22,.7,.28,1)}
+  .recents-h .seeall:hover{color:var(--live)}
+  .recents-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    padding:0 10px 10px;display:flex;flex-direction:column;gap:1px}
+  .rc{display:block;padding:8px 10px;border-radius:11px;border:1px solid transparent;cursor:pointer;
+    transition:background .18s cubic-bezier(.22,.7,.28,1),border-color .18s cubic-bezier(.22,.7,.28,1)}
+  .rc:hover{background:var(--glass);border-color:var(--edge)}
+  .rc b{display:block;font:500 13px var(--sans);color:var(--soft);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rc span{display:block;margin-top:1px;font-size:11px;color:var(--faint)}
+  /* Whichever conversation is open in the chat beside it. */
+  .rc.on{background:var(--live-ghost);border-color:rgba(90,169,255,.28)}
+  .rc.on b{color:#fff}
+  .proof{flex:none;border-top:1px solid var(--edge);padding:13px 18px;font-size:12.5px;color:var(--faint)}
+  .proof summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;
+    color:var(--dim);transition:.2s}
+  .proof summary::-webkit-details-marker{display:none}
+  .proof summary:hover{color:var(--live)}
+  .proof summary b{font-weight:500;color:var(--soft)}
+  .proof-note{margin:0 0 8px;font-size:11.5px;line-height:1.45;color:var(--dim);opacity:.85}
+    .proof-list{margin-top:10px;max-height:132px;overflow-y:auto}
+  .proof-list a{display:block;padding:6px 0;border-top:1px solid var(--edge);
+    font:11px ui-monospace,Menlo,monospace;color:var(--faint);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .proof-list a:hover{color:var(--live)}
+
+  /* ── link modal ── */
+  .scrim{position:fixed;inset:0;z-index:60;background:rgba(3,5,8,.72);
+    backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+    display:grid;place-items:center;padding:20px;opacity:0;pointer-events:none;transition:.24s}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .modal{width:min(430px,100%);border:1px solid var(--edge-2);border-radius:var(--r);
+    background:rgba(13,17,24,.97);padding:28px;text-align:center;
+    box-shadow:0 50px 120px -34px rgba(0,0,0,.95);transform:scale(.96);transition:.24s}
+  .scrim.on .modal{transform:scale(1)}
+  .modal h3{margin:0 0 7px;font:400 24px var(--display);letter-spacing:-.01em}
+  .modal .sub{margin:0 0 20px;color:var(--dim);font-size:13.5px;line-height:1.6}
+  .code{font:500 30px/1 ui-monospace,Menlo,monospace;letter-spacing:.26em;color:#fff;
+    padding:20px 0 20px 6px;background:rgba(0,0,0,.4);border:1px dashed var(--edge-2);
+    border-radius:var(--r-sm);cursor:pointer;user-select:all;transition:.2s;position:relative}
+  .code:hover{border-color:var(--live);color:var(--live)}
+  .copied{position:absolute;inset:0;display:grid;place-items:center;border-radius:var(--r-sm);
+    background:rgba(90,169,255,.14);color:var(--live);font:500 13px var(--sans);
+    letter-spacing:0;opacity:0;pointer-events:none;transition:.2s}
+  .copied.on{opacity:1}
+  #qr{margin:18px auto 0;width:136px;height:136px;background:#fff;padding:10px;
+    border-radius:14px;display:none}
+  #qr.on{display:block}
+  .steps{margin:18px 0 0;text-align:left;font-size:13px;color:var(--dim);line-height:1.75}
+  .steps li{margin-bottom:3px}
+  /* Five separate words, each in its own chip: far easier to read off a screen
+     and copy onto paper than one long hyphenated string. */
+  .words{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:18px 14px;
+    background:rgba(0,0,0,.4);border:1px dashed var(--edge-2);border-radius:var(--r-sm);
+    cursor:pointer;position:relative;transition:.2s}
+  .words:hover{border-color:var(--live)}
+  .words span{padding:7px 13px;border-radius:9px;background:rgba(255,255,255,.06);
+    border:1px solid var(--edge);color:#fff;font:500 14.5px ui-monospace,Menlo,monospace}
+  .words.loading{color:var(--faint);font:500 14px var(--sans);display:block}
+  .keyinput{width:100%;padding:14px 16px;border-radius:var(--r-sm);border:1px solid var(--edge-2);
+    background:rgba(0,0,0,.4);color:var(--ink);font:15px ui-monospace,Menlo,monospace;outline:none;
+    text-align:center;transition:.2s}
+  .keyinput:focus{border-color:var(--live)}
+  .keyinput::placeholder{color:var(--faint);font-family:var(--sans)}
+  .orline{display:flex;align-items:center;gap:12px;margin:18px 0 14px;color:var(--faint);font-size:11.5px}
+  .orline::before,.orline::after{content:"";flex:1;height:1px;background:var(--edge)}
+  .walletbtn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:13px;
+    border-radius:999px;border:1px solid var(--edge-2);background:var(--glass);color:var(--soft);
+    cursor:pointer;font:500 13.5px var(--sans);transition:.22s}
+  .walletbtn:hover:not(:disabled){background:var(--glass-2);color:#fff;border-color:var(--live)}
+  .walletbtn:disabled{opacity:.5;cursor:default}
+  .nudge{display:block;margin:12px 0 0;padding:11px 13px;border-radius:var(--r-md);cursor:pointer;
+    border:1px solid rgba(90,169,255,.3);background:var(--live-ghost);color:var(--live);
+    font:400 12.5px/1.5 var(--sans);text-align:left;transition:.22s}
+  .nudge:hover{background:rgba(90,169,255,.2)}
+  /* The rail is a summary now: a count and a way in. A scrolling list of every
+     memory crammed into a 320px column was unreadable once there were more than
+     a handful. */
+  /* Starts compact, but never taller than the row: capped at the grid area
+     so the recents list inside gets a real height to scroll within. Without
+     the cap the rail just grew with the list and the bottom went off-screen,
+     unreachable. */
+  .rail{align-self:start;max-height:100%}
+  .rail-h{text-align:center;padding:26px 20px 22px}
+  .rail-h h2{margin:14px 0 5px;font:500 16px var(--display)}
+  .rail-h p{margin:0;font-size:12.5px;color:var(--faint);line-height:1.55}
+  .viewbtn[hidden]{display:none}
+  .viewbtn{display:block;text-align:center;margin-top:16px;width:100%;padding:12px;border-radius:999px;cursor:pointer;
+    border:1px solid var(--edge-2);background:var(--glass);color:var(--ink);
+    font:500 13.5px var(--sans);transition:.22s}
+  .viewbtn:hover{background:var(--glass-2);border-color:var(--live);color:#fff}
+
+  /* One chip per surface. Connected ones are stated, the rest are the way in. */
+  .surfaces{display:flex;gap:6px;margin-top:12px}
+  .surfaces[hidden]{display:none}
+  .sf{flex:1;padding:8px 4px;border-radius:var(--r-sm);border:1px solid var(--edge);
+    background:rgba(0,0,0,.25);color:var(--faint);font:500 11px var(--sans);
+    cursor:pointer;transition:.22s;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .sf:hover{border-color:var(--edge-2);color:var(--soft)}
+  .sf.on{color:var(--live);border-color:rgba(90,169,255,.34);background:var(--live-ghost);cursor:default}
+  .sf .tick{font-size:9px;letter-spacing:.06em;opacity:.85}
+  .allset{margin-top:12px;padding:10px 12px;border-radius:var(--r-md);
+    border:1px solid rgba(90,169,255,.3);background:var(--live-ghost);color:var(--live);
+    font:400 12px/1.5 var(--sans);animation:rise .4s both}
+
+  .face{width:62px;height:62px;margin:0 auto;animation:float 4.6s ease-in-out infinite}
+  .face svg{width:100%;height:100%;display:block;
+    filter:drop-shadow(0 6px 22px rgba(90,169,255,.34))}
+  .face.big{width:78px;height:78px;margin-bottom:16px}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  /* Blink: squash the eyes briefly, on an off-beat so it reads as alive
+     rather than mechanical. */
+  .face .eyes,.face #eyes{transform-origin:center 28px;animation:blinkeye 5.2s infinite}
+  @keyframes blinkeye{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.08)}}
+  @media (prefers-reduced-motion:reduce){
+    .face{animation:none}.face .eyes,.face #eyes{animation:none}
+  }
+
+  .close{margin-top:22px;width:100%;padding:12px;border-radius:999px;border:1px solid var(--edge-2);
+    background:var(--glass);color:var(--soft);cursor:pointer;font-size:13.5px}
+  .close:hover{background:var(--glass-2);color:#fff}
+
+  .menu .phone-only{display:none}
+  /* A phone or a small tablet: the chat is the whole screen.
+     The app stays exactly as tall as the window here too — header at the top,
+     composer at the bottom, the conversation scrolling between them — rather
+     than becoming a long page you scroll to find the box you type in. The
+     rail is put away: what it offers is one tap off, in the Memory tab and
+     the ⋯ menu, and on a screen this size the conversation needs the room. */
+  @media (max-width:860px){
+    .app{height:100dvh;padding:12px 14px 14px;gap:12px}
+    .layout{grid-template-columns:minmax(0,1fr)}
+    .rail{display:none}
+    .chat{min-height:0}
+    #log{padding:18px 16px 8px}
+    .welcome{padding:6px}
+    .welcome h2{font-size:26px}
+    .brand span{display:none}
+    .status{display:none}
+    .turn{max-width:90%}
+    .composer{padding:12px 14px 14px}
+    .menu .phone-only{display:block}
+  }
+  /* A phone. The bar has to hold the mark, the connect button, two tabs and
+     the menu in 400px, and it did — until the Memory tab grew a count, which
+     pushed the menu off the right edge where nobody could reach it. */
+  @media (max-width:560px){
+    .app{padding-left:12px;padding-right:12px}
+    .top{gap:7px}
+    .brand b{display:none}
+    .white{padding:9px 13px;font-size:12.5px;white-space:nowrap}
+    .nav a{padding:8px 10px;gap:5px}
+    .quick{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+    .quick::-webkit-scrollbar{display:none}
+    .qc{flex:none}
+  }
+
+
+/* ══ memory, scoped ══════════════════════════════════════════════════════
+   Generated by tools/build-shell.mjs from memory.html. Edit that file. */
+#p-memory{
+    --void:#05070A; --ink:#F2F6FA; --soft:#C3CEDB; --dim:#8695A6; --faint:#5A6674;
+    --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.19);
+    --glass:rgba(255,255,255,.05); --glass-2:rgba(255,255,255,.085);
+    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.12);
+    --wal:#7FE3D4; --warn:#F0A868; --hot:#FF8E7F;
+    --r:20px; --r-md:15px; --r-sm:11px;
+    --ease:cubic-bezier(.22,.7,.28,1);
+    --display:'Outfit',system-ui,sans-serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    color-scheme:dark;
+  }
+#p-memory a{color:inherit;text-decoration:none}
+#p-memory button{font:inherit}
+#p-memory img{display:block}
+#p-memory .wrap{position:relative;z-index:1;max-width:1244px;margin:0 auto;padding:18px 22px 80px}
+#p-memory .wrap > *:not(.top){max-width:1036px;margin-left:auto;margin-right:auto}
+#p-memory .top{display:flex;align-items:center;gap:12px;margin-bottom:34px;flex-wrap:wrap}
+#p-memory .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+#p-memory .brand b{font:500 16px var(--display)}
+#p-memory .brand:hover{opacity:.75}
+#p-memory .tiny{font:400 10.5px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+#p-memory .nav{display:flex;gap:5px;padding:4px;border-radius:999px;background:rgba(255,255,255,.04);
+    border:1px solid var(--edge)}
+#p-memory .nav a{display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:999px;
+    color:var(--dim);font:500 13px var(--sans);transition:.2s cubic-bezier(.22,.7,.28,1);white-space:nowrap}
+#p-memory .nav a:hover{color:var(--soft)}
+#p-memory .nav a.on{background:#fff;color:#0A0D12;font-weight:600}
+#p-memory .nav a .n{padding:1px 6px;border-radius:999px;background:rgba(0,0,0,.14);
+    font:600 10px var(--mono);letter-spacing:0}
+#p-memory .nav a.on .n{background:rgba(0,0,0,.1)}
+@media (max-width:720px){#p-memory .nav a span.label{display:none}
+#p-memory .nav a{padding:8px 12px}}
+#p-memory .cta{padding:10px 19px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
+    font:600 13px var(--sans);cursor:pointer;transition:transform .25s var(--ease)}
+#p-memory .cta:hover{transform:scale(1.03)}
+#p-memory h1{margin:0 0 8px;font:200 clamp(28px,4.2vw,42px)/1.1 var(--display);letter-spacing:-.028em}
+#p-memory h1 em{font-style:normal;font-weight:400;background:linear-gradient(96deg,#fff 20%,var(--live) 130%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+#p-memory .sub{margin:0 0 26px;color:var(--soft);font-size:14.5px;max-width:62ch;line-height:1.7}
+#p-memory .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;margin-bottom:22px}
+#p-memory .stat{border:1px solid var(--edge);border-radius:var(--r-md);padding:14px 16px;
+    background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02) 50%)}
+#p-memory .stat .k{font:500 9.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+#p-memory .stat .v{font:400 25px/1.1 var(--display);margin-top:5px}
+#p-memory .stat .v small{font:400 11px var(--sans);color:var(--dim);margin-left:3px}
+#p-memory .stat.hi .v{color:var(--wal)}
+#p-memory .bar{display:flex;gap:9px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+#p-memory .search{flex:1;min-width:190px;display:flex;align-items:center;gap:9px;padding:10px 15px;
+    border-radius:999px;background:rgba(0,0,0,.32);border:1px solid var(--edge)}
+#p-memory .search input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:14px;outline:none}
+#p-memory .search input::placeholder{color:var(--faint)}
+#p-memory .filter{padding:9px 15px;border-radius:999px;border:1px solid var(--edge);background:var(--glass);
+    color:var(--dim);font:500 12.5px var(--sans);cursor:pointer;transition:.2s var(--ease)}
+#p-memory .filter:hover{color:var(--soft);border-color:var(--edge-2)}
+#p-memory .filter.on{background:#fff;color:#0A0D12;border-color:transparent;font-weight:600}
+#p-memory .filters[hidden]{display:none}
+#p-memory .filters{display:flex;gap:9px}
+#p-memory .conflicts{border:1px solid rgba(240,168,104,.34);border-radius:var(--r);background:rgba(240,168,104,.07);
+    padding:17px 19px;margin-bottom:20px}
+#p-memory .conflicts h2{margin:0 0 4px;font:500 14px var(--display);color:var(--warn)}
+#p-memory .conflicts p.note{margin:0 0 13px;color:var(--dim);font-size:12.5px;line-height:1.6}
+#p-memory .conflict{border-top:1px solid rgba(240,168,104,.2);padding:12px 0 2px}
+#p-memory .conflict:first-of-type{border-top:0}
+#p-memory .side{display:flex;gap:10px;align-items:baseline;padding:4px 0;font-size:13.5px}
+#p-memory .side .tag{flex:none;font:500 9.5px var(--sans);letter-spacing:.1em;text-transform:uppercase;
+    padding:3px 8px;border-radius:999px;min-width:74px;text-align:center}
+#p-memory .side.now .tag{background:rgba(127,227,212,.16);color:var(--wal)}
+#p-memory .side.was .tag{background:rgba(255,255,255,.07);color:var(--faint)}
+#p-memory .side.was span{color:var(--faint);text-decoration:line-through;text-decoration-color:rgba(255,255,255,.25)}
+#p-memory .differs{margin-top:8px;font:400 11px var(--mono);color:var(--faint)}
+#p-memory .shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:14px}
+#p-memory .cover{position:relative;display:flex;flex-direction:column;text-align:left;padding:0;overflow:hidden;
+    border:1px solid var(--edge);border-radius:var(--r);cursor:pointer;color:inherit;
+    background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02) 55%);
+    transition:transform .3s var(--ease),border-color .3s var(--ease);animation:rise-mem .5s var(--ease) both}
+#p-memory .cover:hover{transform:scale(1.02);border-color:var(--edge-2)}
+#p-memory .cover:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+#p-memory .art{position:relative;height:150px;overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 20% 0%, color-mix(in srgb, var(--tint) 30%, transparent), transparent 60%),
+      radial-gradient(90% 80% at 100% 100%, color-mix(in srgb, var(--tint) 14%, transparent), transparent 60%),
+      rgba(0,0,0,.3)}
+#p-memory .art pre{position:absolute;margin:0;font-family:var(--mono);white-space:pre;pointer-events:none;user-select:none}
+#p-memory .art .field{inset:0;font-size:10.5px;line-height:14px;letter-spacing:.1em;color:var(--tint);opacity:.26;
+    padding:2px 0 0 4px}
+#p-memory .art .figure{left:50%;top:50%;transform:translate(-50%,-50%);width:max-content;font-size:11.5px;line-height:13px;
+    color:var(--tint);text-shadow:0 0 16px color-mix(in srgb, var(--tint) 65%, transparent),0 0 2px rgba(0,0,0,.6)}
+#p-memory .cover:hover .figure{text-shadow:0 0 22px color-mix(in srgb, var(--tint) 85%, transparent)}
+#p-memory .cover.bare .figure{opacity:.7}
+#p-memory .art .n{position:absolute;right:12px;top:12px;padding:3px 9px;border-radius:999px;
+    background:rgba(6,9,13,.7);border:1px solid var(--edge);font:600 10.5px var(--mono);color:var(--soft)}
+#p-memory .collage{position:absolute;inset:0;display:grid;gap:2px;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+#p-memory .collage img{width:100%;height:100%;object-fit:cover}
+#p-memory .collage.one{grid-template-columns:1fr;grid-template-rows:1fr}
+#p-memory .collage.two{grid-template-rows:1fr}
+#p-memory .collage.three img:first-child{grid-row:span 2}
+#p-memory .collage::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(5,7,10,.75))}
+#p-memory .cover-body{padding:13px 15px 14px}
+#p-memory .cover-body b{display:block;font:500 16px var(--display)}
+#p-memory .cover-body p{margin:5px 0 0;color:var(--dim);font-size:12.5px;line-height:1.5;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#p-memory .cover-body p em{font-style:normal;color:var(--soft)}
+#p-memory .cover.bare .cover-body p{color:var(--faint)}
+#p-memory .colhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 18px}
+#p-memory .back{display:inline-flex;align-items:center;gap:7px;padding:8px 14px 8px 11px;border-radius:999px;
+    border:1px solid var(--edge);background:var(--glass);color:var(--soft);font:500 12.5px var(--sans);cursor:pointer;
+    transition:.2s var(--ease)}
+#p-memory .back:hover{background:var(--glass-2);color:#fff;transform:translateX(-2px)}
+#p-memory .colhead h2{margin:0;font:300 24px var(--display);letter-spacing:-.02em;display:flex;align-items:baseline;gap:9px}
+#p-memory .colhead h2 span{font:500 11px var(--mono);color:var(--faint);padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.07)}
+#p-memory .colhead .blurb{width:100%;margin:-6px 0 0;color:var(--dim);font-size:13px}
+#p-memory .list{display:flex;flex-direction:column;gap:10px}
+#p-memory .grouphead{margin:20px 0 4px;font:500 10.5px var(--sans);letter-spacing:.13em;text-transform:uppercase;
+    color:var(--faint);display:flex;align-items:center;gap:9px}
+#p-memory .grouphead span{padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.07);font:500 10px var(--mono);letter-spacing:0}
+#p-memory .memo{border:1px solid var(--edge);border-radius:var(--r-md);padding:14px 16px;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.018) 50%);
+    transition:border-color .22s var(--ease);animation:rise-mem .35s var(--ease) both}
+@keyframes rise-mem{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+#p-memory .memo:hover{border-color:var(--edge-2)}
+#p-memory .memo p{margin:0;font-size:14.5px;line-height:1.55;color:var(--soft)}
+#p-memory .memofoot{display:flex;align-items:center;gap:9px;margin-top:11px;flex-wrap:wrap;font-size:11px;color:var(--faint)}
+#p-memory .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+    border:1px solid var(--edge);background:rgba(0,0,0,.26)}
+#p-memory .pill.cross{border-color:rgba(127,227,212,.32);color:var(--wal)}
+#p-memory .pill.cold{border-color:rgba(255,255,255,.08);color:var(--faint);opacity:.75}
+#p-memory .verify{color:var(--faint);border-bottom:1px solid transparent;font-family:var(--mono);font-size:10.5px}
+#p-memory .verify:hover{color:var(--wal);border-bottom-color:rgba(127,227,212,.4)}
+#p-memory .wrong{margin-left:auto;background:none;border:0;color:var(--faint);font-size:11px;cursor:pointer;
+    padding:2px 0;border-bottom:1px dashed var(--edge-2)}
+#p-memory .wrong:hover{color:var(--hot);border-bottom-color:rgba(255,142,127,.5)}
+#p-memory .wrong:disabled{opacity:.5;cursor:default}
+#p-memory .memo.dropped{opacity:.4}
+#p-memory .memo.dropped p{text-decoration:line-through;text-decoration-color:var(--faint)}
+#p-memory .memo.faded{opacity:.62}
+#p-memory .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+#p-memory .photo{margin:0;border:1px solid var(--edge);border-radius:var(--r-md);overflow:hidden;cursor:zoom-in;
+    background:rgba(0,0,0,.3);transition:transform .3s var(--ease),border-color .3s var(--ease);animation:rise-mem .4s var(--ease) both}
+#p-memory .photo:hover{transform:scale(1.02);border-color:var(--edge-2)}
+#p-memory .photo .img{aspect-ratio:4/3;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:12px}
+#p-memory .photo img{width:100%;height:100%;object-fit:cover}
+#p-memory .photo figcaption{padding:10px 12px 11px}
+#p-memory .photo figcaption p{margin:0;font-size:12.5px;line-height:1.5;color:var(--soft);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#p-memory .photo .memofoot{margin-top:8px}
+#p-memory .empty,#p-memory .loading{padding:50px 20px;text-align:center;color:var(--faint);font-size:14px}
+#p-memory .empty a{color:var(--live)}
+#p-memory .foot{margin-top:40px;padding-top:22px;border-top:1px solid var(--edge);
+    display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){#p-memory .memo,#p-memory .cover,#p-memory .photo{animation:none}
+#p-memory .cta{transition:none}}
+
+/* ══ history, scoped ═════════════════════════════════════════════════════
+   Generated by tools/build-shell.mjs from history.html. Edit that file. */
+#p-history{
+    --void:#05070A; --ink:#F2F6FA; --soft:#C3CEDB; --dim:#8695A6; --faint:#5A6674;
+    --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.19);
+    --glass:rgba(255,255,255,.05); --glass-2:rgba(255,255,255,.085);
+    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.12); --wal:#7FE3D4;
+    --r:20px; --r-md:15px; --r-sm:11px;
+    --ease:cubic-bezier(.22,.7,.28,1);
+    --display:'Outfit',system-ui,sans-serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    color-scheme:dark;
+  }
+#p-history a{color:inherit;text-decoration:none}
+#p-history .wrap{position:relative;z-index:1;max-width:1244px;margin:0 auto;padding:18px 22px 80px}
+#p-history .wrap > *:not(.top){max-width:856px;margin-left:auto;margin-right:auto}
+#p-history .top{display:flex;align-items:center;gap:12px;margin-bottom:34px;flex-wrap:wrap}
+#p-history .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+#p-history .brand b{font:500 16px var(--display)}
+#p-history .brand:hover{opacity:.75}
+#p-history .tiny{font:400 10.5px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+#p-history .nav{display:flex;gap:5px;padding:4px;border-radius:999px;background:rgba(255,255,255,.04);
+    border:1px solid var(--edge)}
+#p-history .nav a{display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:999px;
+    color:var(--dim);font:500 13px var(--sans);transition:.2s cubic-bezier(.22,.7,.28,1);white-space:nowrap}
+#p-history .nav a:hover{color:var(--soft)}
+#p-history .nav a.on{background:#fff;color:#0A0D12;font-weight:600}
+#p-history .nav a .n{padding:1px 6px;border-radius:999px;background:rgba(0,0,0,.14);
+    font:600 10px var(--mono);letter-spacing:0}
+#p-history .nav a.on .n{background:rgba(0,0,0,.1)}
+@media (max-width:720px){#p-history .nav a span.label{display:none}
+#p-history .nav a{padding:8px 12px}}
+#p-history .cta{padding:10px 19px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
+    font:600 13px var(--sans);transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
+#p-history .cta:hover{transform:scale(1.03)}
+#p-history h1{margin:0 0 8px;font:200 clamp(28px,4.2vw,40px)/1.1 var(--display);letter-spacing:-.028em}
+#p-history h1 em{font-style:normal;font-weight:400;background:linear-gradient(96deg,#fff 20%,var(--live) 130%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+#p-history .sub{margin:0 0 26px;color:var(--soft);font-size:14.5px;max-width:60ch;line-height:1.7}
+#p-history .search{display:flex;align-items:center;gap:9px;padding:10px 15px;border-radius:999px;
+    background:rgba(0,0,0,.32);border:1px solid var(--edge);margin-bottom:18px}
+#p-history .search input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:14px;outline:none}
+#p-history .search input::placeholder{color:var(--faint)}
+#p-history .list{display:flex;flex-direction:column;gap:10px}
+#p-history .convo{display:block;border:1px solid var(--edge);border-radius:var(--r-md);padding:16px 18px;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.018) 50%);
+    transition:border-color .22s var(--ease),transform .22s var(--ease);cursor:pointer;
+    animation:rise-hist .35s var(--ease) both}
+@keyframes rise-hist{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+#p-history .convo:hover{border-color:var(--edge-2);transform:translateY(-1px)}
+#p-history .convo h2{margin:0;font:500 15.5px var(--sans);line-height:1.45}
+#p-history .meta{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;font-size:11px;color:var(--faint)}
+#p-history .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+    border:1px solid var(--edge);background:rgba(0,0,0,.26)}
+#p-history .pill.live{border-color:rgba(90,169,255,.35);color:var(--live)}
+#p-history .pill.wal{border-color:rgba(127,227,212,.3);color:var(--wal)}
+#p-history .preview{margin:11px 0 0;font-size:13px;color:var(--dim);line-height:1.6;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#p-history .empty,#p-history .loading{padding:50px 20px;text-align:center;color:var(--faint);font-size:14px}
+#p-history .foot{margin-top:40px;padding-top:22px;border-top:1px solid var(--edge);
+    display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){#p-history .convo{animation:none;transition:none}}
+  </style>
+  <link rel="stylesheet" href="/assets/motion.css">
+  <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
+  <link rel="stylesheet" href="/assets/shell.css">
+  <!-- Hold the first frame until the router has run. This document is ~115KB
+       with its scripts at the bottom, and the browser painted it partway
+       through parsing: a view transition then snapshotted a half-built page —
+       the chat panel every time, even when the address said /memory — and the
+       real section appeared a few hundred milliseconds later. That was the
+       blink. With render blocked until #shell-ready, the old page stays on
+       screen until the new one is complete, and the cross-fade goes straight
+       from one finished section to the next. -->
+  <link rel="expect" href="#shell-ready" blocking="render">
+</head>
+<body>
+<div class="ground"></div><div class="bloom"></div><div class="grain"></div>
+<div class="app">
+
+  <header class="top">
+    <a class="brand" href="/" title="Back to the start">
+      <svg width="27" height="27" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="ccore" cx="35%" cy="30%" r="74%">
+            <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#9BD0FF"/>
+            <stop offset="100%" stop-color="#2E7ACB"/>
+          </radialGradient>
+          <linearGradient id="carc" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff"/><stop offset="100%" stop-color="#5AA9FF"/>
+          </linearGradient>
+        </defs>
+        <circle cx="16" cy="16" r="11" fill="none" stroke="#5AA9FF" stroke-width="1.5" opacity=".22"/>
+        <path d="M16 5a11 11 0 0 1 11 11" fill="none" stroke="url(#carc)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 27A11 11 0 0 1 5 16" fill="none" stroke="url(#carc)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4.1" fill="url(#ccore)"/>
+      </svg>
+      <b>Continuity</b>
+      <span id="tagline">remembers you everywhere</span>
+    </a>
+    <span class="status"><span class="ping" id="ping"></span><span id="pingtext">Connecting…</span></span>
+    <button class="white" id="linkbtn">Connect another app</button>
+    <nav class="nav">
+      <span class="glide" id="glide" aria-hidden="true"></span>
+      <a href="/chat" data-nav="chat" title="Chat">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2.4 7.4c0-2.6 2.5-4.6 5.6-4.6s5.6 2 5.6 4.6-2.5 4.6-5.6 4.6c-.7 0-1.4-.1-2-.3l-3 1.3.9-2.4c-.9-.8-1.5-1.9-1.5-3.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+        <span class="label">Chat</span>
+      </a>
+      <a href="/memory" data-nav="memory" title="What it remembers">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><ellipse cx="8" cy="4.2" rx="5.2" ry="2.2" stroke="currentColor" stroke-width="1.3"/><path d="M2.8 4.2v7.6c0 1.2 2.3 2.2 5.2 2.2s5.2-1 5.2-2.2V4.2" stroke="currentColor" stroke-width="1.3"/></svg>
+        <span class="label">Memory</span><span class="n" id="nav-mem" hidden></span>
+      </a>
+    </nav>
+    <div class="morewrap">
+      <button class="more" id="morebtn" aria-label="More options">⋯</button>
+      <div class="menu" id="menu">
+        <a class="phone-only" href="/history">Past conversations</a>
+        <a class="phone-only" href="/docs">Docs</a>
+        <a href="/welcome">Tell me about yourself</a>
+        <button id="savekey">Save your memory key</button>
+        <button id="restorekey">I have a key already</button>
+        <button data-say="/forgetme">Stop remembering me</button>
+        <button id="newchat">Clear this conversation</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="panel" id="p-chat" data-panel="chat">
+    <div class="layout">
+    <main class="chat">
+      <div id="log">
+        <div class="welcome">
+          <div class="orb"></div>
+          <h2>I'll remember this<br><em>wherever you go.</em></h2>
+          <p>Tell me something about yourself. Come back tomorrow, or open me on Telegram — I'll still know who you are.</p>
+          <div class="seeds">
+            <button class="seed">I'm building a website and I'm stuck</button>
+            <button class="seed">What do you know about me?</button>
+            <button class="seed">I prefer short answers</button>
+          </div>
+        </div>
+      </div>
+      <div class="attached" id="attached" hidden></div>
+      <!-- Quick controls. New chat first, because it was buried in the ⋯ menu
+           and nobody found it; the rest are the questions people type most. -->
+      <div class="quick" id="quick">
+        <button type="button" class="qc new" id="newchat-q">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 2.5v9M2.5 7h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          New chat
+        </button>
+        <button type="button" class="qc" data-ask="What do you know about me?">What do you know about me?</button>
+        <button type="button" class="qc" data-prefill="Show me the picture of ">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.3"/><circle cx="6" cy="7" r="1.3" fill="currentColor"/><path d="M3 12l3.5-3.5 2.5 2.5 2-2L14 12" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          Bring back a picture
+        </button>
+        <button type="button" class="qc" data-ask="/mode">How you work</button>
+        <button type="button" class="qc" data-ask="Summarise what we've talked about so far">Summarise this chat</button>
+        <button type="button" class="qc" data-link>Link Telegram or Discord</button>
+      </div>
+      <form class="composer" id="form">
+        <input type="file" id="file" accept="image/*,.txt,.md,.csv,.json,.log,.yml,.yaml" hidden>
+        <button type="button" class="clip" id="clip" aria-label="Attach a file" title="Attach a file">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+            <path d="M14.5 9.2l-4.9 4.9a3 3 0 0 1-4.2-4.2l5.6-5.6a2 2 0 1 1 2.8 2.8l-5.6 5.6a1 1 0 0 1-1.4-1.4l5.1-5.1"
+              stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <textarea id="input" rows="1" placeholder="Tell me something…" aria-label="Message"></textarea>
+        <button id="send" type="submit" aria-label="Send">
+          <svg width="19" height="19" viewBox="0 0 19 19" fill="none">
+            <path d="M3 9.5h12M10 4.5l5 5-5 5" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </form>
+    </main>
+
+    <aside class="rail">
+      <div class="rail-h">
+        <div class="face" id="face" aria-hidden="true">
+          <svg viewBox="0 0 64 64">
+            <defs><radialGradient id="fg" cx="34%" cy="28%" r="76%">
+              <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#7CC0FF"/>
+              <stop offset="100%" stop-color="#1B4E85"/></radialGradient></defs>
+            <circle cx="32" cy="32" r="26" fill="url(#fg)"/>
+            <g id="eyes" fill="#0A2745">
+              <ellipse cx="23" cy="28" rx="3.1" ry="4"/>
+              <ellipse cx="41" cy="28" rx="3.1" ry="4"/>
+            </g>
+            <path d="M22 40c3.4 4.6 16.6 4.6 20 0" fill="none" stroke="#0A2745"
+              stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h2 id="memcount">Getting to know you</h2>
+        <p id="railsub">Tell me something and I'll hold on to it.</p>
+        <a class="viewbtn" id="viewmem" href="/memory" hidden>See all of it →</a>
+        <div class="surfaces" id="surfaces" hidden>
+          <button class="sf" data-surface="web">Web</button>
+          <button class="sf" data-surface="telegram">Telegram</button>
+          <button class="sf" data-surface="discord">Discord</button>
+        </div>
+      </div>
+
+      <!-- Past conversations, where you actually want them: one click from the
+           thing you were doing, rather than a separate page you had to know
+           about. The archive with its search is still behind "See all". -->
+      <div class="recents" id="recents" hidden>
+        <div class="recents-h">
+          <span>Recent</span>
+          <a class="seeall" href="/history">See all &rarr;</a>
+        </div>
+        <div class="recents-list" id="recentlist"></div>
+      </div>
+
+      <details class="proof">
+        <summary>
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M6.5 1.2l4.3 2v3.4c0 2.6-1.8 4.4-4.3 5.2-2.5-.8-4.3-2.6-4.3-5.2V3.2l4.3-2z"
+              stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+          <span><b id="proofn">Live writes</b> to Walrus</span>
+        </summary>
+        <p class="proof-note">Every memory this bot saves, as it lands — from everyone using it,
+          not just you. Open any one on Walruscan to see the blob really exists.</p>
+        <div class="proof-list" id="blobs"></div>
+      </details>
+    </aside>
+  </div>
+  </section>
+
+  <section class="panel" id="p-memory" data-panel="memory" hidden>
+    <div class="wrap">
+  
+
+  <h1 id="title">Everything it knows<br><em>about you.</em></h1>
+  <p class="sub">Sorted into collections. Open one to read each memory, check the blob it lives in on
+    Walrus mainnet, and tell it when one is wrong.</p>
+
+  <div class="stats" id="stats"><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div></div>
+  <div id="conflicts"></div>
+
+  <div class="bar">
+    <label class="search">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.4" stroke="#5A6674" stroke-width="1.3"/><path d="M9.4 9.4L12.5 12.5" stroke="#5A6674" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <input id="q" placeholder="Search everything it remembers…" autocomplete="off">
+    </label>
+    <div class="filters" id="filters" hidden>
+      <button class="filter on" data-filter="all">All</button>
+      <button class="filter" data-filter="crossed">Crossed apps</button>
+      <button class="filter" data-filter="cold">Never used</button>
+    </div>
+  </div>
+
+  <div id="stage"><div class="shelf"><div class="sk-row"><div class="sk sk-line w85"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w85"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w85"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w85"></div><div class="sk sk-line w40"></div></div></div></div>
+
+  <footer class="foot">
+    <span class="tiny">Append-only storage · marking something wrong stops it being used, it cannot unwrite the blob</span>
+    <span class="tiny"><a href="/chat">Back to the chat →</a></span>
+  </footer>
+</div>
+  </section>
+
+  <section class="panel" id="p-history" data-panel="history" hidden>
+    <div class="wrap">
+  
+
+  <h1>Everything you've<br><em>talked about.</em></h1>
+  <p class="sub">Open any of these and carry on where you stopped — on any app. Each one is stored
+    on Walrus alongside the memories it produced.</p>
+
+  <label class="search">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.4" stroke="#5A6674" stroke-width="1.3"/><path d="M9.4 9.4L12.5 12.5" stroke="#5A6674" stroke-width="1.3" stroke-linecap="round"/></svg>
+    <input id="q" placeholder="Search your conversations…" autocomplete="off">
+  </label>
+
+  <div class="list" id="list"><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div></div>
+
+  <footer class="foot">
+    <span class="tiny">A conversation saves itself once it goes quiet</span>
+    <span class="tiny"><a href="/memory">What it remembers →</a></span>
+  </footer>
+</div>
+  </section>
+
+</div>
+
+<div class="scrim" id="scrim">
+  <div class="modal">
+    <h3>Use me somewhere else</h3>
+    <p class="sub" id="linkintro">Enter this code on Telegram or Discord and I'll know it's still you — everything I remember comes with you.</p>
+    <div class="code" id="codeval">······<span class="copied" id="copied">Copied</span></div>
+    <div id="qr"></div>
+    <ol class="steps">
+      <li>Open <b id="botname">the Telegram bot</b> — or scan the code above</li>
+      <li>Send <code>/link</code> followed by the code</li>
+      <li>That's it. Same memory, both places.</li>
+    </ol>
+    <button class="close" id="closelink">Done</button>
+  </div>
+</div>
+
+<div class="scrim" id="keyscrim">
+  <div class="modal">
+    <h3 id="keytitle">Don't lose me</h3>
+    <p class="sub" id="keysub">Your memory lives in this browser. Save a key and you can pick it up anywhere — a new laptop, a cleared cache, a different browser.</p>
+
+    <div id="keysave" hidden>
+      <div class="words loading" id="phrase">making a key…<span class="copied" id="keycopied">Copied</span></div>
+      <p class="note">Write it down or put it in a password manager. I can't show it to you again, and I can't recover it for you.</p>
+    </div>
+
+    <div id="keyrestore" hidden>
+      <input id="phrasein" class="keyinput" placeholder="five words, separated by spaces" autocomplete="off" spellcheck="false">
+      <p class="note" id="keyerr"></p>
+    </div>
+
+    <div class="orline"><span>or</span></div>
+    <button class="walletbtn" id="walletbtn">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4.6A1.6 1.6 0 0 1 3.6 3h8.8A1.6 1.6 0 0 1 14 4.6v6.8a1.6 1.6 0 0 1-1.6 1.6H3.6A1.6 1.6 0 0 1 2 11.4V4.6Z" stroke="currentColor" stroke-width="1.3"/><circle cx="11" cy="8" r="1.1" fill="currentColor"/></svg>
+      <span id="walletlabel">Use a Sui wallet instead</span>
+    </button>
+    <p class="note" id="walleterr"></p>
+
+    <button class="close" id="keyclose">Done</button>
+  </div>
+</div>
+
+<a class="docs-fab" href="/docs" aria-label="Docs" title="Docs">
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M4 3.5h5.2c1 0 1.8.8 1.8 1.8V16.5c0-.9-.8-1.6-1.8-1.6H4V3.5zM16 3.5h-5.2c-1 0-1.8.8-1.8 1.8V16.5c0-.9.8-1.6 1.8-1.6H16V3.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+  </svg>
+</a>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/assets/app.js"></script>
+<script src="/assets/router.js"></script>
+<span id="shell-ready" hidden></span>
+
+<script>
+/* ── chat ── verbatim from chat.html ── */
+
+const $ = (id) => document.getElementById(id);
+
+const userId = (() => {
+  let id = null;
+  try { id = localStorage.getItem("ws8-user"); } catch {}
+  if (!id) {
+    id = "web-" + (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2));
+    try { localStorage.setItem("ws8-user", id); } catch {}
+  }
+  return id;
+})();
+
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+/**
+ * Just enough Markdown for a chat reply: fenced code, bullet and numbered
+ * lists, bold and inline code. Everything is escaped FIRST and only these few
+ * constructs are re-enabled, so model output never becomes live HTML.
+ */
+function fmt(src) {
+  const blocks = [];
+  // Pull fenced code out first so its contents are never treated as markup.
+  let text = esc(src).replace(/```[a-z]*\n?([\s\S]*?)```/gi, (_, code) =>
+    `\u0000${blocks.push(`<pre><code>${code.replace(/\n$/, "")}</code></pre>`) - 1}\u0000`);
+
+  const inline = (t) => t
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
+    .replace(/(^|\s)\*([^*\n]+)\*/g, "$1<i>$2</i>");
+
+  const out = [];
+  let list = null; // "ul" | "ol"
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    const bullet = line.match(/^\s*[-*•]\s+(.*)$/);
+    const numbered = line.match(/^\s*\d+[.)]\s+(.*)$/);
+
+    if (bullet || numbered) {
+      const want = bullet ? "ul" : "ol";
+      if (list !== want) { closeList(); out.push(`<${want}>`); list = want; }
+      out.push(`<li>${inline((bullet || numbered)[1])}</li>`);
+    } else if (!line.trim()) {
+      closeList();
+      out.push("<br>");
+    } else if (/^-#\s+/.test(line)) {
+      // Discord's small-print marker. The bot uses it for asides about its
+      // own memory; anywhere else it showed up as a literal "-#".
+      closeList();
+      out.push(`<p class="aside">${inline(line.replace(/^-#\s+/, ""))}</p>`);
+    } else {
+      closeList();
+      out.push(`<p>${inline(line.replace(/^#{1,6}\s*/, ""))}</p>`);
+    }
+  }
+  closeList();
+  return out.join("").replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[i]);
+}
+
+/* ── chat ── */
+const log = $("log");
+
+/* ── what the introduction told us ──
+   Kept in this browser so the welcome can use it at once; the memory itself
+   is on Walrus and arrives with the first read. */
+const PROFILE = (() => { try { return JSON.parse(localStorage.getItem("ws8-profile") || "null"); } catch { return null; } })();
+const STARTERS = {
+  tutor: "Teach me something new, one step at a time",
+  coding: "Help me debug something",
+  planner: "Help me plan my week",
+  reader: "Read a link for me and tell me what matters",
+  record: "What do you know about me?",
+  support: "I need help with a problem",
+};
+function personalise() {
+  const w = log.querySelector(".welcome");
+  if (!w || !PROFILE) return;
+  if (PROFILE.name) w.querySelector("h2").innerHTML = `Good to see you, ${esc(PROFILE.name)}.<br><em>I know you already.</em>`;
+  w.querySelector("p").textContent = "What you told me in the introduction is in my memory. Ask me anything, or start with one of these.";
+  const seeds = (PROFILE.jobs ?? []).map((j) => STARTERS[j]).filter(Boolean).slice(0, 3);
+  if (!seeds.includes(STARTERS.record)) seeds.push(STARTERS.record);
+  w.querySelector(".seeds").innerHTML = seeds.map((s) => `<button class="seed">${esc(s)}</button>`).join("");
+}
+/** Offered once, to someone it knows nothing about, and never in the way. */
+function maybeInvite() {
+  let flag = null;
+  try { flag = localStorage.getItem("ws8-onboarded"); } catch {}
+  const w = log.querySelector(".welcome");
+  if (flag || !w || w.querySelector(".invite")) return;
+  w.insertAdjacentHTML("beforeend", `
+    <div class="invite">
+      <b>Want me to know you in a minute?</b>
+      <span>Five quick questions, all optional. Your first message gets answered by someone who already knows your name and how you like to be answered.</span>
+      <div class="row"><a class="white" href="/welcome">Introduce yourself</a><button class="no" id="noinvite" type="button">No thanks, I'll just talk</button></div>
+    </div>`);
+  $("noinvite").addEventListener("click", () => {
+    try { localStorage.setItem("ws8-onboarded", "skipped"); } catch {}
+    w.querySelector(".invite")?.remove();
+    $("input").focus();
+  });
+}
+
+/* ── the transcript survives a reload ──
+   Kept in this browser, per user, and put back on screen before anything
+   else loads. Reloading used to wipe the chat to the welcome screen, which
+   read as the bot forgetting the last five minutes — the one impression this
+   product cannot afford. */
+const SESSION_KEY = "ws8-session:" + userId;
+let session = { convo: null, turns: [] };
+try {
+  const saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+  if (saved && Array.isArray(saved.turns)) session = saved;
+} catch {}
+function saveSession() {
+  session.turns = session.turns.slice(-60);
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch {}
+}
+function resetSession(convo = null, turns = []) { session = { convo, turns }; saveSession(); }
+function recordTurn(you, bot, { attached = null, picture = null } = {}) {
+  if (!you || you.startsWith("/")) return; // commands and their codes stay off the record
+  session.turns.push({ you, bot, attached, picture });
+  saveSession();
+}
+const shotHtml = (f, alt) => f?.file
+  ? `<a class="shot" href="/uploads/${encodeURIComponent(f.file)}" target="_blank" rel="noopener"><img src="/uploads/${encodeURIComponent(f.file)}" alt="${esc(alt ?? "")}" loading="lazy"></a>`
+  : "";
+/** Draw saved turns: the picture they sent under theirs, the one it found under its own. */
+function renderTurns(turns) {
+  for (const t of turns) {
+    if (t.you) bubble(turn("me"), esc(t.you) + shotHtml(t.attached, t.attached?.name));
+    if (t.bot) bubble(turn("bot"), fmt(t.bot) + shotHtml(t.picture, "picture it found"));
+  }
+  // A picture has no height until it loads, so the bottom moves after the
+  // list was scrolled to it. Follow it down.
+  for (const img of log.querySelectorAll(".shot img")) {
+    if (!img.complete) img.addEventListener("load", () => scroll(true), { once: true });
+  }
+}
+const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 90;
+function scroll(force) { if (force || atBottom()) log.scrollTop = log.scrollHeight; }
+
+function turn(who) {
+  log.querySelector(".welcome")?.remove();
+  const el = document.createElement("div");
+  el.className = "turn " + who;
+  el.innerHTML = who === "bot" ? '<span class="who"><i></i>Continuity</span>' : '<span class="who">You</span>';
+  log.appendChild(el);
+  return el;
+}
+/**
+ * What it offered to do next. The offer is made by the reply in words; these
+ * are the same words made tappable, and they go away once one is taken.
+ */
+function offer(el, actions) {
+  if (!actions?.length) return;
+  const row = document.createElement("div");
+  row.className = "offer";
+  row.innerHTML = actions.map((a) => a.url
+    ? `<a class="chip" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.label)}</a>`
+    : `<button class="chip" type="button" data-say="${esc(a.say)}">${esc(a.label)}</button>`).join("");
+  el.appendChild(row);
+  scroll(true);
+}
+
+function bubble(el, html) {
+  const b = document.createElement("div");
+  b.className = "bubble"; b.innerHTML = html;
+  el.appendChild(b); scroll(true);
+  return b;
+}
+
+/**
+ * Instead of a latency/cosine readout, one plain line: how many things it
+ * remembered, expandable to the actual memories. Same evidence, no jargon.
+ */
+function addRecalled(el, meta) {
+  const list = meta.trace ?? [];
+  if (!list.length) return;
+  const chip = document.createElement("button");
+  chip.className = "recalled";
+  chip.innerHTML =
+    `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.6"
+      stroke="currentColor" stroke-width="1.2"/><path d="M6 3.6V6l1.7 1.1" stroke="currentColor"
+      stroke-width="1.2" stroke-linecap="round"/></svg>
+     Remembered ${list.length} thing${list.length === 1 ? "" : "s"} about you`;
+  const box = document.createElement("div");
+  box.className = "used";
+  box.innerHTML = "<h5>what I used</h5>" + list.map((t) => `<p>${esc(secondPerson(t.text))}</p>`).join("");
+  chip.onclick = () => { box.classList.toggle("on"); scroll(); };
+  el.appendChild(chip); el.appendChild(box);
+}
+
+/** A screenshot the bot took, shown inline and clickable to open full size. */
+function attachImage(bubble, dataUrl, alt) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.className = "shot";
+  const img = document.createElement("img");
+  img.src = dataUrl;
+  img.alt = alt || "screenshot";
+  img.loading = "lazy";
+  img.onload = () => scroll(true);
+  a.appendChild(img);
+  bubble.appendChild(a);
+}
+
+let busy = false;
+
+/**
+ * Send a turn and render the reply as it streams.
+ *
+ * While tokens are arriving the text is shown raw with a cursor; Markdown is
+ * rendered once at the end. Rendering half-finished Markdown mid-stream makes
+ * lists and code fences flicker as they open and close.
+ */
+async function ask(text, { silent = false } = {}) {
+  if (busy || !text) return;
+  busy = true; $("send").disabled = true;
+  // Let the attachment finish being looked at before reading it.
+  if (describing) await describing;
+  const sending = pending;
+  if (!silent) {
+    const mine = bubble(turn("me"), esc(text));
+    if (sending?.url && /^image\//.test(sending.type ?? "")) {
+      mine.insertAdjacentHTML("beforeend",
+        `<a class="shot" href="${sending.url}" target="_blank" rel="noopener"><img src="${sending.url}" alt="${esc(sending.name ?? "")}"></a>`);
+    }
+  }
+  pending = null;
+  $("attached").hidden = true;
+  $("attached").innerHTML = "";
+  const t = turn("bot");
+  const b = bubble(t, slateHtml());
+  const slate = slateCtl(b);
+
+  let acc = "";
+  let final = null;
+
+  try {
+    const res = await fetch("/api/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // `sending`, not `pending`: pending is cleared above so the composer can
+      // reset while the turn is in flight. Sending it instead meant every
+      // attachment arrived as null and the bot answered, quite reasonably,
+      // that it could not see images — while the image sat in the bubble
+      // right above it, already described and already on disk.
+      body: JSON.stringify({ userId, text, attachment: sending }),
+    });
+    if (!res.ok || !res.body) throw new Error("stream unavailable");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let cut;
+      while ((cut = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, cut);
+        buffer = buffer.slice(cut + 2);
+        if (!frame.startsWith("data:")) continue;
+        let event;
+        try { event = JSON.parse(frame.slice(5)); } catch { continue; }
+        if (event.s) slate.stage(event.s);
+        if (event.t) {
+          if (!acc) slate.stop();
+          acc += event.t;
+          b.innerHTML = esc(acc) + '<span class="caret"></span>';
+          scroll();
+        }
+        if (event.done) final = event;
+      }
+    }
+
+    const reply = final?.reply ?? acc;
+    b.innerHTML = fmt(reply || final?.error || "Something went wrong.");
+    if (final?.image) attachImage(b, final.image, reply);
+    if (final?.meta) addRecalled(t, final.meta);
+    offer(t, final?.actions);
+    if (reply) recordTurn(text, reply, {
+      attached: sending?.file ? { file: sending.file, name: sending.name ?? null } : null,
+      picture: final?.image && final?.meta?.picture?.file ? { file: final.meta.picture.file } : null,
+    });
+    scroll(true);
+    setTimeout(refreshAll, 2500);
+    setTimeout(refreshAll, 40000);
+    return final ?? { reply };
+  } catch {
+    // Fall back to the non-streaming endpoint rather than losing the turn.
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, text, attachment: sending }),
+      }).then((r) => r.json());
+      b.innerHTML = fmt(res.reply ?? res.error ?? "Something went wrong.");
+      if (res.image) attachImage(b, res.image, res.reply);
+      addRecalled(t, res.meta ?? {});
+      offer(t, res.actions);
+      if (res.reply) recordTurn(text, res.reply, {
+        attached: sending?.file ? { file: sending.file, name: sending.name ?? null } : null,
+        picture: res.image && res.meta?.picture?.file ? { file: res.meta.picture.file } : null,
+      });
+      scroll(true);
+      setTimeout(refreshAll, 2500);
+      return res;
+    } catch {
+      b.textContent = "I couldn't reach the server. Try again in a moment.";
+    }
+  } finally {
+    slate.stop();
+    busy = false; $("send").disabled = false; $("input").focus();
+  }
+}
+
+/**
+ * What it is doing, while it is doing it.
+ *
+ * Three dots said "wait". This says what for: reading your memory first, then
+ * thinking — and how long each has taken, because a slow relayer read looks
+ * exactly like a hung page without a clock on it. The server sends one stage
+ * event when recall finishes, with what it found; the first streamed word
+ * replaces the whole thing.
+ */
+function slateHtml() {
+  return `<div class="slate">
+    <div class="step on" data-step="recall"><i></i><span>Reading your memory</span><em>0.0s</em></div>
+    <div class="step" data-step="think"><i></i><span>Thinking</span><em></em></div>
+    <div class="step" data-step="write"><i></i><span>Saving to Walrus</span><em>after the reply</em></div>
+    <div class="bar"></div>
+  </div>`;
+}
+function slateCtl(el) {
+  const started = performance.now();
+  let stageAt = started;
+  let stopped = false;
+  const tick = () => {
+    if (stopped) return;
+    const on = el.querySelector(".step.on em");
+    if (on) {
+      const secs = (performance.now() - stageAt) / 1000;
+      on.textContent = secs.toFixed(1) + "s";
+      // Past six seconds it is the relayer, not the page; say so.
+      const label = el.querySelector(".step.on span");
+      if (label && secs > 6 && label.dataset.slow !== "1") {
+        label.dataset.slow = "1";
+        label.textContent = label.textContent.startsWith("Reading") ? "Memory is slow right now" : "Still thinking";
+      }
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return {
+    stage(st) {
+      const recall = el.querySelector('[data-step="recall"]');
+      if (recall && st.stage === "thinking") {
+        recall.classList.remove("on"); recall.classList.add("done");
+        const n = st.recalled ?? 0, pics = st.pictures ?? 0;
+        recall.querySelector("span").textContent =
+          n ? `Found ${n} thing${n === 1 ? "" : "s"} about you${pics ? ` and ${pics} picture${pics === 1 ? "" : "s"}` : ""}` : "Nothing stored about you yet";
+        recall.querySelector("em").textContent = ((st.ms ?? 0) / 1000).toFixed(1) + "s";
+        el.querySelector('[data-step="think"]')?.classList.add("on");
+        stageAt = performance.now();
+      }
+    },
+    stop() { stopped = true; },
+  };
+}
+
+/* ── attachments ── */
+
+let pending = null; // { id, url, name, description, type, sawIt }
+/**
+ * The in-flight look at an attachment, if there is one.
+ *
+ * `pending` is only filled in once the vision model has answered, so anyone
+ * who attached something and pressed send while it still said "Looking at
+ * it…" lost the attachment silently — no description, no thumbnail, and a
+ * bot that quite reasonably said it could not see any image. Sending now
+ * waits for the look to finish rather than racing it.
+ */
+let describing = null;
+
+$("clip").addEventListener("click", () => $("file").click());
+
+/**
+ * Shrink a big photo before it leaves the browser.
+ *
+ * A 2MB phone screenshot took the vision model past its 40-second limit and
+ * came back as "could not read"; the same picture at 1600px is described in
+ * four seconds and looks no different in the chat. Small files go untouched,
+ * and anything that is not an image goes as it is.
+ */
+const MAX_SIDE = 1600;
+async function prepare(file) {
+  const asDataUrl = (blob) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+  const isPhoto = /^image\/(png|jpe?g|webp|bmp)$/.test(file.type);
+  if (!isPhoto || file.size < 600 * 1024) return { data: await asDataUrl(file), type: file.type };
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+    if (scale === 1 && file.size < 1.5 * 1024 * 1024) return { data: await asDataUrl(file), type: file.type };
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * scale);
+    c.height = Math.round(bmp.height * scale);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.86));
+    if (!blob) throw new Error("no blob");
+    return { data: await asDataUrl(blob), type: "image/jpeg" };
+  } catch {
+    return { data: await asDataUrl(file), type: file.type };
+  }
+}
+
+$("file").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) {
+    showAttached({ name: file.name, error: "Over 8MB — try a smaller one." });
+    return;
+  }
+
+  showAttached({ name: file.name, pending: true });
+  $("clip").disabled = true;
+  let settle;
+  describing = new Promise((r) => { settle = r; });
+  try {
+    const { data, type } = await prepare(file);
+
+    const out = await fetch("/api/attach", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, name: file.name, type, data }),
+    }).then((r) => r.json());
+
+    if (out.error) { showAttached({ name: file.name, error: out.error }); return; }
+    pending = out;
+    showAttached(out);
+  } catch {
+    showAttached({ name: file.name, error: "Couldn't upload that." });
+  } finally {
+    $("clip").disabled = false;
+    describing = null;
+    settle();
+  }
+});
+
+function showAttached(a) {
+  const box = $("attached");
+  box.hidden = false;
+  const thumb = a.url && /^image\//.test(a.type ?? "") ? `<img src="${a.url}" alt="">` : "";
+  const line = a.pending ? "Looking at it…"
+    : a.error ? a.error
+    : a.sawIt ? "Read and ready to send"
+    : "Attached";
+  box.innerHTML = `${thumb}<div class="what"><b>${esc(a.name ?? "file")}</b><span>${esc(line)}</span></div>
+    <button class="drop" type="button" aria-label="Remove">×</button>`;
+}
+
+$("attached").addEventListener("click", (e) => {
+  if (!e.target.closest(".drop")) return;
+  pending = null;
+  $("attached").hidden = true;
+  $("attached").innerHTML = "";
+});
+
+const input = $("input");
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 132) + "px"; }
+input.addEventListener("input", autosize);
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); }
+});
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const v = input.value.trim(); if (!v) return;
+  input.value = ""; autosize(); ask(v);
+});
+log.addEventListener("click", (e) => { if (e.target.classList.contains("seed")) ask(e.target.textContent); });
+// Taking an offer removes it: the same row answered twice would be two turns
+// about one question.
+log.addEventListener("click", (e) => {
+  const chip = e.target.closest(".offer .chip[data-say]");
+  if (!chip) return;
+  const say = chip.dataset.say;
+  chip.closest(".offer").remove();
+  ask(say);
+});
+
+/* ── menu ── */
+$("morebtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  $("menu").classList.toggle("on");
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".morewrap")) $("menu").classList.remove("on");
+});
+$("menu").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-say]");
+  if (b) { ask(b.dataset.say); $("menu").classList.remove("on"); }
+});
+function startNewChat() {
+  // Starting fresh means no past conversation is open any more, so nothing in
+  // the rail should still look selected.
+  openConvo = null;
+  resetSession();
+  if (typeof markOpenConversation === "function") markOpenConversation();
+  log.innerHTML = `<div class="welcome"><div class="orb"></div>
+    <h2>Still here.<br><em>Still remembering.</em></h2>
+    <p>Cleared the screen, not my memory. Everything you told me is still with me.</p></div>`;
+  $("menu").classList.remove("on");
+  $("input").focus();
+}
+$("newchat").addEventListener("click", startNewChat);
+$("newchat-q").addEventListener("click", startNewChat);
+$("quick").addEventListener("click", (e) => {
+  const b = e.target.closest(".qc");
+  if (!b || b.id === "newchat-q") return;
+  if (b.dataset.ask) return ask(b.dataset.ask);
+  if (b.dataset.link) return $("linkbtn").click();
+  if (b.dataset.prefill) {
+    const inp = $("input");
+    inp.value = b.dataset.prefill;
+    inp.focus();
+    inp.setSelectionRange(inp.value.length, inp.value.length);
+  }
+});
+// ⌘K / Ctrl+K starts a new chat from anywhere on the page.
+addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); startNewChat(); }
+});
+
+/* ── linking ── */
+let botUser = "walrusmemory_bot";
+$("linkbtn").addEventListener("click", async () => {
+  $("scrim").classList.add("on");
+  const pending = ["telegram", "discord"].filter((c) => !connectedNow.includes(c));
+  $("linkintro").textContent = pending.length
+    ? `Enter this code on ${pending.map((c) => SURFACE_LABEL[c]).join(" or ")} and I'll know it's still you — everything I remember comes with you.`
+    : "You're already connected everywhere. Use this code to add another account if you want.";
+  $("codeval").firstChild.nodeValue = "······";
+  $("qr").classList.remove("on");
+  const res = await ask("/link", { silent: true });
+  const code = res?.reply?.match(/\b([A-Z0-9]{6})\b/)?.[1];
+  if (!code) return;
+  $("codeval").firstChild.nodeValue = code;
+  const deep = `https://t.me/${botUser}?start=${code}`;
+  $("botname").textContent = "@" + botUser;
+  // Scanning opens Telegram with the code already attached — no typing at all.
+  if (window.QRCode) {
+    $("qr").innerHTML = "";
+    new QRCode($("qr"), { text: deep, width: 116, height: 116, correctLevel: QRCode.CorrectLevel.M });
+    $("qr").classList.add("on");
+  }
+});
+$("closelink").addEventListener("click", () => $("scrim").classList.remove("on"));
+$("scrim").addEventListener("click", (e) => { if (e.target === $("scrim")) $("scrim").classList.remove("on"); });
+$("codeval").addEventListener("click", () => {
+  const c = $("codeval").firstChild.nodeValue.trim();
+  if (!c || c.startsWith("·")) return;
+  navigator.clipboard?.writeText(c).catch(() => {});
+  $("copied").classList.add("on");
+  setTimeout(() => $("copied").classList.remove("on"), 1100);
+});
+
+/**
+ * The extractor stores facts in the third person ("User runs Node 22 on a Mac")
+ * because that is how it reasons about them. Shown in a panel addressed to the
+ * person themselves, that reads like a case file — so it is rephrased for
+ * display only. The stored memory is untouched.
+ */
+const KEEP_S = new Set(["is", "was", "has", "does", "goes", "as", "always", "sometimes"]);
+function secondPerson(text) {
+  let t = String(text);
+  if (!/^(the\s+)?user\b/i.test(t)) return t;
+  t = t.replace(/^the\s+user/i, "User");
+  // Within a fact that opened with "User", later pronouns refer to them too.
+  const pronouns = (x) => x
+    .replace(/\btheir\b/gi, "your").replace(/\bthemselves\b/gi, "yourself")
+    .replace(/\bthem\b/gi, "you").replace(/\bthey\b/gi, "you");
+  if (/^User's\b/i.test(t)) return pronouns(t.replace(/^User's\b/i, "Your"));
+  if (/^User\s+is\b/i.test(t)) return pronouns(t.replace(/^User\s+is\b/i, "You're"));
+  if (/^User\s+was\b/i.test(t)) return pronouns(t.replace(/^User\s+was\b/i, "You were"));
+  if (/^User\s+has\b/i.test(t)) return pronouns(t.replace(/^User\s+has\b/i, "You have"));
+  // "User runs …" → "You run …": drop the third-person -s from the next verb.
+  return pronouns(t.replace(/^User\s+(\w+)/i, (m, verb) => {
+    const lower = verb.toLowerCase();
+    if (KEEP_S.has(lower) || !lower.endsWith("s") || lower.endsWith("ss")) return `You ${verb}`;
+    return `You ${verb.slice(0, -1)}`;
+  }));
+}
+
+/* ── keeping your memory: a phrase you can write down, or a wallet ── */
+
+const keyScrim = $("keyscrim");
+const openKeyModal = (mode) => {
+  const saving = mode === "save";
+  $("keytitle").textContent = saving ? "Don't lose me" : "Pick up where you left off";
+  $("keysub").textContent = saving
+    ? "Your memory lives in this browser. Save a key and you can pick it up anywhere — a new laptop, a cleared cache, a different browser."
+    : "Enter the key you saved, and I'll be myself again.";
+  $("keysave").hidden = !saving;
+  $("keyrestore").hidden = saving;
+  $("walletlabel").textContent = saving ? "Use a Sui wallet instead" : "Sign in with a Sui wallet";
+  $("keyerr").textContent = "";
+  $("walleterr").textContent = "";
+  keyScrim.classList.add("on");
+  if (!saving) setTimeout(() => $("phrasein").focus(), 120);
+};
+
+$("savekey").addEventListener("click", async () => {
+  $("menu").classList.remove("on");
+  openKeyModal("save");
+  currentPhrase = "";
+  $("phrase").className = "words loading";
+  $("phrase").textContent = "making a key…";
+  $("phrase").appendChild(copiedBadge);
+  try {
+    const r = await fetch("/api/key/issue", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    }).then((r) => r.json());
+    if (r.phrase) {
+      renderPhrase(r.phrase);
+      try { localStorage.setItem("ws8-keyed", "1"); } catch {}
+      $("nudge")?.remove();
+    } else {
+      showPhraseError();
+    }
+  } catch {
+    showPhraseError();
+  }
+});
+
+$("restorekey").addEventListener("click", () => { $("menu").classList.remove("on"); openKeyModal("restore"); });
+$("keyclose").addEventListener("click", () => keyScrim.classList.remove("on"));
+keyScrim.addEventListener("click", (e) => { if (e.target === keyScrim) keyScrim.classList.remove("on"); });
+
+let currentPhrase = "";
+const copiedBadge = $("keycopied");
+
+function renderPhrase(phrase) {
+  currentPhrase = phrase;
+  const box = $("phrase");
+  box.className = "words";
+  box.textContent = "";
+  for (const word of phrase.split("-")) {
+    const el = document.createElement("span");
+    el.textContent = word;
+    box.appendChild(el);
+  }
+  box.appendChild(copiedBadge);
+}
+
+function showPhraseError() {
+  currentPhrase = "";
+  $("phrase").className = "words loading";
+  $("phrase").textContent = "Couldn't make a key just now. Close this and try again.";
+  $("phrase").appendChild(copiedBadge);
+}
+
+$("phrase").addEventListener("click", () => {
+  if (!currentPhrase) return;
+  navigator.clipboard?.writeText(currentPhrase).catch(() => {});
+  copiedBadge.classList.add("on");
+  setTimeout(() => copiedBadge.classList.remove("on"), 1100);
+});
+
+/** Adopt a different identity: store it and reload so every panel refetches. */
+function becomeUser(newId) {
+  try { localStorage.setItem("ws8-user", newId); localStorage.setItem("ws8-keyed", "1"); } catch {}
+  location.reload();
+}
+
+$("phrasein").addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter") return;
+  const phrase = $("phrasein").value.trim();
+  if (!phrase) return;
+  $("keyerr").textContent = "checking…";
+  try {
+    const r = await fetch("/api/key/redeem", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phrase }),
+    }).then((r) => r.json());
+    if (r.ok) becomeUser(r.userId);
+    else $("keyerr").textContent = r.error ?? "That key doesn't match anything I've stored.";
+  } catch {
+    $("keyerr").textContent = "Couldn't reach the server.";
+  }
+});
+
+/**
+ * Sui wallets announce themselves through the Wallet Standard handshake, so
+ * they can be discovered without pulling in a wallet library.
+ */
+function suiWallets() {
+  const found = [];
+  const register = (wallet) => { found.push(wallet); return () => {}; };
+  const onRegister = (e) => { try { e.detail({ register }); } catch {} };
+  window.addEventListener("wallet-standard:register-wallet", onRegister);
+  window.dispatchEvent(new CustomEvent("wallet-standard:app-ready", { detail: { register } }));
+  window.removeEventListener("wallet-standard:register-wallet", onRegister);
+  return found.filter((w) => w.features?.["standard:connect"] && w.features?.["sui:signPersonalMessage"]);
+}
+
+$("walletbtn").addEventListener("click", async () => {
+  const btn = $("walletbtn");
+  const err = $("walleterr");
+  err.textContent = "";
+  const wallets = suiWallets();
+  if (!wallets.length) {
+    err.innerHTML = 'No Sui wallet found in this browser. <a href="https://slush.app" target="_blank" rel="noopener" style="color:var(--live)">Get Slush</a>, then try again.';
+    return;
+  }
+
+  btn.disabled = true;
+  $("walletlabel").textContent = "Check your wallet…";
+  try {
+    const wallet = wallets[0];
+    const { accounts } = await wallet.features["standard:connect"].connect();
+    const account = accounts?.[0];
+    if (!account) throw new Error("no account");
+
+    const { nonce, message } = await fetch("/api/wallet/challenge", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    }).then((r) => r.json());
+
+    const signed = await wallet.features["sui:signPersonalMessage"].signPersonalMessage({
+      message: new TextEncoder().encode(message),
+      account,
+    });
+
+    const out = await fetch("/api/wallet/verify", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nonce, message, signature: signed.signature }),
+    }).then((r) => r.json());
+
+    if (out.userId) becomeUser(out.userId);
+    else err.textContent = out.error ?? "Couldn't verify that signature.";
+  } catch (e) {
+    err.textContent = e?.message === "no account" ? "That wallet has no account to sign with." : "Wallet sign-in was cancelled.";
+  } finally {
+    btn.disabled = false;
+    $("walletlabel").textContent = $("keysave").hidden ? "Sign in with a Sui wallet" : "Use a Sui wallet instead";
+  }
+});
+
+/**
+ * Arriving from the conversations list: put the transcript back on screen and
+ * back into short-term context, so the next message continues the thread
+ * rather than starting a new one.
+ */
+async function reopen(id) {
+  try {
+    const r = await fetch("/api/conversations/open", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, id }),
+    }).then((r) => r.json());
+    if (!r.conversation) return;
+
+    log.innerHTML = "";
+    const turns = r.conversation.turns.map((t) => ({
+      you: t.you, bot: t.bot, attached: t.attached ?? null, picture: t.picture ?? null,
+    }));
+    renderTurns(turns);
+    resetSession(id, turns);
+    const note = document.createElement("div");
+    note.className = "resumed";
+    note.textContent = "Picking up where you left off";
+    log.appendChild(note);
+    scroll(true);
+    history.replaceState(null, "", "/chat");
+  } catch { /* a failed reopen just leaves a fresh chat */ }
+}
+
+// A question handed over by another page ("Try: …" on the capabilities page).
+// Put in the composer, not sent: what gets said to it is still their call.
+const askParam = new URLSearchParams(location.search).get("ask");
+if (askParam) {
+  const inp = $("input");
+  inp.value = askParam.slice(0, 600);
+  inp.dispatchEvent(new Event("input"));
+  setTimeout(() => { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }, 60);
+  history.replaceState(null, "", "/chat");
+}
+
+const convoParam = new URLSearchParams(location.search).get("convo");
+if (!convoParam && !session.turns.length) {
+  personalise();
+  // Offered straight away, not once the first read comes back: for someone
+  // new that read is the slowest one there is — their identity is being
+  // created — and the offer arrived eight seconds after the page did. Anyone
+  // this browser has evidence of knowing is not asked.
+  if (!PROFILE && !(WS8.cached("memory")?.facts?.length)) maybeInvite();
+}
+if (convoParam) reopen(convoParam);
+else if (session.turns.length) {
+  log.innerHTML = "";
+  renderTurns(session.turns);
+  scroll(true);
+  // The server may have restarted since; give it the last few turns back so
+  // the next message still continues the thread. It keeps its own if it has them.
+  fetch("/api/session/restore", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, turns: session.turns.slice(-12).map((t) => ({ you: t.you, bot: t.bot })) }),
+  }).catch(() => {});
+  // `openConvo` is declared further down; by the time this runs it exists.
+  setTimeout(() => { openConvo = session.convo; markOpenConversation(); }, 0);
+}
+
+// In the app shell, opening a conversation from the history panel or the rail
+// never reloads the page, so the router hands the id over directly. Re-marking
+// the rail afterwards is what keeps the open one highlighted.
+window.__reopen = (id) => { openConvo = id; reopen(id); markOpenConversation(); };
+
+/* ── live panels ── */
+let knownFacts = new Set();
+let first = true;
+
+// The server decides what "healthy" means and never blocks on the relayer, so
+// this just renders the answer. Before the first poll lands, stay neutral
+// rather than alarming someone who has done nothing wrong.
+async function refreshHealth() {
+  try {
+    const h = await fetch("/healthz").then((r) => r.json());
+    if (!h.known) { $("ping").className = "ping"; $("pingtext").textContent = "Connecting…"; return; }
+    const ok = h.ok !== false;
+    $("ping").className = "ping " + (ok ? "ok" : "bad");
+    $("pingtext").textContent = !ok ? "Reconnecting…"
+      : h.relayer === "busy" ? "Busy — still saving"
+      : "Saving your memory";
+  } catch {
+    $("ping").className = "ping bad";
+    $("pingtext").textContent = "Offline";
+  }
+}
+
+let allFacts = [];
+
+// The first read shares the one the nav pills already started; every read
+// after a turn forces a new one, because by then the answer has changed.
+let memLoaded = false;
+
+async function refreshMemory() {
+  try {
+    // Arriving from another section with a recent answer already in hand: use
+    // it. This is the last read that fired on every single navigation, and
+    // dropping it is what makes moving between sections cost nothing at all.
+    const warm = !memLoaded && WS8.age("memory") < WS8.FRESH_MS && WS8.cached("memory");
+    const m = warm || await WS8.memories({ fresh: memLoaded });
+    memLoaded = true;
+    if (!warm && !m.error) WS8.remember("memory", m); // so /memory opens already filled in
+    const facts = m.facts ?? [];
+    allFacts = facts;
+    if (!facts.length) {
+      // Nothing known yet. If they have just been introduced, say the answers
+      // are on their way; if they have not, offer to be.
+      if (PROFILE?.name) { $("memcount").textContent = `Hi ${PROFILE.name} — saving what you told me`; $("tagline").textContent = `remembers ${PROFILE.name}`; }
+      else if (!m.error) maybeInvite();
+      return;
+    }
+
+    // It knows them after all (a linked account, a restored key): no need to ask.
+    log.querySelector(".invite")?.remove();
+
+    const n = facts.length;
+    const name = m.name ? esc(m.name) : null;
+    $("memcount").innerHTML = name
+      ? `Hi ${name} — I remember ${n} thing${n === 1 ? "" : "s"} about you`
+      : `I remember ${n} thing${n === 1 ? "" : "s"} about you`;
+    if (name) $("tagline").textContent = `remembers ${name}`;
+    $("viewmem").hidden = false;
+    paintSurfaces(m.connected ?? [], name);
+    maybeNudge(n);
+    for (const f of facts) knownFacts.add(f.text);
+    first = false;
+  } catch {}
+}
+
+/**
+ * Say which apps this person is reachable on. The chips are the honest version
+ * of "you're connected": each one is either joined up or a way to join it up.
+ */
+const SURFACE_LABEL = { web: "Web", telegram: "Telegram", discord: "Discord" };
+let connectedNow = [];
+
+function paintSurfaces(connected, name) {
+  connectedNow = connected;
+  const box = $("surfaces");
+  box.hidden = false;
+  for (const chip of box.querySelectorAll(".sf")) {
+    const on = connected.includes(chip.dataset.surface);
+    chip.classList.toggle("on", on);
+    chip.innerHTML = `${SURFACE_LABEL[chip.dataset.surface]}<span class="tick">${on ? "connected" : "connect"}</span>`;
+    chip.disabled = on;
+  }
+
+  const others = connected.filter((c) => c !== "web");
+  $("railsub").textContent = others.length
+    ? `${others.map((c) => SURFACE_LABEL[c]).join(" and ")} ${others.length > 1 ? "see" : "sees"} these too.`
+    : "These follow you to Telegram and Discord.";
+
+  const all = ["web", "telegram", "discord"].every((c) => connected.includes(c));
+  let banner = $("allset");
+  if (all && !banner) {
+    banner = document.createElement("div");
+    banner.className = "allset";
+    banner.id = "allset";
+    banner.textContent = name
+      ? `All three connected. Wherever you open me, I'm still talking to ${name}.`
+      : "All three connected. Wherever you open me, it's still you.";
+    $("surfaces").insertAdjacentElement("afterend", banner);
+  } else if (!all && banner) {
+    banner.remove();
+  }
+}
+
+// A chip that isn't connected yet is the shortest route to connecting it.
+$("surfaces").addEventListener("click", (e) => {
+  const chip = e.target.closest(".sf");
+  if (chip && !chip.classList.contains("on")) $("linkbtn").click();
+});
+
+
+
+async function refreshLedger() {
+  try {
+    const r = await fetch("/api/ledger").then((r) => r.json());
+    const n = r.writes?.length ?? 0;
+    // This is the PUBLIC ledger — every write the bot makes, by anyone. It used
+    // to be labelled "N saved permanently" directly under the personal memory
+    // panel, so a first-time visitor with nothing stored was told two things
+    // had been saved about them. True number, wrong subject.
+    $("proofn").textContent = n ? `${n} recent write${n === 1 ? "" : "s"}` : "Live writes";
+    if (!n) return;
+    $("blobs").innerHTML = r.writes.slice(0, 20).map((w) =>
+      `<a target="_blank" rel="noopener" href="https://walruscan.com/mainnet/blob/${encodeURIComponent(w.blobId)}"
+        title="Open on Walruscan">${esc(w.blobId)}</a>`).join("");
+  } catch {}
+}
+
+/**
+ * Offer the key once there is something to lose. Asking on arrival would be a
+ * signup form in front of an empty chat; asking after two facts is a real offer.
+ */
+function maybeNudge(factCount) {
+  if (factCount < 2 || $("nudge")) return;
+  try { if (localStorage.getItem("ws8-keyed")) return; } catch {}
+  const b = document.createElement("button");
+  b.className = "nudge";
+  b.id = "nudge";
+  b.textContent = "I know a few things about you now. Save a key so a new browser doesn't lose them →";
+  b.onclick = () => $("savekey").click();
+  $("viewmem").insertAdjacentElement("afterend", b);
+}
+
+/* ── recent conversations, in the rail ── */
+
+const SURFACE_NAME = { web: "Web", telegram: "Telegram", discord: "Discord", demo: "Demo" };
+
+function ago(iso) {
+  if (!iso) return "";
+  const mins = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
+  if (mins < 60 * 24 * 7) return `${Math.round(mins / 1440)}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/**
+ * Which app a conversation happened on is the whole point of this project made
+ * visible: seeing "Telegram · 2h ago" listed in the web sidebar says more about
+ * what this thing does than a paragraph explaining it would.
+ */
+function renderRecents(list) {
+  const box = $("recents");
+  if (!box) return;
+  if (!list.length) { box.hidden = true; return; }
+  box.hidden = false;
+  $("recentlist").innerHTML = list.slice(0, 20).map((c) => `
+    <a class="rc" href="/chat?convo=${encodeURIComponent(c.id)}" data-convo="${esc(c.id)}">
+      <b>${esc(c.title)}</b>
+      <span>${esc(SURFACE_NAME[c.surface] ?? c.surface)} · ${ago(c.endedAt)}</span>
+    </a>`).join("");
+  markOpenConversation();
+}
+
+/**
+ * Highlight the one currently open in the chat beside it.
+ *
+ * Tracked in a variable rather than read from the URL, because `reopen` clears
+ * the ?convo= param on purpose so that reloading gives you a fresh chat. The
+ * URL is therefore only right for the instant after a click.
+ */
+let openConvo = null;
+
+function markOpenConversation() {
+  const open = openConvo ?? new URLSearchParams(location.search).get("convo");
+  for (const el of document.querySelectorAll(".rc")) {
+    el.classList.toggle("on", !!open && el.dataset.convo === open);
+  }
+}
+
+/**
+ * Costs nothing on arrival: the nav counts already read this, and WS8 shares
+ * one request per endpoint and treats an answer under twenty seconds old as
+ * still true.
+ */
+function refreshRecents() {
+  if (!userId) return;
+
+  // Show the shape of the list while the relayer is answering, but only when
+  // there is reason to think there IS a list — a skeleton that appears and
+  // then vanishes tells a brand-new person their history failed to load.
+  const seen = WS8.cached("conversations");
+  if (!seen && $("recentlist") && !$("recentlist").children.length) {
+    $("recents").hidden = false;
+    $("recentlist").innerHTML = '<div class="sk-row"><div class="sk sk-line w60"></div>'
+      + '<div class="sk sk-line w40"></div></div>'.repeat(1)
+      + '<div class="sk-row"><div class="sk sk-line w85"></div>'
+      + '<div class="sk sk-line w40"></div></div>';
+  }
+
+  WS8.live("conversations", WS8.conversations, (r) => {
+    if (r.error) { // the rail is not the place to report a failed read
+      if (!document.querySelector(".rc")) $("recents").hidden = true;
+      return;
+    }
+    renderRecents(r.conversations ?? []);
+  });
+}
+
+const refreshAll = () => { refreshMemory(); refreshLedger(); refreshRecents(); };
+refreshHealth(); refreshAll();
+setInterval(refreshHealth, 25000);
+setInterval(refreshAll, 20000);
+fetch("/api/stats").then((r) => r.json()).then((s) => { botUser = s.botUsername ?? botUser; }).catch(() => {});
+
+/* Nav state, counts and the shared request cache live in /assets/app.js. */
+WS8.nav();
+
+</script>
+
+<script>
+/* ── memory ── from memory.html, deferred until the panel is first opened ── */
+PANELS.memory = (() => {
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const userId = (() => {
+  try { return localStorage.getItem("ws8-user"); } catch { return null; }
+})();
+
+/** The extractor stores facts in the third person; this page addresses you. */
+const KEEP_S = new Set(["is", "was", "has", "does", "goes", "as", "always", "sometimes"]);
+function secondPerson(text) {
+  let t = String(text);
+  if (!/^(the\s+)?user\b/i.test(t)) return t;
+  t = t.replace(/^the\s+user/i, "User");
+  const pronouns = (x) => x.replace(/\btheir\b/gi, "your").replace(/\bthemselves\b/gi, "yourself")
+    .replace(/\bthem\b/gi, "you").replace(/\bthey\b/gi, "you");
+  if (/^User's\b/i.test(t)) return pronouns(t.replace(/^User's\b/i, "Your"));
+  if (/^User\s+is\b/i.test(t)) return pronouns(t.replace(/^User\s+is\b/i, "You're"));
+  if (/^User\s+was\b/i.test(t)) return pronouns(t.replace(/^User\s+was\b/i, "You were"));
+  if (/^User\s+has\b/i.test(t)) return pronouns(t.replace(/^User\s+has\b/i, "You have"));
+  return pronouns(t.replace(/^User\s+(\w+)/i, (m, verb) => {
+    const l = verb.toLowerCase();
+    if (KEEP_S.has(l) || !l.endsWith("s") || l.endsWith("ss")) return `You ${verb}`;
+    return `You ${verb.slice(0, -1)}`;
+  }));
+}
+
+/**
+ * The collections. A memory lands in the first one whose test matches, so
+ * the order is the tie-break: something "stuck" is Still open before it is
+ * anything else, a date beats the tools it mentions, and a tool you use is your
+ * setup before it is a preference.
+ * Keyword tests, not a model — they run on every render and being wrong
+ * costs a memory sitting one shelf over, not a wrong answer.
+ */
+/**
+ * Each shelf's cover is drawn in type. String.raw, because half of these are
+ * backslashes and a template literal would eat them.
+ */
+const ART = {
+  photos: String.raw`
+       ____
+  .---|____|---------.
+  |     .----.       |
+  |    /  ()  \      |
+  |    \      /      |
+  |     '----'       |
+  '------------------'
+`,
+  about: String.raw`
+      .-""""-.
+     /  o  o  \
+    |    ..    |
+     \  \__/  /
+      '.____.'
+    .-'        '-.
+   /  /|      |\  \
+  /__/ |______| \__\
+`,
+  prefs: String.raw`
+    .-~~-.   .-~~-.
+   /      \ /      \
+  |        '        |
+  |                 |
+   \               /
+    '.           .'
+      '.       .'
+        '.   .'
+          '.'
+`,
+  setup: String.raw`
+   .--------------------.
+   | >_ node 22         |
+   |    pnpm, never npm |
+   |    macOS      _    |
+   |               █    |
+   '--------------------'
+        _______|_______
+`,
+  work: String.raw`
+         .-------.
+     .---|       |---.
+     |   '-------'   |
+     |===============|
+     |     [___]     |
+     |               |
+     '---------------'
+`,
+  plans: String.raw`
+     _______________
+    |_o___________o_|
+    |  1   2   3   4 |
+    |  5   6  [7]  8 |
+    |  9  10  11  12 |
+    |  13  14  15  . |
+    '----------------'
+`,
+  open: String.raw`
+      __________
+      \::::::::/
+       \::::::/
+        \::::/
+         \::/
+          )(
+         /  \
+        /    \
+       / .... \
+      /________\
+`,
+  other: String.raw`
+   ----  --------  ---
+   ------  ----  -----
+   ---  -------  ----
+   ------  ---  ------
+   --  ---------  ---
+`,
+};
+
+/* The faint field behind each figure: characters scattered on a seed, so
+   every cover is different and every reload draws the same one. */
+function field(seed, rows = 12, cols = 56) {
+  let x = 0;
+  for (const ch of seed) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 2 ** 32; };
+  const glyphs = " .·:+*";
+  let out = "";
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const v = rnd();
+      out += v < .78 ? " " : glyphs[1 + Math.floor((v - .78) / .22 * (glyphs.length - 1))];
+    }
+    out += "\n";
+  }
+  return out;
+}
+
+const COLLECTIONS = [
+  { id: "photos", label: "Photos", tint: "#5AA9FF", blurb: "Pictures you've sent it, on any app. Ask for one by describing it." },
+  { id: "open", label: "Still open", tint: "#F0A868", blurb: "Things you were stuck on the last time you spoke.",
+    test: /\b(stuck|error|failing|broken|issue|problem|can't|cannot|trying to|403|404|500)\b/i },
+  { id: "plans", label: "Plans", tint: "#C7A6FF", blurb: "Dates and things coming up.",
+    test: /\b(trip|travel|travelling|traveling|flight|visit|visiting|planning|plans? to|next (week|month)|on (mon|tues|wednes|thurs|fri|satur|sun)day|tomorrow|deadline|appointment|meeting|exam|birthday|wedding|holiday|vacation)\b/i },
+  { id: "setup", label: "Your setup", tint: "#7FE3D4", blurb: "Tools, versions and machines. It stops asking once it knows.",
+    test: /\b(node|npm|pnpm|yarn|bun|mac|macos|windows|linux|ubuntu|vs ?code|python|typescript|javascript|react|next\.?js|postgres|docker|iphone|android|chrome|safari|version|v\d+|uses?|using|runs? on|installed)\b/i },
+  { id: "work", label: "Projects & work", tint: "#FFB86B", blurb: "What you're building and where you work.",
+    test: /\b(building|builds?|project|side project|app|startup|company|client|launch|hackathon|interview|job|role|team|deploys?|deployed|shipping|working on|works? (at|for|as))\b/i },
+  { id: "prefs", label: "Preferences", tint: "#FF8EB4", blurb: "How you like things done.",
+    test: /\b(prefer|prefers|likes?|loves?|dislikes?|hates?|doesn't like|don't like|favourite|favorite|vegetarian|vegan|allergic|rather|always|never|short answers|no emoji)\b/i },
+  { id: "about", label: "About you", tint: "#9BD0FF", blurb: "Who you are: name, where you live, what you do.",
+    test: /\b(name is|named|called|lives? in|from|born|years old|age|studies|studying|student|wife|husband|partner|girlfriend|boyfriend|kids?|children|daughter|son|family|speaks?|language)\b/i },
+  { id: "other", label: "Everything else", tint: "#8695A6", blurb: "Things it kept that don't fit a shelf." },
+];
+const BY_ID = Object.fromEntries(COLLECTIONS.map((c) => [c.id, c]));
+const groupOf = (t) => /^(the )?user'?s preference\b/i.test(t) ? "prefs"
+  : (COLLECTIONS.find((g) => g.test?.test(t)) ?? BY_ID.other).id;
+const SURFACE = { web: "Web", telegram: "Telegram", discord: "Discord", demo: "Demo" };
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+
+let data = null, filter = "all", query = "";
+
+/* Which collection is open lives in the hash, so the browser's back button
+   steps out of it and a link to it can be shared. Buttons, not anchors: the
+   app shell intercepts every same-origin link and would swallow the hash. */
+const openCollection = () => new URLSearchParams(location.hash.slice(1)).get("c");
+function go(id) {
+  history.pushState(null, "", location.pathname + (id ? "#c=" + id : ""));
+  render();
+  if (id) window.scrollTo({ top: Math.max(0, $("stage").getBoundingClientRect().top + window.scrollY - 96), behavior: "smooth" });
+}
+addEventListener("popstate", render);
+
+function statCard(k, v, small, hi) {
+  const n = Number(v);
+  const body = Number.isFinite(n) ? `<span class="num" data-to="${n}">0</span>` : v;
+  return `<div class="stat${hi ? " hi" : ""}"><div class="k">${k}</div>
+    <div class="v">${body}${small ? `<small>${small}</small>` : ""}</div></div>`;
+}
+
+function countUp() {
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  for (const el of document.querySelectorAll("#stats .num")) {
+    const to = Number(el.dataset.to);
+    if (!Number.isFinite(to)) continue;
+    if (still || to === 0) { el.textContent = String(to); continue; }
+    const started = performance.now();
+    const tick = (now) => {
+      const p = Math.min(1, (now - started) / 620);
+      el.textContent = String(Math.round(to * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+}
+
+/* ── pieces ── */
+
+function memoHtml(f, i) {
+  const p = f.provenance ?? {};
+  const cold = (p.readCount ?? 0) === 0;
+  const when = fmtDate(f.at);
+  return `<div class="memo${cold ? " faded" : ""}" data-text="${esc(f.text)}" style="animation-delay:${Math.min(i * 35, 280)}ms">
+    <p>${esc(secondPerson(f.text))}</p>
+    <div class="memofoot">
+      ${when ? `<span class="pill">${when}</span>` : ""}
+      ${p.wroteOn ? `<span class="pill">written on ${SURFACE[p.wroteOn] ?? p.wroteOn}</span>` : ""}
+      ${p.crossed ? `<span class="pill cross">read on ${p.surfaces.map((x) => SURFACE[x] ?? x).join(" + ")}</span>`
+        : cold ? '<span class="pill cold">never used again</span>' : ""}
+      ${f.blobId ? `<a class="verify" target="_blank" rel="noopener"
+        href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}">${esc(f.blobId.slice(0, 18))}… ↗</a>` : ""}
+      <button class="wrong" type="button">Not right</button>
+    </div>
+  </div>`;
+}
+
+function photoHtml(p, i) {
+  return `<figure class="photo" data-file="${esc(p.file)}" style="animation-delay:${Math.min(i * 40, 320)}ms">
+    <div class="img">${p.available ? `<img src="${esc(p.url)}" alt="${esc(p.description)}" loading="lazy">` : "file no longer on this server"}</div>
+    <figcaption>
+      <p>${esc(p.description || p.said || "A picture")}</p>
+      <div class="memofoot">
+        ${p.at ? `<span class="pill">${fmtDate(p.at)}</span>` : ""}
+        ${p.surface ? `<span class="pill">sent on ${SURFACE[p.surface] ?? p.surface}</span>` : ""}
+      </div>
+    </figcaption>
+  </figure>`;
+}
+
+function coverHtml(c, items, i) {
+  const n = items.length;
+  const drawn = `<pre class="field" aria-hidden="true">${field(c.id)}</pre><pre class="figure" aria-hidden="true">${esc(ART[c.id].replace(/^\n|\n$/g, ""))}</pre>`;
+  let art = drawn;
+  if (c.id === "photos") {
+    // Real pictures beat a drawing of a camera, when there are any.
+    const shots = items.filter((p) => p.available).slice(0, 4);
+    const cls = ["", "one", "two", "three", ""][shots.length] ?? "";
+    if (shots.length) art = `<div class="collage ${cls}">${shots.map((p) => `<img src="${esc(p.url)}" alt="">`).join("")}</div>`;
+  }
+  const preview = c.id === "photos"
+    ? (n ? `${n} picture${n === 1 ? "" : "s"} it can bring back when you ask.` : "None yet. Send one in the chat and ask for it later.")
+    : items.slice(0, 2).map((f) => `<em>${esc(secondPerson(f.text))}</em>`).join(" · ");
+  return `<button class="cover${n ? "" : " bare"}" data-col="${c.id}" style="--tint:${c.tint};animation-delay:${i * 45}ms">
+    <div class="art">${art}<span class="n">${n}</span></div>
+    <div class="cover-body"><b>${c.label}</b><p>${preview}</p></div>
+  </button>`;
+}
+
+/* ── views ── */
+
+function buckets(facts) {
+  const b = new Map(COLLECTIONS.map((c) => [c.id, []]));
+  for (const f of facts) b.get(groupOf(f.text)).push(f);
+  b.set("photos", data.pictures ?? []);
+  return b;
+}
+
+function passes(f) {
+  if (filter === "crossed") return !!f.provenance?.crossed;
+  if (filter === "cold") return (f.provenance?.readCount ?? 0) === 0;
+  return true;
+}
+
+function render() {
+  if (!data) return;
+  const s = data.stats;
+  const stage = $("stage");
+  const open = openCollection();
+
+  $("title").innerHTML = data.name
+    ? `Everything it knows<br><em>about ${esc(data.name)}.</em>`
+    : `Everything it knows<br><em>about you.</em>`;
+
+  $("stats").innerHTML =
+    statCard("Memories", s.total) +
+    statCard("Pictures", (data.pictures ?? []).length) +
+    statCard("Crossed apps", s.crossSurface, "of " + s.total, s.crossSurface > 0) +
+    statCard("Apps connected", (data.connected ?? []).length) +
+    statCard("Never used again", s.neverRead);
+  countUp();
+
+  $("conflicts").innerHTML = data.conflicts?.length ? `
+    <div class="conflicts">
+      <h2>${data.conflicts.length} thing${data.conflicts.length === 1 ? "" : "s"} it has heard two ways</h2>
+      <p class="note">It uses the newer one. Normally that happens silently — here is what it decided.</p>
+      ${data.conflicts.map((c) => `
+        <div class="conflict">
+          <div class="side now"><span class="tag">Using</span><span>${esc(secondPerson(c.current.text))}</span></div>
+          <div class="side was"><span class="tag">Older</span><span>${esc(secondPerson(c.superseded.text))}</span></div>
+          <div class="differs">differs on: ${c.differsOn.map(esc).join(" · ")}</div>
+        </div>`).join("")}
+    </div>` : "";
+
+  const all = buckets(data.facts);
+
+  // Searching cuts across every shelf and shows a flat list, grouped by shelf.
+  if (query) {
+    $("filters").hidden = false;
+    let html = "", i = 0;
+    for (const c of COLLECTIONS) {
+      const items = all.get(c.id).filter((x) => c.id === "photos"
+        ? `${x.description} ${x.said ?? ""}`.toLowerCase().includes(query)
+        : x.text.toLowerCase().includes(query) && passes(x));
+      if (!items.length) continue;
+      html += `<h3 class="grouphead">${c.label} <span>${items.length}</span></h3>`;
+      html += c.id === "photos"
+        ? `<div class="grid">${items.map((p) => photoHtml(p, i++)).join("")}</div>`
+        : `<div class="list">${items.map((f) => memoHtml(f, i++)).join("")}</div>`;
+    }
+    stage.innerHTML = html || '<p class="empty">Nothing matches that.</p>';
+    return;
+  }
+
+  // Inside one collection.
+  if (open && BY_ID[open]) {
+    const c = BY_ID[open];
+    const items = c.id === "photos" ? all.get("photos") : all.get(c.id).filter(passes);
+    $("filters").hidden = c.id === "photos";
+    const body = c.id === "photos"
+      ? (items.length
+        ? `<div class="grid">${items.map(photoHtml).join("")}</div>`
+        : '<p class="empty">No pictures yet. Attach one in the <a href="/chat">chat</a>, on Telegram or on Discord, and it will be here — and it can bring it back when you describe it.</p>')
+      : (items.length
+        ? `<div class="list">${items.map(memoHtml).join("")}</div>`
+        : `<p class="empty">${filter !== "all" ? "Nothing here matches that filter." : "Nothing on this shelf yet."}</p>`);
+    stage.innerHTML = `
+      <div class="colhead">
+        <button class="back" type="button" data-back>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          All memories
+        </button>
+        <h2>${c.label} <span>${items.length}</span></h2>
+        <p class="blurb">${c.blurb}</p>
+      </div>${body}`;
+    return;
+  }
+
+  // The shelf. Empty collections stay off it, except Photos, which is the one
+  // people do not know to expect.
+  $("filters").hidden = true;
+  const covers = COLLECTIONS.filter((c) => c.id === "photos" || all.get(c.id).length);
+  stage.innerHTML = data.facts.length || (data.pictures ?? []).length
+    ? `<div class="shelf">${covers.map((c, i) => coverHtml(c, all.get(c.id), i)).join("")}</div>`
+    : '<p class="empty">Nothing stored yet. <a href="/chat">Go and tell it something.</a></p>';
+}
+
+/* ── the lightbox ──
+   Built here and hung off <body>, not written in the markup: the app shell
+   lifts only the page's .wrap into its panel, so anything outside it would
+   never arrive — and a panel mid-animation is a transformed ancestor, which
+   would pin a fixed overlay to the panel instead of the screen. */
+const lb = document.createElement("div");
+lb.className = "lb"; lb.id = "lb"; lb.setAttribute("role", "dialog"); lb.setAttribute("aria-modal", "true"); lb.setAttribute("aria-label", "Picture");
+lb.innerHTML = '<button class="lb-close" id="lbclose" aria-label="Close">×</button><div class="lb-card" id="lbcard"></div>';
+document.body.appendChild(lb);
+function showPicture(file) {
+  const p = (data?.pictures ?? []).find((x) => x.file === file);
+  if (!p) return;
+  $("lbcard").innerHTML = `
+    <img src="${esc(p.url)}" alt="${esc(p.description)}">
+    <div class="lb-side">
+      <h3>${p.name ? esc(p.name) : "A picture you sent"}</h3>
+      <p>${esc(p.description || "No description was saved for this one.")}</p>
+      ${p.said ? `<p class="said">You said: ${esc(p.said)}</p>` : ""}
+      <div class="memofoot">
+        ${p.at ? `<span class="pill">${fmtDate(p.at)}</span>` : ""}
+        ${p.surface ? `<span class="pill">sent on ${SURFACE[p.surface] ?? p.surface}</span>` : ""}
+        ${p.blobId ? `<a class="verify" target="_blank" rel="noopener" href="https://walruscan.com/mainnet/blob/${encodeURIComponent(p.blobId)}">${esc(p.blobId.slice(0, 18))}… ↗</a>` : ""}
+      </div>
+    </div>`;
+  $("lb").classList.add("on");
+}
+const closePicture = () => $("lb").classList.remove("on");
+$("lbclose").addEventListener("click", closePicture);
+$("lb").addEventListener("click", (e) => { if (e.target === $("lb")) closePicture(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape") closePicture(); });
+
+/**
+ * The dashboard is the slowest read in the app — a few seconds against the
+ * relayer. It opens on whatever this tab last saw and quietly corrects itself.
+ */
+function load() {
+  if (!userId) {
+    $("stage").innerHTML = '<p class="empty">This browser hasn\'t talked to it yet. <a href="/chat">Start a conversation →</a></p>';
+    $("stats").innerHTML = "";
+    return;
+  }
+  return WS8.live(
+    "memory-full",
+    () => WS8.api("/api/memory/full?userId=" + encodeURIComponent(userId)),
+    (fresh) => {
+      if (fresh.error) {
+        if (!data) { WS8.problem($("stage"), fresh.error, load); $("stats").innerHTML = ""; }
+        return;
+      }
+      data = fresh;
+      render();
+    },
+  );
+}
+
+$("q").addEventListener("input", (e) => { query = e.target.value.trim().toLowerCase(); render(); });
+$("filters").addEventListener("click", (e) => {
+  const b = e.target.closest(".filter");
+  if (!b) return;
+  filter = b.dataset.filter;
+  for (const f of document.querySelectorAll(".filter")) f.classList.toggle("on", f === b);
+  render();
+});
+
+$("stage").addEventListener("click", async (e) => {
+  const cover = e.target.closest(".cover");
+  if (cover) return go(cover.dataset.col);
+  if (e.target.closest("[data-back]")) return go(null);
+  const photo = e.target.closest(".photo");
+  if (photo) return showPicture(photo.dataset.file);
+
+  const btn = e.target.closest(".wrong");
+  if (!btn) return;
+  const card = btn.closest(".memo");
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const r = await fetch("/api/memory/forget", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, text: card.dataset.text }),
+    }).then((r) => r.json());
+    if (r.ok) {
+      card.classList.add("dropped");
+      card.querySelector(".memofoot").innerHTML =
+        '<span class="pill">Won\'t be used again · the blob stays on Walrus</span>';
+      data.facts = data.facts.filter((f) => f.text !== card.dataset.text);
+    } else { btn.disabled = false; btn.textContent = "Not right"; }
+  } catch { btn.disabled = false; btn.textContent = "Not right"; }
+});
+  return { open: load };
+})();
+</script>
+
+<script>
+/* ── history ── from history.html, deferred until the panel is first opened ── */
+PANELS.history = (() => {
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const userId = (() => { try { return localStorage.getItem("ws8-user"); } catch { return null; } })();
+const SURFACE = { web: "Web", telegram: "Telegram", discord: "Discord", demo: "Demo" };
+
+let all = [], query = "";
+
+function when(iso) {
+  if (!iso) return "";
+  const d = new Date(iso), now = new Date();
+  const mins = Math.round((now - d) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
+  if (mins < 60 * 24 * 7) return `${Math.round(mins / 1440)}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function render() {
+  const shown = query ? all.filter((c) => c.title.toLowerCase().includes(query)) : all;
+  if (!shown.length) {
+    $("list").innerHTML = `<p class="empty">${query ? "Nothing matches that." :
+      'No conversations yet. <a href="/chat" style="color:var(--live)">Start one →</a>'}</p>`;
+    return;
+  }
+  $("list").innerHTML = shown.map((c, i) => `
+    <a class="convo" href="/chat?convo=${encodeURIComponent(c.id)}" style="animation-delay:${Math.min(i * 40, 320)}ms">
+      <h2>${esc(c.title)}</h2>
+      <div class="meta">
+        <span class="pill">${when(c.endedAt)}</span>
+        <span class="pill">${SURFACE[c.surface] ?? c.surface}</span>
+        <span class="pill">${c.turns} turn${c.turns === 1 ? "" : "s"}</span>
+        ${c.live ? '<span class="pill live">in progress</span>' : ""}
+        ${c.blobId ? '<span class="pill wal">on Walrus</span>' : ""}
+      </div>
+    </a>`).join("");
+}
+
+$("q").addEventListener("input", (e) => { query = e.target.value.trim().toLowerCase(); render(); });
+
+/**
+ * Paint from what this tab saw last, then correct it from the network. Reading
+ * conversations back off Walrus takes a few seconds, and opening this page on
+ * "Reading from Walrus…" every time was the single thing that made switching
+ * sections feel like the site had fallen over.
+ */
+function start() {
+  if (!userId) {
+    $("list").innerHTML = '<p class="empty">This browser hasn\'t talked to it yet. <a href="/chat" style="color:var(--live)">Start a conversation →</a></p>';
+    return;
+  }
+  WS8.live("conversations", WS8.conversations, (r) => {
+    if (r.error) {
+      // Only worth saying if there is nothing already on screen to keep.
+      if (!all.length) WS8.problem($("list"), r.error, () => location.reload());
+      return;
+    }
+    all = r.conversations ?? [];
+    render();
+  });
+}
+  return { open: start };
+})();
+</script>
+
+<script>Router.start();</script>
+</body>
+</html>

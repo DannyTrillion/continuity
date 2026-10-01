@@ -1,0 +1,116 @@
+/**
+ * The app shell: one header, three panels, one of them showing.
+ *
+ * `.app` is already a full-height flex column with the header at the top, so a
+ * panel is simply the thing that fills the rest of it. Chat manages its own
+ * internal scrolling; memory and history are long documents, so they scroll
+ * inside their panel rather than moving the page. That is what keeps the
+ * header genuinely fixed — it is not pinned with `position: fixed`, it just
+ * never scrolls and is never replaced.
+ */
+
+.panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* `hidden` is only a hint, and `display: flex` above outranks it. Without this
+   every panel renders at once, stacked. */
+.panel[hidden] {
+  display: none !important;
+}
+
+/* The two reading panels scroll themselves. `contain` stops a flick at the end
+   of the list turning into a page-level bounce. */
+#p-memory,
+#p-history {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* These wrappers carried the page's own top padding and centring when they
+   were separate documents. The shell provides both now. */
+#p-memory .wrap,
+#p-history .wrap {
+  width: 100%;
+  /* As separate pages these sat 34px below the nav. The shell's own 16px gap
+     covers half of that; this is the rest, so the headings breathe the way
+     they did before rather than crowding the bar. */
+  padding-top: 18px;
+}
+
+/* ── switching sections ───────────────────────────────────────────────── */
+
+/* Same-document transitions land on the same pseudo-elements as the
+   cross-document ones in motion.css, and inherit their timing — short, and
+   with the header and background held still by name. Only the panel changes.
+   Nothing here needs to move it further. */
+
+/* A panel is opened for the first time with its data still on the way. This
+   keeps that first frame from arriving as a bare white line of text. */
+#p-memory .empty,
+#p-history .empty {
+  transition: opacity 200ms ease;
+}
+
+/* ── narrow screens ───────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  /* The scroll containers need the safe-area padding the page used to have. */
+  #p-memory,
+  #p-history {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* ═══ how a section opens ═════════════════════════════════════════════════
+
+   The vocabulary itself — the curve, the timings, enter-rise and the skeleton
+   classes — lives in motion.css, because the landing page uses the same ones
+   and only links that. What belongs here is which elements get staged.        */
+
+.panel.opening .layout > *,
+.panel.opening .wrap > * {
+  animation: enter-rise var(--rise-time) var(--rise) both;
+}
+
+/* The stagger stops after three steps. Letting it run the full length of the
+   panel meant the list — the thing you actually came for, and the thing the
+   skeleton exists to show early — was last to appear, a third of a second
+   after the heading. Everything from the fourth child down arrives together. */
+.panel.opening .layout > *:nth-child(2),
+.panel.opening .wrap > *:nth-child(2) { animation-delay: calc(var(--rise-step) * 1); }
+.panel.opening .wrap > *:nth-child(3) { animation-delay: calc(var(--rise-step) * 2); }
+.panel.opening .wrap > *:nth-child(n+4) { animation-delay: calc(var(--rise-step) * 3); }
+
+/* Coming back to a section already opened: the panel itself fades up, quickly,
+   with none of the stagger. */
+.panel.returning {
+  animation: panel-back 420ms cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes panel-back {
+  from { opacity: 0; transform: translateY(14px) scale(.99); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel.returning,
+  .panel.opening .layout > *,
+  .panel.opening .wrap > *,
+  .sk { animation: none; }
+  .sk { background: rgba(255, 255, 255, .06); }
+}
+
+/* ── on a phone ───────────────────────────────────────────────────────────
+   The panels scroll inside themselves at every size now, so a swipe on the
+   memory page moves the memory page. Before, the page was let go to its full
+   height on small screens while the panel kept `overscroll-behavior: contain`
+   — a scroll container with nothing to scroll that refused to pass the swipe
+   on to the page. The result was a page that could not be scrolled at all. */
+@media (max-width: 860px) {
+  #p-memory, #p-history { -webkit-overflow-scrolling: touch; }
+  #p-memory .wrap, #p-history .wrap { padding-left: 2px; padding-right: 2px; padding-bottom: 40px; }
+  /* The docs button would sit on top of the send button; it is in the ⋯ menu here. */
+  [data-page="app"] .docs-fab { display: none; }
+}
