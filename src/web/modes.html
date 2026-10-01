@@ -79,6 +79,15 @@
   .empty{color:var(--dim);font-size:13.5px;margin:0}
   .empty code{font-family:var(--mono);font-size:12.5px;color:var(--live)}
 
+  .row{display:flex;gap:11px;align-items:baseline;background:rgba(255,255,255,.035);
+    border:1px solid var(--edge);border-radius:var(--r-sm);padding:10px 13px;font-size:13.5px}
+  .row .what{min-width:0;color:var(--soft);overflow-wrap:anywhere}
+  .row .when{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--live);white-space:nowrap}
+  .row.past .when{color:var(--faint)}
+  .rows{display:grid;gap:7px}
+  .now{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-family:var(--mono);
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--wal);
+    border:1px solid rgba(127,227,212,.28);border-radius:999px;padding:4px 11px}
   footer{margin-top:40px;color:var(--faint);font-size:12.5px;max-width:62ch}
   footer a{color:var(--dim)}
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -89,7 +98,7 @@
   <header>
     <a class="back" href="/chat">← Back to the chat</a>
     <h1>Four ways to work,<br><em>one memory</em> behind them.</h1>
-    <p class="lede">A mode changes how it answers, never what it knows. Pick one on Telegram and
+    <p class="lede" id="lede">A mode changes how it answers, never what it knows. Pick one on Telegram and
       you have picked it on Discord and here — it is stored as a memory like everything else.</p>
   </header>
 
@@ -129,6 +138,7 @@
         <li>Uses the tools and versions it already knows you are on — <code>/stack</code> shows you what it has, so a gap is one sentence to fix.</li>
       </ul>
       <div class="cmds"><span class="cmd live">/mode coding</span><span class="cmd live">/stack</span></div>
+      <div class="shelf"><h3>What it has on your setup</h3><div id="stack"><p class="empty">Reading…</p></div></div>
     </section>
 
     <section class="mode">
@@ -140,6 +150,7 @@
         <li>If something it remembers was due and has passed, it asks how it went. <code>/plans</code> shows what is coming and what just went.</li>
       </ul>
       <div class="cmds"><span class="cmd live">/mode planner</span><span class="cmd live">/plans</span></div>
+      <div class="shelf"><h3>What you have coming up</h3><div id="plans"><p class="empty">Reading…</p></div></div>
     </section>
 
     <section class="mode">
@@ -161,49 +172,68 @@
 </div>
 
 <script>
-/* The tutor shelf is the only part of this page that is not static, and it is
-   deliberately allowed to fail quietly: a relayer wobble should leave four
-   mode cards standing, not an error where the page was. */
+/* One request feeds all four shelves, and each one fails on its own: a relayer
+   wobble should leave the mode cards standing rather than put an error where
+   the page was. */
 (async function () {
-  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const slot = document.getElementById("materials");
-  const missedSlot = document.getElementById("missed");
+  const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const at = (id) => document.getElementById(id);
+  const say = (id, msg) => { const el = at(id); if (el) el.innerHTML = `<p class="empty">${msg}</p>`; };
 
   let userId = null;
   try { userId = localStorage.getItem("ws8.userId"); } catch { /* private window */ }
   if (!userId) {
-    slot.innerHTML = '<p class="empty">Open <code>/chat</code> first, then come back — this shelf shows your own materials.</p>';
+    for (const id of ["materials", "stack", "plans"])
+      say(id, 'Open <code>/chat</code> once and come back — these shelves show your own memory.');
     return;
   }
 
-  let data;
+  let d;
   try {
-    const r = await fetch("/api/study?userId=" + encodeURIComponent(userId));
+    const r = await fetch("/api/modes?userId=" + encodeURIComponent(userId));
     if (!r.ok) throw new Error(String(r.status));
-    data = await r.json();
+    d = await r.json();
   } catch {
-    slot.innerHTML = '<p class="empty">Couldn\'t read your materials just now. Refresh in a moment.</p>';
+    for (const id of ["materials", "stack", "plans"]) say(id, "Couldn't read that just now. Refresh in a moment.");
     return;
   }
 
-  if (!data.materials?.length) {
-    slot.innerHTML =
-      '<p class="empty">Nothing yet. Switch to Tutor mode and send it a PDF or your notes, then <code>/quiz</code>.</p>';
-  } else {
-    slot.innerHTML = data.materials.map((m) => `
-      <div class="material">
-        <span class="name">${esc(m.name)}</span>
-        ${m.blobId ? `<a class="verify" target="_blank" rel="noopener"
-          href="https://walruscan.com/mainnet/blob/${encodeURIComponent(m.blobId)}">${esc(String(m.blobId).slice(0, 14))}… ↗</a>` : ""}
-        <span class="meta">${m.url ? "on file" : "file gone"}</span>
-      </div>`).join("");
+  if (d.mode) {
+    const label = { tutor: "Tutor", coding: "Coding partner", planner: "Planner", support: "Support desk" }[d.mode];
+    if (label) at("lede").insertAdjacentHTML("afterend", `<div class="now">● you're in ${esc(label)} mode</div>`);
   }
 
-  if (data.missed?.length) {
-    missedSlot.innerHTML =
-      `<h3 style="margin-bottom:8px">What you got wrong</h3>` +
-      data.missed.slice(0, 5).map((x) => `<div class="missed">${esc(x.text)}</div>`).join("");
+  const blob = (b) => b
+    ? `<a class="verify" target="_blank" rel="noopener" href="https://walruscan.com/mainnet/blob/${encodeURIComponent(b)}">${esc(String(b).slice(0, 14))}… ↗</a>`
+    : "";
+
+  /* Tutor */
+  const mats = d.tutor?.materials ?? [];
+  at("materials").innerHTML = mats.length
+    ? mats.map((m) => `<div class="material"><span class="name">${esc(m.name)}</span>${blob(m.blobId)}<span class="meta">${m.url ? "on file" : "file gone"}</span></div>`).join("")
+    : '<p class="empty">Nothing yet. Switch to Tutor mode, send a PDF or your notes, then <code>/quiz</code>.</p>';
+
+  const missed = d.tutor?.missed ?? [];
+  if (missed.length) {
+    at("missed").innerHTML = `<h3 style="margin-bottom:8px">What you got wrong</h3>` +
+      missed.slice(0, 5).map((x) => `<div class="missed">${esc(x.text)}</div>`).join("");
   }
+
+  /* Coding partner */
+  const stack = d.coding?.stack ?? [];
+  at("stack").innerHTML = stack.length
+    ? `<div class="rows">${stack.map((x) => `<div class="row"><span class="what">${esc(x.text)}</span>${blob(x.blobId)}</div>`).join("")}</div>`
+    : '<p class="empty">Nothing yet. Tell it once — language, runtime, package manager, editor — and it stops asking.</p>';
+
+  /* Planner */
+  const up = d.planner?.upcoming ?? [];
+  const past = d.planner?.passed ?? [];
+  at("plans").innerHTML = (up.length || past.length)
+    ? `<div class="rows">` +
+      up.slice(0, 5).map((x) => `<div class="row"><span class="what">${esc(x.text)}</span><span class="when">${esc(x.when)}</span></div>`).join("") +
+      past.map((x) => `<div class="row past"><span class="what">${esc(x.text)}</span><span class="when">${esc(x.when)}</span></div>`).join("") +
+      `</div>`
+    : '<p class="empty">Nothing dated yet. Say "my interview is next Tuesday" and it will pin that to a real day.</p>';
 })();
 </script>
 </body>

@@ -156,3 +156,42 @@ export async function materialText(file, { limit = 24_000 } = {}) {
   if (!read.ok) throw new Error(read.error ?? "could not read it back");
   return String(read.text ?? "").slice(0, limit);
 }
+
+/**
+ * Materials and misses in one read.
+ *
+ * `listMaterials` and `listMistakes` each cost a recall, and the page wants
+ * both. They live in the same namespace and are told apart by whether the
+ * memory carries a file reference — so one broad read answers both, which
+ * halves what the page spends against a budget shared with every chat turn.
+ */
+export async function studyShelf(personId, { limit = 24 } = {}) {
+  const hits = await recall(studyNs(personId), "study materials and questions got wrong", {
+    limit,
+    maxTokens: 5000,
+  }).catch(() => []);
+
+  const materials = [];
+  const missed = [];
+  const seen = new Set();
+
+  for (const h of hits) {
+    const text = String(h.text ?? "");
+    const file = text.match(REF)?.[1];
+    if (file) {
+      if (seen.has(file)) continue;
+      seen.add(file);
+      const body = bodyOf(text);
+      materials.push({
+        file,
+        name: body.match(/: ([^.\n(]+?)(?: \(\d+ pages\))?\./)?.[1]?.trim() ?? "a document",
+        summary: body,
+        blobId: h.blob_id ?? null,
+        at: h.created_at ?? null,
+      });
+    } else if (/got this wrong/i.test(text)) {
+      missed.push({ text, blobId: h.blob_id ?? null, at: h.created_at ?? null });
+    }
+  }
+  return { materials, missed };
+}

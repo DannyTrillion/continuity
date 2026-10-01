@@ -134,3 +134,82 @@ export function suggestMode(personId, message, current, now = Date.now()) {
 
 /** Forget that anything was offered — for tests, and for a fresh start. */
 export const forgetOffers = () => offered.clear();
+
+/* ────────────────────────────────────────────────────────────────────────
+   What each mode has to show for itself.
+
+   These are views over the same memory, written once and read by two
+   callers: the slash command on Telegram and Discord, and the /modes page
+   on the web. Keeping them here rather than in either caller is what stops
+   the bot and the page disagreeing about what the assistant knows — which
+   is exactly the contradiction that made the memory dashboard sit beside a
+   reply claiming to know nothing.
+   ──────────────────────────────────────────────────────────────────────── */
+
+import { recall, personNs } from "./memory.mjs";
+import { PLAN } from "./followups.mjs";
+import { datesIn, daysBetween } from "./time.mjs";
+
+const nsOf = (person) => person.namespaces?.[0] ?? personNs(person.personId);
+
+/**
+ * Anything with a date on it, sorted, with how far away it is.
+ *
+ * `away` is in days: positive ahead, negative behind. Only the recent past
+ * is kept — a deadline from March is not news, and a list that never shrinks
+ * stops being read.
+ */
+export async function planItems(person, { lookBack = 14 } = {}) {
+  const facts = await recall(
+    nsOf(person),
+    "plans, appointments, interviews, trips, deadlines and events on a date",
+    { limit: 12, maxTokens: 900 },
+  ).catch(() => []);
+
+  const now = new Date();
+  const out = [];
+  for (const f of facts) {
+    const text = String(f.text ?? "");
+    if (!PLAN.test(text)) continue;
+    for (const d of datesIn(text)) {
+      const away = -daysBetween(d, now);
+      if (away < -lookBack) continue;
+      out.push({
+        // The bracketed date is machinery the resolver added on the way in.
+        text: text.replace(/\s*\([^)]*\d{4}\)/g, "").replace(/\s+/g, " ").trim(),
+        date: d.toISOString(),
+        away,
+        blobId: f.blob_id ?? null,
+      });
+    }
+  }
+  return out.sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+}
+
+/** How far away, in words a person would use. */
+export const awayInWords = (away) =>
+  away === 0 ? "today"
+    : away === 1 ? "tomorrow"
+      : away > 0 ? `in ${away} days`
+        : away === -1 ? "yesterday"
+          : `${-away} days ago`;
+
+/**
+ * What it knows about the tools someone works with.
+ *
+ * "Never ask them to repeat their setup" is a promise nobody can check until
+ * it fails, so this is the check. Filtered to sentences that actually assert
+ * something about usage rather than every fact that mentions a language.
+ */
+export async function stackItems(person, { limit = 8 } = {}) {
+  const facts = await recall(
+    nsOf(person),
+    "the tools, languages, runtimes, editors, operating system and versions this person works with",
+    { limit: 10, maxTokens: 700 },
+  ).catch(() => []);
+
+  return facts
+    .map((f) => ({ text: String(f.text ?? "").replace(/\s+/g, " ").trim(), blobId: f.blob_id ?? null }))
+    .filter((f) => /\b(use|uses|using|on|runs?|prefers?|never)\b/i.test(f.text))
+    .slice(0, limit);
+}

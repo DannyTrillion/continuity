@@ -11,7 +11,8 @@ import { dirname, join } from "node:path";
 
 import { respond } from "./core/session.mjs";
 import { rememberLastGood } from "./core/agent.mjs";
-import { listMaterials, listMistakes } from "./core/study.mjs";
+import { studyShelf } from "./core/study.mjs";
+import { modeFor, stackItems, planItems, awayInWords } from "./core/modes.mjs";
 import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, findConflicts, NS_INDEX } from "./core/memory.mjs";
 import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
 import { startOutbox, onSettled, outboxStats, pendingFor, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
@@ -364,28 +365,45 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  /* What the tutor has been given to teach from, and what it has seen them
-     get wrong. Both live in the same namespace — a material carries a file
-     reference and a missed question does not, which is what tells them apart
-     — so one read answers the whole page. */
-  if (url.pathname === "/api/study") {
+  /**
+   * Everything the /modes page shows, in one request.
+   *
+   * Three recalls rather than four: materials and missed questions share a
+   * namespace and are told apart by whether the memory carries a file
+   * reference, so one read answers both. That matters because this budget is
+   * the same sixty-a-minute every chat turn draws on.
+   *
+   * Each shelf fails on its own. A page with three of four sections is a far
+   * better answer than an error where the page was.
+   */
+  if (url.pathname === "/api/modes") {
     const userId = url.searchParams.get("userId");
     if (!userId) return json(res, 400, { error: "userId is required" });
     try {
       const who = await resolvePerson("web", userId);
-      const [materials, missed] = await Promise.all([
-        listMaterials(who.personId).catch(() => []),
-        listMistakes(who.personId).catch(() => []),
+      const [study, stack, plans] = await Promise.all([
+        studyShelf(who.personId).catch(() => ({ materials: [], missed: [] })),
+        stackItems(who).catch(() => []),
+        planItems(who).catch(() => []),
       ]);
+
       return json(res, 200, {
         personId: who.personId,
-        materials: materials.map((m) => ({
-          ...m,
-          // The bytes are on the volume; a material whose file went with a
-          // redeploy should say so rather than offering a dead link.
-          url: existsSync(join(UPLOADS, m.file)) ? `/uploads/${m.file}` : null,
-        })),
-        missed,
+        mode: await modeFor(who.personId).catch(() => null),
+        tutor: {
+          materials: study.materials.map((m) => ({
+            ...m,
+            // The bytes live on the volume; a material whose file went with a
+            // redeploy should say so rather than offering a dead link.
+            url: existsSync(join(UPLOADS, m.file)) ? `/uploads/${m.file}` : null,
+          })),
+          missed: study.missed,
+        },
+        coding: { stack },
+        planner: {
+          upcoming: plans.filter((p) => p.away >= 0).map((p) => ({ ...p, when: awayInWords(p.away) })),
+          passed: plans.filter((p) => p.away < 0).slice(-4).map((p) => ({ ...p, when: awayInWords(p.away) })),
+        },
       });
     } catch (err) {
       return json(res, 503, { error: err.message });

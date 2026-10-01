@@ -8,11 +8,9 @@
 import { issueLinkCode, redeemLinkCode, resolvePerson, setOptOut } from "./identity.mjs";
 import { recall, personNs, KB_NS } from "./memory.mjs";
 import { searchWeb, screenshotUrl } from "./web.mjs";
-import { MODES, isMode, modeFor, setMode } from "./modes.mjs";
+import { MODES, isMode, modeFor, setMode, planItems, stackItems, awayInWords } from "./modes.mjs";
 import { listMaterials } from "./study.mjs";
 import { startQuiz, answerQuiz, LETTERS } from "./quiz.mjs";
-import { PLAN } from "./followups.mjs";
-import { datesIn, daysBetween } from "./time.mjs";
 
 /**
  * Where the website is, if it is anywhere.
@@ -488,27 +486,9 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
      * them ask "what have I got on?" and hope it mentions everything.
      */
     case "/plans": {
-      const facts = await recall(
-        person.namespaces?.[0] ?? personNs(person.personId),
-        "plans, appointments, interviews, trips, deadlines and events on a date",
-        { limit: 12, maxTokens: 900 },
-      ).catch(() => []);
-
-      const now = new Date();
-      const dated = [];
-      for (const f of facts) {
-        const text = String(f.text ?? "");
-        if (!PLAN.test(text)) continue;
-        for (const d of datesIn(text)) {
-          dated.push({ text, date: d, away: -daysBetween(d, now) }); // +future, −past
-        }
-      }
-      dated.sort((a, b) => a.date - b.date);
-
-      // Only the recent past is worth showing. A deadline from March is not
-      // news, and a list that never shrinks stops being read.
+      const dated = await planItems(person);
       const soon = dated.filter((d) => d.away >= 0);
-      const gone = dated.filter((d) => d.away < 0 && d.away >= -14).slice(-3);
+      const gone = dated.filter((d) => d.away < 0).slice(-3);
 
       if (!soon.length && !gone.length) {
         return {
@@ -519,10 +499,7 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
         };
       }
 
-      const line = (d) =>
-        `• ${d.text.replace(/\s*\([^)]*\d{4}\)/g, "").replace(/\s+/g, " ").trim().slice(0, 110)}` +
-        ` — ${d.away === 0 ? "today" : d.away > 0 ? `in ${d.away} day${d.away === 1 ? "" : "s"}` : `${-d.away} day${d.away === -1 ? "" : "s"} ago`}`;
-
+      const line = (d) => `• ${d.text.slice(0, 110)} — ${awayInWords(d.away)}`;
       return {
         handled: true,
         reply:
@@ -541,21 +518,11 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
      * halfway through an answer written for the wrong stack.
      */
     case "/stack": {
-      const facts = await recall(
-        person.namespaces?.[0] ?? personNs(person.personId),
-        "the tools, languages, runtimes, editors, operating system and versions this person works with",
-        { limit: 10, maxTokens: 700 },
-      ).catch(() => []);
-
-      const kept = facts
-        .map((f) => String(f.text ?? "").replace(/\s+/g, " ").trim())
-        .filter((t) => /\b(use|uses|using|on|runs?|prefers?|never)\b/i.test(t))
-        .slice(0, 8);
-
+      const kept = await stackItems(person);
       return {
         handled: true,
         reply: kept.length
-          ? `What I've got on your setup:\n\n${kept.map((t) => `• ${t.slice(0, 120)}`).join("\n")}\n\nAnything wrong or missing, just tell me.`
+          ? `What I've got on your setup:\n\n${kept.map((t) => `• ${t.text.slice(0, 120)}`).join("\n")}\n\nAnything wrong or missing, just tell me.`
           : "I don't know your setup yet. Tell me once — language, runtime, package manager, editor — and I'll stop asking.",
         actions: kept.length ? ["memory", "mode-coding"] : ["mode-coding"],
       };
