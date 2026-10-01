@@ -1,163 +1,360 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-page="cases">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>What Continuity is for</title>
-<meta name="description" content="Real conversations, captured across the web, Telegram and Discord, showing what changes when an assistant remembers you.">
+<title>What Continuity does</title>
+<meta name="description" content="What Continuity can do, shown with real screenshots: one memory across the web, Telegram and Discord; a picture bank; a memory page you can check blob by blob; conversations you can pick back up.">
+<meta property="og:title" content="What Continuity does">
+<meta property="og:description" content="One memory across three apps, a picture bank, a memory page you can check blob by blob, and conversations you can pick back up. Real screenshots, real blob ids.">
+<meta property="og:image" content="https://continuity-production-6084.up.railway.app/assets/og.jpg">
+<meta property="og:url" content="https://continuity-production-6084.up.railway.app/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="What Continuity does">
+<meta name="twitter:description" content="One memory across three apps, a picture bank, a memory page you can check blob by blob, and conversations you can pick back up. Real screenshots, real blob ids.">
+<meta name="twitter:image" content="https://continuity-production-6084.up.railway.app/assets/og.jpg">
 <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500&family=Inter:wght@400;450;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
     --void:#05070A; --ink:#F2F6FA; --soft:#C3CEDB; --dim:#8695A6; --faint:#5A6674;
     --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.19);
     --glass:rgba(255,255,255,.05); --glass-2:rgba(255,255,255,.085);
-    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.12);
-    --r:22px; --r-md:16px; --r-sm:12px;
-    --ease:cubic-bezier(.22,.7,.28,1);
+    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.12); --wal:#7FE3D4;
+    --r:24px; --r-md:16px; --r-sm:12px;
+    --ease:cubic-bezier(.22,1,.36,1);
     --display:'Outfit',system-ui,sans-serif;
     --sans:'Inter',-apple-system,system-ui,sans-serif;
     --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    --auto:6500ms;
     color-scheme:dark;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--void);color:var(--ink);font:15px/1.65 var(--sans);
-    -webkit-font-smoothing:antialiased}
+  html,body{height:100%}
+  body{margin:0;background:var(--void);color:var(--ink);font:15px/1.6 var(--sans);
+    -webkit-font-smoothing:antialiased;overflow:hidden}
   .ground,.bloom,.grain{position:fixed;inset:0;z-index:0;pointer-events:none}
-  .ground{background-image:url("/assets/texture.jpg");background-size:cover;
-    background-position:center;opacity:.9}
+  .ground{background-image:url("/assets/texture.jpg");background-size:cover;background-position:center;opacity:.9}
   .bloom{background:
     radial-gradient(1000px 560px at 80% -14%, rgba(90,169,255,.15), transparent 62%),
     radial-gradient(700px 480px at 6% 102%, rgba(120,90,255,.1), transparent 60%)}
   .grain{opacity:.05;mix-blend-mode:overlay;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
   a{color:inherit;text-decoration:none}
+  button{font:inherit;color:inherit}
+  img{display:block;max-width:100%}
 
-  .wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:26px 24px 90px}
-
-  .top{display:flex;align-items:center;gap:12px;margin-bottom:76px}
+  /* One screen. Nothing on this page is below the fold on a laptop: the six
+     capabilities are all in view the moment it opens. */
+  .wrap{position:relative;z-index:1;height:100dvh;max-width:1360px;margin:0 auto;padding:16px 24px 18px;
+    display:flex;flex-direction:column;gap:14px}
+  .top{flex:none;display:flex;align-items:center;gap:12px}
   .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
   .brand b{font:500 16px var(--display)}
   .brand:hover{opacity:.75}
   .tiny{font:400 10.5px var(--mono);letter-spacing:.17em;text-transform:uppercase;color:var(--faint)}
   .cta{padding:10px 20px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
-    font:600 13px var(--sans);transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
-  .cta:hover{transform:translateY(-1px);box-shadow:0 14px 30px -14px rgba(255,255,255,.5)}
+    font:600 13px var(--sans);transition:transform .25s var(--ease)}
+  .cta:hover{transform:scale(1.03)}
 
-  header.lede{margin-bottom:22px}
-  h1{max-width:14ch}
-  h1{margin:0;font:200 clamp(34px,5.6vw,60px)/1.06 var(--display);letter-spacing:-.032em}
+  .lede{flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+  h1{margin:0;font:200 clamp(28px,3.6vw,46px)/1.05 var(--display);letter-spacing:-.03em}
   h1 em{font-style:normal;font-weight:400;
     background:linear-gradient(96deg,#fff 20%,var(--live) 130%);
     -webkit-background-clip:text;background-clip:text;color:transparent}
-  .lede p{margin:20px 0 0;max-width:52ch;color:var(--soft);font-size:15.5px;line-height:1.7}
-  .realnote{display:inline-flex;align-items:center;gap:8px;margin-top:22px;padding:8px 14px;
-    border-radius:999px;background:var(--live-ghost);border:1px solid rgba(90,169,255,.25);
-    color:var(--live);font-size:12.5px}
+  .realnote{display:inline-flex;align-items:center;gap:9px;padding:7px 13px;border-radius:999px;
+    background:var(--live-ghost);border:1px solid rgba(90,169,255,.25);color:var(--live);font-size:12px}
+  .realnote i{width:6px;height:6px;border-radius:50%;background:var(--live);box-shadow:0 0 0 4px rgba(90,169,255,.2)}
 
-  .tabs{display:flex;gap:8px;margin:40px 0 20px;flex-wrap:wrap}
-  .tab{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:999px;border:1px solid var(--edge);background:var(--glass);
-    color:var(--dim);font:500 14px var(--sans);cursor:pointer;transition:.22s var(--ease)}
-  .tab:hover{color:var(--soft);border-color:var(--edge-2)}
-  .tab.on{background:#fff;color:#0A0D12;border-color:transparent;font-weight:600}
+  .board{flex:1;min-height:0;position:relative}
+  .view{position:absolute;inset:0}
+  .view[hidden],.bento[hidden],.stage[hidden]{display:none}
 
-  .role{border:1px solid var(--edge);border-radius:var(--r);padding:30px 30px 28px;
-    background:linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.022) 48%);
-    backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);animation:rise .4s var(--ease) both}
-  .role h2{margin:0 0 4px;font:400 26px/1.15 var(--display);letter-spacing:-.018em}
-  .role .org{font:400 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
-  .role .tag{margin:14px 0 0;color:var(--soft);font-size:15px;line-height:1.7;max-width:58ch}
-  .role .why{margin:12px 0 0;color:var(--dim);font-size:14px;line-height:1.7;max-width:58ch}
-  .proof{display:flex;gap:11px;align-items:flex-start;margin:22px 0 0;padding:14px 16px;
-    border-radius:var(--r-md);background:var(--live-ghost);border:1px solid rgba(90,169,255,.25);
-    color:var(--live);font-size:13.5px;line-height:1.6}
-  .proof svg{flex:none;margin-top:2px}
-  .actions{display:flex;gap:10px;align-items:center;margin-top:24px;flex-wrap:wrap}
-  .try{display:inline-flex;align-items:center;gap:9px;padding:13px 24px;border-radius:999px;border:0;
-    background:#fff;color:#0A0D12;font:600 14px var(--sans);cursor:pointer;
-    transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
-  .try:hover{transform:translateY(-2px);box-shadow:0 18px 38px -16px rgba(255,255,255,.55)}
+  /* ── glass ── */
+  .pane{position:relative;overflow:hidden;border-radius:var(--r);
+    background:linear-gradient(155deg,rgba(255,255,255,.12),rgba(255,255,255,.045) 40%,rgba(255,255,255,.02) 72%);
+    border:1px solid rgba(255,255,255,.15);
+    backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.26),inset 0 -1px 0 rgba(255,255,255,.04),0 34px 70px -38px rgba(0,0,0,.9)}
+  .pane::before{content:"";position:absolute;width:280px;height:280px;right:-90px;top:-110px;border-radius:50%;
+    background:radial-gradient(circle,var(--tint,#5AA9FF),transparent 68%);opacity:.26;filter:blur(8px);pointer-events:none}
+  .pane::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(118deg,rgba(255,255,255,.13),transparent 26%,transparent 74%,rgba(255,255,255,.04))}
+  .pane > *{position:relative;z-index:1}
+
+  /* ── the overview: six tiles, all at once ── */
+  .bento{display:grid;gap:14px;grid-template-columns:repeat(12,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr))}
+  /* The pane itself never moves on hover. A blurred-glass element that is
+     scaled or lifted gets re-sampled every frame, and its one-pixel highlight
+     shimmers along the edge as a bright line. What moves is what is inside. */
+  .tile{padding:22px 22px 20px;text-align:left;cursor:pointer;display:flex;flex-direction:column;
+    transition:border-color .6s var(--ease);animation:tile-in .9s var(--ease) backwards}
+  .tile:nth-child(1){grid-column:span 5;animation-delay:.02s}
+  .tile:nth-child(2){grid-column:span 4;animation-delay:.08s}
+  .tile:nth-child(3){grid-column:span 3;animation-delay:.14s}
+  .tile:nth-child(4){grid-column:span 3;animation-delay:.2s}
+  .tile:nth-child(5){grid-column:span 4;animation-delay:.26s}
+  .tile:nth-child(6){grid-column:span 5;animation-delay:.32s}
+  @keyframes tile-in{from{opacity:0;transform:translateY(28px)}}
+  .tile:hover,.tile.lit{border-color:rgba(255,255,255,.34)}
+  .tile .num,.tile h2,.tile p{transition:transform .7s var(--ease),opacity .7s var(--ease)}
+  .tile:hover h2,.tile.lit h2{transform:translateX(4px)}
+  .tile:hover p,.tile.lit p{transform:translateX(4px);opacity:1}
+  .tile::before{transition:opacity .9s var(--ease),transform 1.2s var(--ease)}
+  .tile:hover::before,.tile.lit::before{opacity:.4;transform:translate(-26px,22px)}
+  .tile:focus-visible{outline:2px solid var(--live);outline-offset:3px}
+  .num{font:500 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--tint,var(--live))}
+  .tile h2{margin:9px 0 0;font:300 clamp(19px,1.7vw,25px)/1.14 var(--display);letter-spacing:-.02em;max-width:19ch}
+  .tile p{margin:8px 0 0;color:var(--soft);opacity:.85;font-size:13px;line-height:1.5;max-width:30ch}
+  .tile .open{margin-top:auto;display:inline-flex;align-items:center;gap:7px;font:500 12px var(--sans);color:var(--ink);padding-top:12px}
+  .tile .open svg{transition:transform .6s var(--ease)}
+  .tile:hover .open svg,.tile.lit .open svg{transform:translateX(6px)}
+  /* The real screenshot, leaning out of the corner of its tile. Anchored by
+     its top-left corner rather than sized, so a wide shot and a tall one both
+     fill the same corner and run off the edge, whatever their shape. */
+  .peek{position:absolute!important;z-index:0!important;left:40%;top:45%;right:-7%;border-radius:14px;overflow:hidden;
+    box-shadow:0 0 0 1px rgba(255,255,255,.13),0 26px 60px -22px rgba(0,0,0,.95);
+    transform:rotate(-3deg) translate3d(var(--px,0px),calc(var(--py,0px) + var(--lift,0px)),0);transform-origin:top left;
+    transition:transform .9s var(--ease);will-change:transform;backface-visibility:hidden;
+    -webkit-mask-image:linear-gradient(155deg,#000 64%,transparent 100%);mask-image:linear-gradient(155deg,#000 64%,transparent 100%)}
+  .peek.slim{left:60%;top:24%;right:5%}
+  .tile:nth-child(3) .peek{left:16%;top:50%;right:-46%}
+  .tile:nth-child(4) .peek.slim{left:50%;top:47%;right:5%}
+  @media (max-height:800px){ .tile p{display:none} .peek{top:40%} .peek.slim{top:20%} .tile:nth-child(4) .peek.slim{top:40%} }
+  .peek img{width:100%;height:auto}
+  .tile:hover .peek,.tile.lit .peek{--lift:-12px}
+  .tile.tracking .peek{transition:transform .25s ease-out}
+  .tile .steps-mini{position:absolute!important;right:22px;bottom:22px;left:46%;display:flex;flex-direction:column;gap:8px}
+  .tile .steps-mini span{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:14px;
+    border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.3);font:500 12px var(--sans);color:var(--soft)}
+  .tile .steps-mini span b{font:500 10px var(--mono);letter-spacing:.12em;color:var(--tint)}
+
+  /* ── the stage: one capability, large, with the rest a click away ── */
+  .stage{display:grid;grid-template-columns:262px minmax(0,1fr);gap:14px;scroll-margin-top:14px}
+  .dock{position:relative;display:flex;flex-direction:column;gap:8px;min-height:0}
+  /* The highlight is one element that slides to whichever tab is showing. */
+  .glide{position:absolute;left:0;top:0;z-index:0;border-radius:18px;pointer-events:none;
+    background:linear-gradient(150deg,rgba(255,255,255,.15),rgba(255,255,255,.05));
+    box-shadow:0 0 0 1px rgba(255,255,255,.24);
+    transition:transform .7s var(--ease),width .7s var(--ease),height .7s var(--ease),opacity .4s var(--ease);opacity:0}
+  .glide.placed{opacity:1}
+  .tab{position:relative;z-index:1;flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:3px;text-align:left;
+    padding:10px 16px;border-radius:18px;border:1px solid var(--edge);background:rgba(255,255,255,.028);cursor:pointer;overflow:hidden;
+    transition:border-color .5s var(--ease),background .5s var(--ease)}
+  .tab:hover{border-color:var(--edge-2);background:rgba(255,255,255,.05)}
+  .tab b{font:400 15px/1.2 var(--display);color:var(--dim);transition:color .5s var(--ease),transform .6s var(--ease)}
+  .tab .num{color:var(--faint);transition:color .5s var(--ease)}
+  .tab:hover b{transform:translateX(3px)}
+  .tab.on{border-color:transparent;background:transparent}
+  .tab.on b{color:#fff;transform:translateX(3px)}
+  .tab.on .num{color:var(--tint)}
+  /* The clock: fills along the bottom of the tab that is showing. */
+  .tab .bar{position:absolute;left:0;right:0;bottom:0;height:2px;background:transparent;overflow:hidden}
+  .tab.on .bar::after{content:"";position:absolute;inset:0;background:var(--tint);transform-origin:left center;
+    animation:fill var(--auto) linear both}
+  .resting .tab.on .bar::after{animation:none;transform:scaleX(1);opacity:.45}
+  @keyframes fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .dock-foot{flex:none;display:flex;gap:8px}
+  .mini{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 12px;border-radius:999px;
+    border:1px solid var(--edge);background:var(--glass);color:var(--soft);font:500 12px var(--sans);cursor:pointer;
+    transition:.25s var(--ease)}
+  .mini:hover{background:var(--glass-2);color:#fff;transform:scale(1.03)}
+  .mini[hidden]{display:none}
+  .mini .pause{display:block} .mini .go-on{display:none}
+  .resting .mini .pause{display:none} .resting .mini .go-on{display:block}
+
+  .panel{display:grid;grid-template-columns:minmax(0,1.18fr) minmax(0,1fr);gap:30px;padding:26px 30px 26px 26px;min-height:0}
+  /* The screenshot is shown large and allowed to run off the right of its
+     column. Fitted whole, a wide screenshot was a thumbnail with air above
+     and below it; cropped, it is big enough to read. */
+  .fig{min-height:0;min-width:0;display:flex;align-items:center;justify-content:flex-start;overflow:hidden;border-radius:18px;
+    -webkit-mask-image:linear-gradient(90deg,#000 84%,transparent 100%);mask-image:linear-gradient(90deg,#000 84%,transparent 100%)}
+  .frame{flex:none;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.18);
+    background:#0B0F15;box-shadow:0 40px 90px -40px rgba(0,0,0,.95);display:flex;height:min(100%,560px)}
+  .frame img{height:100%;width:auto;max-width:none}
+  .fig.whole{justify-content:center;-webkit-mask-image:none;mask-image:none;overflow:visible}
+  .fig.whole .frame{height:auto;max-height:100%;max-width:100%}
+  .fig.whole .frame img{height:auto;width:auto;max-height:100%;max-width:100%}
+  .duo{height:100%;width:100%;min-height:0;display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1fr);gap:14px;align-items:center}
+  .duo .frame{justify-self:center;height:auto;max-height:100%}
+  .duo .frame img{width:100%;height:auto;max-height:100%;object-fit:contain}
+  .copy{min-height:0;overflow-y:auto;display:flex;flex-direction:column;justify-content:center;padding-right:4px;scrollbar-width:thin}
+  .copy h2{margin:10px 0 0;font:300 clamp(24px,2.5vw,34px)/1.12 var(--display);letter-spacing:-.025em}
+  .copy h2 b{font-weight:400;color:#fff}
+  .copy .lead{margin:14px 0 0;color:var(--soft);font-size:14.5px;line-height:1.65}
+  .how{margin:16px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+  .how li{display:flex;gap:11px;align-items:flex-start;color:var(--soft);font-size:13px;line-height:1.5}
+  .how li>span{flex:1;min-width:0}
+  .how li i{flex:none;margin-top:6px;width:6px;height:6px;border-radius:50%;background:var(--tint,var(--live))}
+  .how code,.truth code{font:11.5px var(--mono);background:rgba(0,0,0,.38);border:1px solid var(--edge);
+    padding:1px 6px;border-radius:5px;color:var(--live)}
+  .truth{margin:16px 0 0;padding:11px 14px;border-radius:var(--r-md);background:var(--live-ghost);
+    border:1px solid rgba(90,169,255,.22);color:var(--soft);font-size:12.5px;line-height:1.55}
+  .truth b{display:block;font:500 10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--live);margin-bottom:4px}
+  .go{display:flex;gap:9px;align-items:center;margin-top:20px;flex-wrap:wrap}
+  .try{display:inline-flex;align-items:center;gap:9px;padding:11px 20px;border-radius:999px;border:0;
+    background:#fff;color:#0A0D12;font:600 13px var(--sans);cursor:pointer;transition:transform .25s var(--ease)}
+  .try:hover{transform:scale(1.03)}
   .try svg{transition:transform .25s var(--ease)}
   .try:hover svg{transform:translateX(3px)}
-  .askthis{padding:12px 18px;border-radius:999px;border:1px solid var(--edge-2);background:var(--glass);
-    color:var(--soft);font-size:13px;cursor:pointer;transition:.22s var(--ease)}
-  .askthis:hover{background:var(--glass-2);color:#fff;border-color:var(--live)}
+  .alt{display:inline-flex;align-items:center;gap:8px;padding:10px 15px;border-radius:999px;
+    border:1px solid var(--edge-2);background:var(--glass);color:var(--soft);font:500 12.5px var(--sans);transition:.22s var(--ease)}
+  .alt:hover{background:var(--glass-2);color:#fff;transform:scale(1.03)}
+  .alt[hidden]{display:none}
 
-  .case{margin-top:34px;border-top:1px solid var(--edge);padding-top:34px}
-  .case h2{margin:0 0 8px;font:400 27px/1.16 var(--display);letter-spacing:-.018em}
-  .case .situation{margin:0 0 30px;max-width:58ch;color:var(--dim);font-size:14.5px;line-height:1.68}
+  /* What changes when a tab does: the contents rise in, a beat apart. */
+  .panel.swap .fig{animation:swap-in .6s var(--ease) both}
+  .panel.swap .copy > *{animation:swap-in .6s var(--ease) both}
+  .panel.swap .copy > *:nth-child(2){animation-delay:.05s}
+  .panel.swap .copy > *:nth-child(3){animation-delay:.1s}
+  .panel.swap .copy > *:nth-child(n+4){animation-delay:.15s}
+  @keyframes swap-in{from{opacity:0;transform:translateY(16px)}}
 
-  .pair{display:grid;gap:14px;grid-template-columns:1fr 1fr;align-items:start}
-  .panel{border:1px solid var(--edge);border-radius:var(--r);overflow:hidden;
-    background:linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.025) 46%);
-    backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
-  .panel-h{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--edge)}
-  .panel-h .when{font:500 11px var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
-  .badge{margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:4px 11px;
-    border-radius:999px;background:rgba(0,0,0,.34);border:1px solid var(--edge);
-    font:500 11px var(--sans);color:var(--soft)}
-  .badge svg{opacity:.85}
-  .thread{padding:16px;display:flex;flex-direction:column;gap:11px}
-  .msg{max-width:92%;padding:11px 15px;border-radius:16px;font-size:14px;line-height:1.6;
-    white-space:pre-wrap;overflow-wrap:anywhere}
-  .msg.you{align-self:flex-end;background:#fff;color:#0A0D12;border-bottom-right-radius:5px;font-weight:450}
-  .msg.bot{align-self:flex-start;background:var(--glass-2);border:1px solid var(--edge);
-    border-bottom-left-radius:5px;color:var(--soft)}
-  .msg code{font:12.5px var(--mono);background:rgba(0,0,0,.38);border:1px solid var(--edge);
-    padding:1px 5px;border-radius:5px;color:var(--live)}
-  .you code{background:rgba(0,0,0,.08);border-color:rgba(0,0,0,.1);color:#0A4C8F}
-  .msg b{color:#fff;font-weight:600}
-  .you b{color:#000}
-  .msg p{margin:0 0 7px}
-  .msg p:last-child{margin-bottom:0}
-  .msg ul,.msg ol{margin:5px 0 8px;padding-left:19px}
-  .msg li{margin:3px 0}
-  .msg li::marker{color:var(--live)}
-  .msg br+br{display:none}
-  .msg pre{margin:8px 0;padding:11px 13px;border-radius:10px;background:rgba(0,0,0,.45);
-    border:1px solid var(--edge);overflow-x:auto}
-  .msg pre code{background:none;border:0;padding:0;color:var(--soft);font-size:12.5px;line-height:1.55}
+  /* The recorded handoff, as three small app columns. */
+  .handoff{height:100%;min-height:0;display:flex;flex-direction:column;gap:9px;overflow-y:auto;scrollbar-width:thin}
+  .col{flex:none;border:1px solid var(--edge);border-radius:14px;overflow:hidden;background:rgba(0,0,0,.26)}
+  .col-h{display:flex;align-items:center;gap:7px;padding:8px 11px;border-bottom:1px solid var(--edge);font:500 11px var(--sans);color:var(--soft)}
+  .col-h .t{margin-left:auto;font:400 10px var(--mono);color:var(--faint)}
+  .msgs{padding:9px;display:flex;flex-direction:column;gap:6px}
+  .m{max-width:94%;padding:6px 10px;border-radius:11px;font-size:11.5px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+  .m.you{align-self:flex-end;background:linear-gradient(150deg,rgba(90,169,255,.42),rgba(90,169,255,.2));border:1px solid rgba(150,200,255,.4);color:#fff}
+  .m.bot{align-self:flex-start;background:var(--glass-2);border:1px solid var(--edge);color:var(--soft)}
+  .m.sys{align-self:center;color:var(--faint);font:400 10px var(--mono);padding:1px 0}
+  .m.sys code{color:var(--live)}
+  .blobs{padding:7px 10px 9px;border-top:1px solid var(--edge);display:flex;flex-direction:column;gap:3px}
+  .blob{display:flex;gap:7px;align-items:center;font:400 10px var(--mono);color:var(--dim);min-width:0}
+  .blob i{width:5px;height:5px;border-radius:50%;background:var(--wal);flex:none}
+  .blob em{font-style:normal;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .blob a{color:var(--live);flex:none;margin-left:auto}
 
-  /* The bot really does answer at length. Keep it truthful but scannable:
-     clamp the long ones and let anyone read the rest. */
-  .msg.bot.long{max-height:280px;overflow:hidden;position:relative;padding-bottom:34px}
-  .msg.bot.long::after{content:"";position:absolute;inset:auto 0 0;height:104px;pointer-events:none;
-    background:linear-gradient(180deg,rgba(17,22,29,0),rgba(17,22,29,.82) 52%,rgba(17,22,29,.97))}
-  .msg.bot.long.open{max-height:none;padding-bottom:11px}
-  .msg.bot.long.open::after{display:none}
-  /* A pill, not bare text: the label sat straight on the fading paragraph
-     underneath and was hard to read against it. */
-  .more{position:absolute;left:14px;bottom:9px;z-index:2;cursor:pointer;
-    padding:5px 12px;border-radius:999px;border:1px solid rgba(90,169,255,.3);
-    background:rgba(11,16,22,.92);color:var(--live);font:500 11.5px var(--sans);
-    transition:background .2s var(--ease),border-color .2s var(--ease)}
-  .more:hover{background:rgba(90,169,255,.16);border-color:rgba(90,169,255,.5)}
-  .msg.bot.long.open .more{position:static;display:inline-block;margin-top:10px}
+  .jobs{width:100%;height:100%;min-height:0;display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr)}
+  .job{position:relative;display:flex;flex-direction:column;gap:5px;padding:13px 15px 11px;border-radius:18px;min-height:0;overflow:hidden;
+    border:1px solid rgba(255,255,255,.13);background:rgba(0,0,0,.26);transition:border-color .5s var(--ease),background .5s var(--ease)}
+  .job:hover{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.05)}
+  .job .ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;flex:none;
+    border:1px solid rgba(255,255,255,.16);background:linear-gradient(160deg,rgba(255,255,255,.14),rgba(255,255,255,.03));
+    transition:transform .6s var(--ease)}
+  .job:hover .ic{transform:translateY(-3px)}
+  .job .ic svg{width:17px;height:17px;fill:none;stroke:var(--jt);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .job b{font:400 15px/1.2 var(--display);color:#fff}
+  .job p{margin:0;color:var(--dim);font-size:12px;line-height:1.45}
+  /* On a short screen the example question earns its place over the blurb. */
+  @media (max-height:820px){ .job p{display:none} .job{padding:11px 14px 10px} }
+  .job .ask{margin-top:auto;padding-top:6px;color:var(--jt);font-size:11.5px;line-height:1.4;display:flex;gap:6px;align-items:baseline}
+  .job .ask svg{flex:none;transition:transform .6s var(--ease);transform:translateY(2px)}
+  .job:hover .ask svg{transform:translate(4px,2px)}
+  .panel.swap .job{animation:swap-in .7s var(--ease) both}
+  .panel.swap .job:nth-child(2){animation-delay:.06s}.panel.swap .job:nth-child(3){animation-delay:.12s}
+  .panel.swap .job:nth-child(4){animation-delay:.18s}.panel.swap .job:nth-child(5){animation-delay:.24s}
+  .panel.swap .job:nth-child(6){animation-delay:.3s}
+  .tile .jobs-mini{position:absolute!important;right:20px;bottom:20px;left:44%;display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end;
+    transform:translate3d(0,var(--lift,0px),0);transition:transform .9s var(--ease)}
+  .tile:hover .jobs-mini,.tile.lit .jobs-mini{--lift:-8px}
+  .tile .jobs-mini span{padding:7px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.3);
+    font:500 11.5px var(--sans);color:var(--soft)}
 
-  .carried{margin-top:14px;border:1px solid rgba(90,169,255,.24);border-radius:var(--r-md);
-    background:var(--live-ghost);padding:15px 17px}
-  .carried h3{margin:0 0 10px;font:500 10.5px var(--sans);letter-spacing:.13em;
-    text-transform:uppercase;color:var(--live)}
-  .carried ul{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:7px}
-  .carried li{padding:6px 12px;border-radius:999px;background:rgba(0,0,0,.3);
-    border:1px solid var(--edge);font-size:12.5px;color:var(--soft)}
+  .steps{width:100%;display:flex;flex-direction:column;gap:12px}
+  .step{display:grid;grid-template-columns:44px minmax(0,1fr);gap:14px;align-items:center;padding:16px 18px;border-radius:18px;
+    border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.26)}
+  .step .n{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font:500 13px var(--mono);color:var(--tint);
+    border:1px solid rgba(255,255,255,.18);background:linear-gradient(160deg,rgba(255,255,255,.14),rgba(255,255,255,.03))}
+  .step b{display:block;font:500 15px var(--display)}
+  .step span{color:var(--dim);font-size:12.5px;line-height:1.5}
+  .step .k{display:block;font:500 10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--tint);margin-bottom:2px}
 
-  .loading,.empty{margin-top:70px;text-align:center;color:var(--faint);font-size:14px}
-  .foot{margin-top:86px;padding-top:26px;border-top:1px solid var(--edge);
-    display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .foot{flex:none;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-right:64px}
 
-  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-  .case,.lede{animation:rise .7s var(--ease) both}
-  @media (prefers-reduced-motion:reduce){.case,.lede{animation:none}.cta{transition:none}}
+  /* Same-document transitions on this page: the tile that was clicked grows
+     into the stage. The page-level choreography in motion.css is for arriving
+     from another page; here only the morph should move. */
+  html.morph::view-transition-old(root),html.morph::view-transition-new(root),
+  html.morph::view-transition-old(cases-lede),html.morph::view-transition-new(cases-lede){animation:none}
+  html.morph::view-transition-old(cases-board){animation:220ms ease both vt-out-flat}
+  html.morph::view-transition-new(cases-board){animation:420ms ease 140ms both vt-in-flat}
+  ::view-transition-group(cap){animation-duration:560ms;animation-timing-function:cubic-bezier(.22,1,.36,1)}
+  ::view-transition-old(cap){animation:240ms ease both vt-out-flat;height:100%;object-fit:cover}
+  ::view-transition-new(cap){animation:420ms ease 160ms both vt-in-flat;height:100%;object-fit:cover}
 
-  @media (max-width:820px){
-    .pair{grid-template-columns:1fr}
-    .top{margin-bottom:52px}
-    .case{margin-top:56px}
+  /* Below a laptop the page scrolls like any other, and that is fine: a phone
+     has no fold to keep things above. Everything that was sized to fit one
+     screen is let go here and takes the height it needs: words first, then
+     the picture, one under the other, nothing clipped and nothing overlapping. */
+  @media (max-width:980px), (max-height:620px){
+    html,body{height:auto}
+    body{overflow:auto}
+    .wrap{height:auto;min-height:100dvh;gap:16px}
+    .top .tiny{display:none}
+    .cta{white-space:nowrap}
+    .lede{flex-direction:column;align-items:flex-start;gap:12px}
+    .board,.view{position:static}
+
+    /* Tiles stack their contents here: the words, then the picture under
+       them. Leaning out of a corner only works when the tile is wide enough
+       for the picture to miss the words, and on a phone it never is. */
+    .bento{grid-template-columns:1fr 1fr;grid-template-rows:none;grid-auto-rows:auto;align-items:stretch}
+    .tile:nth-child(n){grid-column:span 1}
+    .tile{padding:20px 18px 18px}
+    .tile h2,.tile p{max-width:none}
+    .tile .open{order:9;margin-top:14px;padding-top:0}
+    .tile .peek,.tile .peek.slim,.tile:nth-child(n) .peek,.tile:nth-child(n) .peek.slim{
+      position:relative!important;left:auto;top:auto;right:auto;bottom:auto;width:100%;height:150px;margin-top:16px;
+      transform:none;-webkit-mask-image:linear-gradient(180deg,#000 62%,transparent 100%);mask-image:linear-gradient(180deg,#000 62%,transparent 100%)}
+    .tile .peek.slim img{width:62%;margin:0 auto}
+    .tile:hover .peek,.tile.lit .peek{transform:none}
+    .tile .jobs-mini,.tile .steps-mini{position:relative!important;left:auto;right:auto;bottom:auto;margin-top:16px;justify-content:flex-start;transform:none}
+
+    .stage{grid-template-columns:minmax(0,1fr);gap:12px}
+    .dock{flex-direction:row;overflow-x:auto;scrollbar-width:none;gap:8px;scroll-snap-type:x proximity;
+      margin:0 -16px;padding:2px 16px 4px}
+    .dock::-webkit-scrollbar{display:none}
+    .tab{flex:none;min-width:156px;padding:12px 15px;scroll-snap-align:center}
+    .tab b{font-size:14px}
+    .dock-foot{flex:none;align-items:stretch}
+    .mini{flex:none;white-space:nowrap;padding:0 16px}
+
+    .panel{display:flex;flex-direction:column;gap:22px;padding:22px 18px 20px}
+    .copy{order:-1;overflow:visible;justify-content:flex-start;padding-right:0}
+    .copy h2{font-size:26px}
+    .fig,.fig.whole{display:block;overflow:visible;min-height:0;max-height:none;border-radius:0;
+      -webkit-mask-image:none;mask-image:none}
+    .frame,.fig.whole .frame{display:block;height:auto;max-height:none;max-width:100%;width:100%}
+    .frame img,.fig.whole .frame img{display:block;width:100%;height:auto;max-height:none;max-width:100%}
+    /* Tall screenshots of the rail are shown narrower, centred, not stretched. */
+    .fig.whole > .frame{max-width:280px;margin:0 auto}
+    /* The rail beside the handoff where there is room for both, under it
+       where there is not. */
+    .duo{display:grid;grid-template-columns:minmax(0,240px) minmax(0,1fr);gap:14px;height:auto;align-items:start}
+    .fig.whole .duo .frame{width:100%;max-width:240px;height:auto;margin:0}
+    .fig.whole .duo .frame img{width:100%;height:auto;max-height:none}
+    .handoff{height:auto;overflow:visible}
+    .m{font-size:12.5px}
+    .blob{font-size:10.5px}
+    .jobs{grid-template-columns:minmax(0,1fr);height:auto;grid-auto-rows:auto}
+    .job,.job p{display:flex}
+    .job p{display:block}
+    .step{padding:14px 15px}
+    .go .try,.go .alt{flex:1 1 auto;justify-content:center}
+    .foot{padding-right:0}
+  }
+  @media (max-width:620px){
+    .duo{display:flex;flex-direction:column}
+    .fig.whole .duo .frame{order:2;align-self:center;max-width:230px}
+    .wrap{padding:14px 16px 84px}
+    .bento{grid-template-columns:minmax(0,1fr)}
+    h1{font-size:30px}
+    .realnote{font-size:11.5px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .tile,.panel.swap .fig,.panel.swap .copy > *,.panel.swap .job{animation:none}
+    .tab.on .bar::after{animation:none;transform:scaleX(1)}
+    .tile,.peek,.tab,.glide,.tile h2,.tile p{transition:none}
   }
 </style>
+  <link rel="stylesheet" href="/assets/motion.css">
+  <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
 </head>
 <body>
 <div class="ground"></div><div class="bloom"></div><div class="grain"></div>
@@ -182,171 +379,396 @@
       </svg>
       <b>Continuity</b>
     </a>
-    <span class="tiny">What it's for</span>
+    <span class="tiny">What it does</span>
     <a class="cta" href="/chat">Open the chat</a>
   </nav>
 
   <header class="lede">
-    <h1>One memory.<br><em>Three jobs.</em></h1>
-    <p>Same assistant underneath, three different roles on top. What changes isn't the
-      model — it's that each one already knows who you are, and keeps knowing when you
-      move to Telegram or Discord.</p>
+    <h1>One assistant that <em>keeps what you tell it.</em></h1>
+    <span class="realnote"><i></i>Real screenshots, real blob ids. Nothing here is a mock-up.</span>
   </header>
 
-  <div class="tabs" id="tabs"></div>
-  <div id="pane"><p class="loading">Loading…</p></div>
+  <div class="board" id="board">
+    <div class="view bento" id="bento" role="list" aria-label="What Continuity does"></div>
+
+    <div class="view stage" id="stage" hidden>
+      <div class="dock" id="dock" role="tablist" aria-label="Capabilities" aria-orientation="vertical"></div>
+      <section class="pane panel" id="panel" role="tabpanel" aria-live="polite">
+        <div class="fig" id="fig"></div>
+        <div class="copy" id="copy"></div>
+      </section>
+    </div>
+  </div>
 
   <footer class="foot">
     <span class="tiny">Memories stored on Walrus mainnet</span>
-    <span class="tiny"><a href="/chat">Try it yourself →</a></span>
+    <span class="tiny"><a href="/docs#what-s-next-v2">Docs and the v2 plan →</a></span>
   </footer>
 </div>
 
+<noscript>
+  <div style="position:relative;z-index:2;padding:24px;color:#C3CEDB">
+    <p>Continuity keeps one memory across the web, Telegram and Discord; stores pictures you can ask for later;
+    shows every memory as a blob you can check on Walrus; lets you reopen past conversations; runs three roles
+    on one memory; and keeps answering when Walrus is down. <a href="/chat" style="color:#5AA9FF">Open the chat</a>.</p>
+  </div>
+</noscript>
+
+<a class="docs-fab" href="/docs" aria-label="Docs" title="Docs">
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M4 3.5h5.2c1 0 1.8.8 1.8 1.8V16.5c0-.9-.8-1.6-1.8-1.6H4V3.5zM16 3.5h-5.2c-1 0-1.8.8-1.8 1.8V16.5c0-.9.8-1.6 1.8-1.6H16V3.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+  </svg>
+</a>
+
 <script>
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const ARROW = '<svg width="15" height="15" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const TG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>';
+const DC = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>';
 
 /**
- * The same small Markdown subset the chat renders. Without the fenced-code
- * handling the transcripts showed literal ``` around every snippet, which on a
- * page arguing the bot is good would read as the bot being broken.
+ * The six things it does. One list drives both views — the tiles and the
+ * stage — so they cannot say different things about the same capability.
  */
-function fmt(src) {
-  const blocks = [];
-  let text = esc(src).replace(/```[a-z]*\n?([\s\S]*?)```/gi, (_, code) =>
-    `\u0000${blocks.push(`<pre><code>${code.replace(/\n$/, "")}</code></pre>`) - 1}\u0000`);
+const CAPS = [
+  { id: "cross-app", tint: "#5AA9FF", kicker: "Cross-app memory", title: "One memory, three apps",
+    line: "Tell it once on Telegram. It knows on Discord and the web.",
+    head: "Tell it once on Telegram.<br><b>It knows on Discord and the web.</b>",
+    lead: "Continuity is one person with one memory, not three bots that happen to share a name. Link your apps with a six-letter code and every memory follows you: preferences, your setup, what you were in the middle of.",
+    how: ["Type <code>/link</code> on any app to get a code; paste it on another. Done, for good.",
+          "Memory is written once, under a single person id, never copied per app.",
+          "The handoff shown here is a real one, recorded through the server's own code path, with the blobs it wrote."],
+    img: "/assets/shots/cross-app.jpg", alt: "The chat rail: four memories, with Web, Telegram and Discord all connected", slim: true, extra: "handoff",
+    cta: `<a class="try" href="/chat">Open the chat ${ARROW}</a><a class="alt" data-tg href="https://t.me/walrusmemory_bot" target="_blank" rel="noopener">${TG}Telegram</a><a class="alt" data-dc href="#" target="_blank" rel="noopener" hidden>${DC}Discord</a>` },
+  { id: "pictures", tint: "#7FE3D4", kicker: "A picture bank", title: "A picture bank",
+    line: "Send it a photo. Ask for it back months later.",
+    head: "Send it a photo.<br><b>Ask for it back months later.</b>",
+    lead: "Attach a picture on the web, on Telegram or on Discord. It looks at it, writes down what it sees, and keeps the file. Later, on any app, say “fetch that picture of me ice skating” and the actual photo comes back into the chat.",
+    how: ["A vision model describes the photo, so a search for words finds a picture.",
+          "Telegram gets it back as a photo, Discord as an attachment, the web inline.",
+          "Every picture you have sent is on the Photos shelf of your memory page."],
+    truth: ["What is stored where", "Walrus Memory stores text, so the description and the reference are the memory on Walrus. The bytes sit on the server's volume. Saying the photo itself lives on Walrus would be a nicer sentence and a false one."],
+    img: "/assets/shots/picture.jpg", alt: "Asking for the ice skating picture and getting the actual image back in the chat",
+    cta: `<a class="try" href="/chat">Try it with a photo ${ARROW}</a><a class="alt" href="/memory#c=photos">See the Photos shelf</a>` },
+  { id: "check", tint: "#C7A6FF", kicker: "Memory you can check", title: "Memory you can check",
+    line: "Every line is a blob. Open it. Correct it.",
+    head: "Every line is a blob.<br><b>Open it. Correct it.</b>",
+    lead: "Most assistants keep what they know about you somewhere you can't see. Here it's sorted onto shelves: photos, what's still open, plans, your setup, projects, preferences, about you. Open one and every memory has its date, whether it crossed apps, and the blob that holds it.",
+    how: ["Click a blob id to open it on Walruscan and read the exact text it stored.",
+          "“Not right” writes a correction; the old memory stays on chain, superseded, because Walrus is append-only.",
+          "<code>/whatyouknow</code> on Telegram or Discord prints the same list; <code>/forgetme</code> stops recording."],
+    img: "/assets/shots/dashboard.jpg", alt: "The memory page: a shelf of collections, each opening into its memories",
+    cta: `<a class="try" href="/memory">See your memory ${ARROW}</a>` },
+  { id: "resume", tint: "#FFB86B", kicker: "Pick it back up", title: "Pick a conversation back up",
+    line: "Come back in a week. Carry on mid-sentence.",
+    head: "Come back in a week.<br><b>Carry on mid-sentence.</b>",
+    lead: "Every conversation is saved as its own blob once it goes quiet, with the app it happened on and when. The rail lists the recent ones; open any of them and the next thing you type continues that thread, pictures included.",
+    how: ["Conversations from Telegram and Discord appear in the same list as web ones.",
+          "Reloading the page keeps the chat on screen; nothing resets.",
+          "It remembers dates: mention an interview on Thursday and it asks how it went, once, after Thursday."],
+    img: "/assets/shots/resume.jpg", alt: "The chat rail with a list of recent conversations", slim: true,
+    cta: `<a class="try" href="/chat">Open the chat ${ARROW}</a><a class="alt" href="/history">All conversations</a>` },
+  { id: "jobs", tint: "#FF8EB4", kicker: "Many jobs, one memory", title: "Whatever job you give it",
+    line: "Tutor, coding partner, planner, reader, record keeper, support desk.",
+    head: "One memory.<br><b>Whatever job you give it.</b>",
+    lead: "It isn't built for one task. The memory is the constant and what you use it for is up to you: what the tutor learned about you, the coding partner already knows. These are the jobs people reach for first.",
+    how: ["Pick one and the chat opens with that question ready to send.",
+          "Teams can give it a role and a handbook of its own. The demo runs three side by side."],
+    extra: "jobs",
+    cta: `<a class="try" href="/chat">Open the chat ${ARROW}</a><a class="alt" href="/demo">See the three demo roles</a>` },
+  { id: "recovery", tint: "#9BD0FF", kicker: "When Walrus is down", title: "When Walrus is down",
+    line: "It still answers. The memory lands when it can.",
+    head: "It still answers.<br><b>The memory lands when it can.</b>",
+    lead: "Walrus mainnet has bad patches: rate limits, 503s from the relayer, writes that succeed but report a timeout. Continuity was built around that rather than pretending it doesn't happen.",
+    how: ["The vision model has two fallbacks, so a provider's bad hour does not make photos unfindable.",
+          "A chat that loses its connection mid-reply retries in one piece, never as a doubled answer."],
+    extra: "steps",
+    cta: `<a class="alt" href="/docs#how-memory-works">How memory works</a><a class="alt" href="/docs#memwal-findings">What we found in MemWal</a>` },
+];
+CAPS.forEach((c, i) => { c.n = String(i + 1).padStart(2, "0"); });
 
-  const inline = (t) => t
-    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
-
-  const out = [];
-  let list = null;
-  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
-
-  for (const raw of text.split("\n")) {
-    const line = raw.trimEnd();
-    const bullet = line.match(/^\s*[-*•]\s+(.*)$/);
-    const numbered = line.match(/^\s*\d+[.)]\s+(.*)$/);
-    if (bullet || numbered) {
-      const want = bullet ? "ul" : "ol";
-      if (list !== want) { closeList(); out.push(`<${want}>`); list = want; }
-      out.push(`<li>${inline((bullet || numbered)[1])}</li>`);
-    } else if (!line.trim()) {
-      closeList();
-      out.push("<br>");
-    } else {
-      closeList();
-      out.push(`<p>${inline(line.replace(/^#{1,6}\s*/, ""))}</p>`);
-    }
-  }
-  closeList();
-  return out.join("").replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[i]);
-}
-
-const ICON = {
-  web: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.3"/><path d="M1.8 8h12.4M8 1.8c1.7 1.8 2.5 4 2.5 6.2S9.7 12.4 8 14.2C6.3 12.4 5.5 10.2 5.5 8S6.3 3.6 8 1.8z" stroke="currentColor" stroke-width="1.2"/></svg>',
-  telegram: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>',
-  discord: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.79.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.32.027C.533 9.046-.32 13.58.099 18.058a.082.082 0 0 0 .31.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.873-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .078-.01c3.928 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .79.009c.12.099.246.198.373.292a.077.077 0 0 1-.7.128 12.3 12.3 0 0 1-1.873.891.077.077 0 0 0-.4.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .84.029 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.055c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.029zM8.02 15.331c-1.182 0-2.157-1.086-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.211 0 2.176 1.095 2.157 2.42 0 1.332-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.332-.946 2.418-2.157 2.418z"/></svg>',
-};
-const LABEL = { web: "Web chat", telegram: "Telegram", discord: "Discord" };
-
-const LONG = 520; // characters before a reply gets clamped
-
-const thread = (turns) => turns.map((t) => {
-  const long = (t.bot ?? "").length > LONG;
-  return `<div class="msg you">${esc(t.you)}</div>` +
-    `<div class="msg bot${long ? " long" : ""}">${fmt(t.bot)}` +
-    (long ? '<button class="more">Read the rest</button>' : "") + "</div>";
-}).join("");
-
-const panel = (when, surface, turns) => `
-  <div class="panel">
-    <div class="panel-h">
-      <span class="when">${when}</span>
-      <span class="badge">${ICON[surface] ?? ""} ${LABEL[surface] ?? surface}</span>
-    </div>
-    <div class="thread">${thread(turns)}</div>
+const JOBS = [
+  { t: "A tutor that remembers the lesson", c: "#FFB86B",
+    d: "Learn anything in steps. It knows what you covered and where you got stuck, so the next session starts there.",
+    ask: "Teach me recursion, one step at a time",
+    i: '<path d="M4 5.500h6c1.100 0 2 .900 2 2V20c0-1-.900-1.800-2-1.800H4V5.500zM20 5.500h-6c-1.100 0-2 .900-2 2V20c0-1 .900-1.800 2-1.800h6V5.500z"/>' },
+  { t: "A coding partner that knows your stack", c: "#7FE3D4",
+    d: "Tell it your tools once. Paste an error, or a screenshot of one, and it answers for your setup.",
+    ask: "Why would my build fail with ERR_MODULE_NOT_FOUND?",
+    i: '<path d="M8.500 8l-4 4 4 4M15.500 8l4 4-4 4M13.500 5.500l-3 13"/>' },
+  { t: "A planner that follows up", c: "#C7A6FF",
+    d: "Trips, interviews, deadlines. It pins the date, and asks how it went once the day has passed.",
+    ask: "I've got a backend interview on Thursday. Help me prepare",
+    i: '<rect x="3.500" y="5" width="17" height="15" rx="2.500"/><path d="M3.500 10h17M8 3.500V7M16 3.500V7M8.500 14.500l2.300 2.300 4.700-4.700"/>' },
+  { t: "A reader for the links you paste", c: "#5AA9FF",
+    d: "Drop a URL and it reads the page before it answers, then keeps what mattered to you.",
+    ask: "Read https://walrus.xyz and tell me what it is for",
+    i: '<path d="M10 14a4 4 0 0 0 5.700 0l3-3a4 4 0 0 0-5.700-5.700l-1 1M14 10a4 4 0 0 0-5.700 0l-3 3a4 4 0 0 0 5.700 5.700l1-1"/>' },
+  { t: "A record of you, that you own", c: "#9BD0FF",
+    d: "Preferences, facts, photos. Sorted onto shelves, each one a blob you can open and correct.",
+    ask: "What do you know about me?",
+    i: '<circle cx="12" cy="8.500" r="3.600"/><path d="M4.800 19.500c.900-3.400 3.700-5.200 7.200-5.200s6.300 1.800 7.200 5.200"/>' },
+  { t: "A support desk with a handbook", c: "#FF8EB4",
+    d: "Give it a role and a knowledge base. The demo runs a registrar, a tutor and a support agent.",
+    href: "/demo", say: "Open the demo",
+    i: '<path d="M5 13v-1a7 7 0 0 1 14 0v1M5 13a2 2 0 0 1 2 2v2a2 2 0 0 1-4 0v-2a2 2 0 0 1 2-2zM19 13a2 2 0 0 0-2 2v2a2 2 0 0 0 4 0v-2a2 2 0 0 0-2-2zM19 19c0 1.700-2 2.500-5 2.500"/>' },
+];
+const jobsHtml = () => `<div class="jobs">${JOBS.map((j) => `
+  <a class="job" style="--jt:${j.c}" href="${j.href ?? "/chat?ask=" + encodeURIComponent(j.ask)}">
+    <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true">${j.i.replace(/(\d)\.(\d)00/g, "$1.$2")}</svg></span>
+    <b>${esc(j.t)}</b>
+    <p>${esc(j.d)}</p>
+    <span class="ask">${esc(j.say ?? "“" + j.ask + "”")} ${ARROW}</span>
+  </a>`).join("")}</div>`;
+const STEPS = `
+  <div class="steps">
+    <div class="step"><span class="n">01</span><div><span class="k">Writes</span><b>A durable outbox</b><span>Every memory write goes into a queue on disk first. If the relayer says no, it retries with backoff. Conversations and pictures too.</span></div></div>
+    <div class="step"><span class="n">02</span><div><span class="k">Reads</span><b>A memoryless turn</b><span>If recall fails, you still get an answer, marked as one it gave without its memory. What you said is still written.</span></div></div>
+    <div class="step"><span class="n">03</span><div><span class="k">Identity</span><b>Self-healing links</b><span>If an identity record can't be read, it rebuilds from the other apps' records the next time you speak.</span></div></div>
   </div>`;
 
-let personas = [], cases = [], active = null;
+/* ── the overview ── */
+$("bento").innerHTML = CAPS.map((c) => `
+  <button class="pane tile" role="listitem" data-id="${c.id}" style="--tint:${c.tint}" aria-label="${esc(c.title)} — open">
+    <span class="num">${c.n} · ${esc(c.kicker)}</span>
+    <h2>${esc(c.title)}</h2>
+    <p>${esc(c.line)}</p>
+    <span class="open">See it ${ARROW}</span>
+    ${c.img ? `<span class="peek${c.slim ? " slim" : ""}"><img src="${c.img}" alt="" loading="eager"></span>`
+      : c.extra === "jobs" ? `<span class="jobs-mini"><span>Tutor</span><span>Coding partner</span><span>Planner</span><span>Reader</span><span>Your record</span><span>Support desk</span></span>`
+            : `<span class="steps-mini"><span><b>01</b>A durable outbox</span><span><b>02</b>A memoryless turn</span><span><b>03</b>Self-healing links</span></span>`}
+  </button>`).join("");
 
-const ICONS = {
-  registrar: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2.4 5.2L8 2.4l5.6 2.8L8 8 2.4 5.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M4.4 6.6v3.2c0 1 1.6 1.8 3.6 1.8s3.6-.8 3.6-1.8V6.6" stroke="currentColor" stroke-width="1.3"/></svg>',
-  tutor: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 3.2h4.2c.8 0 1.4.6 1.4 1.4v8c0-.7-.6-1.3-1.4-1.3H3V3.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M13.6 3.2H9.4c-.8 0-1.4.6-1.4 1.4v8c0-.7.6-1.3 1.4-1.3h4.2V3.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
-  support: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.6" stroke="currentColor" stroke-width="1.3"/><path d="M6.4 6.2A1.7 1.7 0 019.6 7c0 1.1-1.6 1.3-1.6 2.3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" fill="currentColor"/></svg>',
-};
+/* ── the stage ── */
+$("dock").innerHTML = CAPS.map((c, i) => `
+  <button class="tab" role="tab" data-i="${i}" style="--tint:${c.tint}" aria-selected="false">
+    <span class="num">${c.n}</span><b>${esc(c.title)}</b><span class="bar"></span>
+  </button>`).join("") + `
+  <div class="dock-foot">
+    <button class="mini" id="overview" aria-label="Back to all six">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 2h4v4H2zM8 2h4v4H8zM2 8h4v4H2zM8 8h4v4H8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>All six
+    </button>
+    <button class="mini" id="auto" aria-label="Pause" aria-pressed="true">
+      <svg class="pause" width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M4.5 2.5v9M9.5 2.5v9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <svg class="go-on" width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M4 2.5l7.5 4.5L4 11.5z" fill="currentColor"/></svg>
+      <span class="pause">Pause</span><span class="go-on">Play</span>
+    </button>
+  </div>`;
 
-function render(p) {
-  active = p;
-  for (const t of document.querySelectorAll(".tab")) t.classList.toggle("on", t.dataset.id === p.id);
+$("dock").insertAdjacentHTML("afterbegin", '<span class="glide" id="glide"></span>');
+const tabs = [...document.querySelectorAll(".tab")];
+function glide() {
+  const t = tabs[at], g = $("glide");
+  if (!t || $("stage").hidden) return;
+  g.style.width = t.offsetWidth + "px"; g.style.height = t.offsetHeight + "px";
+  g.style.transform = `translate(${t.offsetLeft}px,${t.offsetTop}px)`;
+  g.classList.add("placed");
+  // On a phone the tabs are a strip; bring the one showing into view.
+  const d = $("dock");
+  if (d.scrollWidth > d.clientWidth + 1) d.scrollTo({ left: t.offsetLeft - (d.clientWidth - t.offsetWidth) / 2, behavior: still ? "auto" : "smooth" });
+}
+addEventListener("resize", glide);
+const tiles = [...document.querySelectorAll(".tile")];
+let at = 0, view = "bento", bot = { tg: "walrusmemory_bot", dc: null }, handoffHtml = "";
 
-  const transcript = cases.find((c) => c.id === p.caseId);
-  document.getElementById("pane").innerHTML = `
-    <section class="role">
-      <span class="org">${esc(p.org ?? "")}</span>
-      <h2>${esc(p.name)}</h2>
-      <p class="tag">${esc(p.tagline)}</p>
-      <p class="why">${esc(p.why)}</p>
-      <div class="proof">
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 8.4l3 3 7-7"
-          stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>${esc(p.proof ?? "")}</span>
-      </div>
-      <div class="actions">
-        <a class="try" href="/demo?persona=${encodeURIComponent(p.id)}">
-          Try this one live
-          <svg width="16" height="16" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13"
-            stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-        ${(p.starters ?? []).slice(0, 2).map((sx) =>
-          `<a class="askthis" href="/demo?persona=${encodeURIComponent(p.id)}&ask=${encodeURIComponent(sx)}">“${esc(sx)}”</a>`).join("")}
-      </div>
-
-      ${transcript ? `
-        <div class="case">
-          <h2 style="font-size:19px;margin-bottom:6px">A real handoff</h2>
-          <p class="situation">${esc(transcript.situation)}</p>
-          <div class="pair">
-            ${panel("First conversation", transcript.firstSurface, transcript.first)}
-            ${panel("Later, somewhere else", transcript.laterSurface, transcript.later)}
-          </div>
-          ${transcript.carried?.length ? `
-            <div class="carried">
-              <h3>What it carried across</h3>
-              <ul>${transcript.carried.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
-            </div>` : ""}
-        </div>` : ""}
-    </section>`;
+function figure(c) {
+  if (c.extra === "steps") return STEPS;
+  if (c.extra === "jobs") return jobsHtml();
+  const shot = `<div class="frame"><img src="${c.img}" alt="${esc(c.alt)}"></div>`;
+  if (c.extra === "handoff") return `<div class="duo">${shot}<div class="handoff">${handoffHtml || ""}</div></div>`;
+  return shot;
+}
+function copy(c) {
+  return `<span class="num" style="--tint:${c.tint}">${c.n} · ${esc(c.kicker)}</span>
+    <h2>${c.head}</h2>
+    <p class="lead">${esc(c.lead)}</p>
+    ${c.how ? `<ul class="how">${c.how.map((h) => `<li><i></i><span>${h}</span></li>`).join("")}</ul>` : ""}
+    ${c.truth ? `<div class="truth"><b>${esc(c.truth[0])}</b>${esc(c.truth[1])}</div>` : ""}
+    <div class="go">${c.cta}</div>`;
+}
+function paint(i, { animate = true } = {}) {
+  at = (i + CAPS.length) % CAPS.length;
+  const c = CAPS[at];
+  $("panel").style.setProperty("--tint", c.tint);
+  $("fig").innerHTML = figure(c);
+  $("fig").classList.toggle("whole", Boolean(c.slim || c.extra === "steps" || c.extra === "handoff" || c.extra === "jobs"));
+  $("copy").innerHTML = copy(c);
+  $("copy").scrollTop = 0;
+  if (small.matches) $("auto").hidden = true;
+  const tg = $("copy").querySelector("[data-tg]"), dc = $("copy").querySelector("[data-dc]");
+  if (tg) tg.href = "https://t.me/" + bot.tg;
+  if (dc && bot.dc) { dc.href = bot.dc; dc.hidden = false; }
+  tabs.forEach((t, n) => { t.classList.toggle("on", n === at); t.setAttribute("aria-selected", String(n === at)); });
+  glide();
+  if (animate && !still) { $("panel").classList.remove("swap"); void $("panel").offsetWidth; $("panel").classList.add("swap"); }
+  if (view === "stage") history.replaceState(null, "", "#" + c.id);
+  sync();
 }
 
-Promise.all([
-  fetch("/api/demo/personas").then((r) => r.json()).catch(() => ({ personas: [] })),
-  fetch("/cases.json").then((r) => r.json()).catch(() => []),
-]).then(([d, c]) => {
-  personas = d.personas ?? [];
-  cases = c ?? [];
-  if (!personas.length) {
-    document.getElementById("pane").innerHTML = '<p class="empty">Couldn\'t load the roles.</p>';
+/* ── it moves on its own ──
+   In the overview a light passes from tile to tile; on the stage the next
+   capability comes round. Both rest while you are pointing at the thing, and
+   the stage stops for good once you have picked a tab yourself — you are
+   reading now, and having the page change under you would be rude. */
+const AUTO = 6500, LIGHT = 2600;
+const small = matchMedia("(max-width:980px), (max-height:620px)");
+// On a phone nothing moves by itself. Every capability is a different height
+// there, and a page that re-flows under your thumb while you are reading is
+// worse than one that waits to be asked.
+let wanted = !still && !small.matches, holds = 0, clock = null, lit = -1;
+const resting = () => !wanted || holds > 0 || document.hidden;
+function sync() {
+  document.documentElement.classList.toggle("resting", view === "stage" && resting());
+  clearTimeout(clock); clock = null;
+  if (document.hidden || holds > 0) return;
+  if (view === "bento") {
+    if (still || small.matches) return;
+    clock = setTimeout(() => {
+      lit = (lit + 1) % tiles.length;
+      tiles.forEach((t, n) => t.classList.toggle("lit", n === lit));
+      sync();
+    }, lit < 0 ? 1400 : LIGHT);
+  } else if (wanted) {
+    const on = tabs[at]; // restart the bar so the clock on screen matches this one
+    on.classList.remove("on"); void on.offsetWidth; on.classList.add("on");
+    clock = setTimeout(() => paint(at + 1), AUTO);
+  }
+}
+const hold = () => { holds++; tiles.forEach((t) => t.classList.remove("lit")); sync(); };
+const release = () => { holds = Math.max(0, holds - 1); sync(); };
+// What counts as "doing something with it": pointing at the tiles, at the
+// tabs, or at the words you are reading — not at the picture, and not the
+// focus this page sets itself after a click. The board is most of the screen,
+// so resting whenever the pointer was anywhere on it meant it never moved.
+for (const el of [$("bento"), $("dock"), $("copy")]) {
+  el.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") hold(); });
+  el.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") release(); });
+}
+let keyHeld = false;
+$("board").addEventListener("focusin", (e) => { if (!keyHeld && e.target.matches(":focus-visible")) { keyHeld = true; hold(); } });
+$("board").addEventListener("focusout", (e) => { if (keyHeld && !$("board").contains(e.relatedTarget)) { keyHeld = false; release(); } });
+document.addEventListener("visibilitychange", sync);
+
+/* ── between the two views ──
+   The tile that was clicked carries the same transition name as the stage's
+   panel, so the browser grows one into the other. Where it cannot, the views
+   simply change places. */
+function change(to, i, from) {
+  const swap = () => {
+    view = to; holds = keyHeld ? 1 : 0;
+    $("bento").hidden = to !== "bento";
+    $("stage").hidden = to !== "stage";
+    if (to === "stage") paint(i, { animate: false });
+    else { history.replaceState(null, "", location.pathname); lit = -1; tiles.forEach((t) => t.classList.remove("lit")); sync(); }
+  };
+  const tile = tiles[i] ?? tiles[at];
+  if (still || !document.startViewTransition || small.matches) {
+    swap();
+    if (to === "stage") $("panel").classList.add("swap");
+    // The page is a scrolling one here, and the tile that was tapped may have
+    // been far down it: start the capability from its top, and come back to
+    // the tile it was opened from.
+    if (small.matches) requestAnimationFrame(() => (to === "stage" ? $("stage") : tile).scrollIntoView({ block: to === "stage" ? "start" : "center", behavior: "auto" }));
     return;
   }
-  document.getElementById("tabs").innerHTML = personas.map((p) =>
-    `<button class="tab" data-id="${p.id}">${ICONS[p.id] ?? ""} ${esc(p.name)}</button>`).join("");
-  document.getElementById("tabs").addEventListener("click", (e) => {
-    const t = e.target.closest(".tab");
-    if (t) render(personas.find((x) => x.id === t.dataset.id));
+  document.documentElement.classList.add("morph");
+  if (to === "stage") tile.style.viewTransitionName = "cap";
+  else $("panel").style.viewTransitionName = "cap";
+  const t = document.startViewTransition(() => {
+    swap();
+    if (to === "stage") { tile.style.viewTransitionName = ""; $("panel").style.viewTransitionName = "cap"; }
+    else { $("panel").style.viewTransitionName = ""; tile.style.viewTransitionName = "cap"; }
   });
+  t.finished.finally(() => {
+    document.documentElement.classList.remove("morph");
+    tile.style.viewTransitionName = ""; $("panel").style.viewTransitionName = "";
+    if (to === "stage") (tabs[at]).focus({ preventScroll: true }); else tile.focus({ preventScroll: true });
+  });
+}
 
-  const asked = new URLSearchParams(location.search).get("role");
-  render(personas.find((p) => p.id === asked) ?? personas[0]);
+tiles.forEach((t, i) => t.addEventListener("click", () => change("stage", i)));
+
+/* The screenshot in a tile leans a few pixels away from the pointer, so the
+   tile reads as having depth. Only the picture moves; see the note on .tile. */
+if (!still) tiles.forEach((t) => {
+  const peek = t.querySelector(".peek"); if (!peek) return;
+  let raf = 0, x = 0, y = 0;
+  t.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const r = t.getBoundingClientRect();
+    x = ((e.clientX - r.left) / r.width - .5) * -18; y = ((e.clientY - r.top) / r.height - .5) * -14;
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; t.classList.add("tracking"); peek.style.setProperty("--px", x.toFixed(1) + "px"); peek.style.setProperty("--py", y.toFixed(1) + "px"); });
+  });
+  t.addEventListener("pointerleave", () => { t.classList.remove("tracking"); peek.style.setProperty("--px", "0px"); peek.style.setProperty("--py", "0px"); });
+});
+tabs.forEach((t, i) => t.addEventListener("click", () => {
+  wanted = false; // they have taken over
+  if (small.matches) requestAnimationFrame(() => $("stage").scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" }));
+  $("auto").setAttribute("aria-pressed", "false"); $("auto").setAttribute("aria-label", "Play");
+  paint(i);
+}));
+$("overview").addEventListener("click", () => change("bento", at));
+$("auto").addEventListener("click", () => {
+  wanted = !wanted;
+  $("auto").setAttribute("aria-pressed", String(wanted));
+  $("auto").setAttribute("aria-label", wanted ? "Pause" : "Play");
+  sync();
+});
+addEventListener("keydown", (e) => {
+  if (view !== "stage" || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === "Escape") change("bento", at);
+  else if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); wanted = false; paint(at + 1); tabs[at].focus({ preventScroll: true }); }
+  else if (e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); wanted = false; paint(at - 1); tabs[at].focus({ preventScroll: true }); }
 });
 
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest(".more");
-  if (!btn) return;
-  const msg = btn.closest(".msg");
-  msg.classList.toggle("open");
-  btn.textContent = msg.classList.contains("open") ? "Show less" : "Read the rest";
-});
+// A link to one capability opens the stage on it.
+function openHash() {
+  const wanted = location.hash === "#roles" ? "#jobs" : location.hash; // the old name for this one
+  const i = CAPS.findIndex((c) => "#" + c.id === wanted);
+  if (i < 0) return false;
+  view = "stage"; $("bento").hidden = true; $("stage").hidden = false;
+  paint(i);
+  return true;
+}
+addEventListener("hashchange", openHash);
+
+/* Bot links come from the server so they stay right when the bot changes. */
+fetch("/api/stats").then((r) => r.json()).then((s) => {
+  if (s.botUsername) bot.tg = s.botUsername;
+  if (s.discordInvite) bot.dc = s.discordInvite;
+  if (view === "stage") paint(at, { animate: false });
+}).catch(() => {});
+
+/* The recorded handoff: one column per app, in the order it happened, with
+   the blob ids of the memories the first message produced. */
+const APP = { telegram: ["Telegram", TG], discord: ["Discord", DC],
+  web: ["Web", '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="9" rx="1.6" stroke="currentColor" stroke-width="1.3"/><path d="M5 14h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'] };
+const short = (id) => id.length > 14 ? id.slice(0, 6) + "…" + id.slice(-4) : id;
+fetch("/assets/handoff.json").then((r) => r.json()).then((rec) => {
+  const cols = [];
+  for (const e of rec.events) {
+    if (!e.surface) continue;
+    let col = cols.find((c) => c.surface === e.surface);
+    if (!col) { col = { surface: e.surface, items: [], blobs: [], at: e.at }; cols.push(col); }
+    if (e.type === "user") col.items.push(`<div class="m you">${esc(e.text)}</div>`);
+    else if (e.type === "bot") col.items.push(`<div class="m bot">${esc(e.text)}</div>`);
+    else if (e.type === "linked") col.items.unshift(`<div class="m sys">linked with code · <code>${esc(rec.events.find((x) => x.type === "code" && x.at < e.at && x.surface !== e.surface)?.code ?? "")}</code></div>`);
+    else if (e.type === "write" && e.kind === "analyze" && e.facts?.length) col.blobs.push(e);
+  }
+  handoffHtml = cols.map((c) => `
+    <div class="col">
+      <div class="col-h">${APP[c.surface][1]} ${APP[c.surface][0]}<span class="t">+${Math.round(c.at / 1000)}s</span></div>
+      <div class="msgs">${c.items.join("")}</div>
+      ${c.blobs.length ? `<div class="blobs">${c.blobs.map((b) => `
+        <div class="blob"><i></i><em>${esc(b.facts[0])}</em><a href="https://walruscan.com/mainnet/blob/${encodeURIComponent(b.blobId)}" target="_blank" rel="noopener">${esc(short(b.blobId))} ↗</a></div>`).join("")}</div>` : ""}
+    </div>`).join("");
+  if (view === "stage" && CAPS[at].extra === "handoff") paint(at, { animate: false });
+}).catch(() => {});
+
+if (!openHash()) sync();
 </script>
 </body>
 </html>

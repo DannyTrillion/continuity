@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="en" data-page="docs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Docs — Continuity</title>
+<meta name="description" content="How Continuity works: one memory across the web, Telegram and Discord on Walrus mainnet — identity, recall, pictures, reliability, the MemWal findings, and the v2 plan.">
+<link rel="icon" href="/assets/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/motion.css">
+<script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
+<style>
+  :root{
+    --void:#05070A; --glass:rgba(255,255,255,.055); --glass-2:rgba(255,255,255,.088);
+    --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.18);
+    --ink:#fff; --soft:#C9D3DF; --dim:#8695A6; --faint:#5A6674;
+    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.13);
+    --r:26px; --r-md:18px; --r-sm:13px;
+    --display:'Outfit',system-ui,sans-serif; --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1);
+    --card-w:clamp(270px,27vw,350px); --card-h:430px;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--void);color:var(--soft);font:400 15.5px/1.7 var(--sans);-webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;min-height:100vh;overflow-x:hidden}
+  a{color:var(--live);text-decoration:none}
+  a:hover{text-decoration:underline;text-underline-offset:3px}
+  button{font:inherit;color:inherit}
+  .ground,.bloom,.grain{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .ground{background:url("/assets/texture.jpg") center/cover;opacity:.9}
+  .bloom{background:radial-gradient(1000px 540px at 82% -14%, rgba(90,169,255,.14), transparent 62%),
+    radial-gradient(760px 480px at 8% 108%, rgba(199,166,255,.09), transparent 60%)}
+  .grain{opacity:.05;mix-blend-mode:overlay;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+  .top{position:relative;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px}
+  .brand{display:flex;align-items:center;gap:9px;font:500 17px var(--display);color:var(--ink)}
+  .brand:hover{text-decoration:none;opacity:.8}
+  .brand i{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#9BD0FF 45%,#2E7ACB)}
+  .tiny{font:500 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .go{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:#fff;color:#0A0D12;
+    font:600 13px var(--sans);transition:transform .25s var(--ease)}
+  .go:hover{text-decoration:none;transform:scale(1.03)}
+
+  main{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0;padding:6px 0 10px}
+  .hero{max-width:1180px;width:100%;margin:0 auto;padding:0 22px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+  .hero h1{margin:0;font:200 clamp(32px,4.4vw,52px)/1.05 var(--display);letter-spacing:-.025em;color:var(--ink)}
+  .hero h1 em{font-style:normal;font-weight:400;background:linear-gradient(90deg,#fff,#C9DEFF 45%,#5AA9FF);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{margin:10px 0 0;max-width:58ch;color:var(--dim);font-size:14.5px;line-height:1.65}
+  .ctl{display:flex;align-items:center;gap:10px}
+  .count{font:500 12px var(--mono);color:var(--dim);min-width:64px;text-align:center}
+  .count b{color:var(--ink);font-weight:500}
+  .arrow{width:42px;height:42px;border-radius:50%;border:1px solid var(--edge-2);background:var(--glass);cursor:pointer;
+    display:grid;place-items:center;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    transition:transform .25s var(--ease),background .25s var(--ease),opacity .25s var(--ease)}
+  .arrow:hover{transform:scale(1.08);background:var(--glass-2)}
+  .arrow:disabled{opacity:.3;cursor:default;transform:none}
+
+  /* ── the carousel ── */
+  .stage{position:relative;margin-top:26px;perspective:1400px}
+  .track{display:flex;gap:22px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+    padding:26px max(22px, calc(50vw - var(--card-w) / 2)) 34px;scrollbar-width:none;cursor:grab;
+    -webkit-overflow-scrolling:touch;transform-style:preserve-3d}
+  .track::-webkit-scrollbar{display:none}
+  .track.dragging{cursor:grabbing;scroll-snap-type:none}
+  .track.dragging .card{pointer-events:none}
+
+  .card{flex:none;width:var(--card-w);height:var(--card-h);scroll-snap-align:center;position:relative;padding:0;border:0;
+    background:none;text-align:left;cursor:pointer;border-radius:var(--r);
+    transform:rotateY(var(--ry,0deg)) scale(var(--s,1));opacity:var(--o,1);
+    transition:opacity .3s var(--ease);will-change:transform}
+  .card:focus-visible{outline:2px solid var(--live);outline-offset:4px}
+  /* The glass itself. Three things make it read as glass and not a grey box:
+     what is behind it shows through blurred, the top edge catches light, and
+     a little of the section's colour is caught inside. */
+  .glass{position:absolute;inset:0;border-radius:inherit;overflow:hidden;display:flex;flex-direction:column;padding:24px 24px 22px;
+    background:linear-gradient(155deg,rgba(255,255,255,.13),rgba(255,255,255,.045) 38%,rgba(255,255,255,.02) 70%);
+    border:1px solid rgba(255,255,255,.16);
+    backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(255,255,255,.04),0 34px 70px -34px rgba(0,0,0,.9);
+    transition:border-color .6s var(--ease);backface-visibility:hidden}
+  /* Nothing blurred is scaled on hover: that re-samples the pane every frame
+     and its one-pixel highlight shimmers as a bright line. The contents move. */
+  .card:hover .glass{border-color:rgba(255,255,255,.32)}
+  .card h2,.card p,.card .ico{transition:transform .7s var(--ease)}
+  .card:hover h2,.card:hover p{transform:translateY(-4px)}
+  .card:hover .ico{transform:translateY(-4px) rotate(-4deg)}
+  .glass::before{transition:opacity .9s var(--ease),transform 1.2s var(--ease)}
+  .card:hover .glass::before{opacity:.5;transform:translate(-24px,20px)}
+  .glass::before{content:"";position:absolute;width:240px;height:240px;right:-70px;top:-80px;border-radius:50%;
+    background:radial-gradient(circle,var(--tint),transparent 68%);opacity:.34;filter:blur(8px);pointer-events:none}
+  .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(115deg,rgba(255,255,255,.16),transparent 26%,transparent 72%,rgba(255,255,255,.05))}
+  .card-top{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between}
+  .num{font:500 12px var(--mono);letter-spacing:.14em;color:var(--tint)}
+  .ico{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.18);
+    background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.03));box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+  .ico svg{width:22px;height:22px;fill:none;stroke:var(--tint);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+  .card h2{position:relative;z-index:1;margin:auto 0 0;font:300 27px/1.14 var(--display);letter-spacing:-.02em;color:var(--ink)}
+  .card p{position:relative;z-index:1;margin:12px 0 0;color:var(--soft);font-size:13.5px;line-height:1.6;opacity:.86;
+    display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+  .card-foot{position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-top:18px;padding-top:15px;
+    border-top:1px solid rgba(255,255,255,.12);font:500 11.5px var(--sans);color:var(--dim)}
+  .card-foot .read{margin-left:auto;display:inline-flex;align-items:center;gap:6px;color:var(--ink)}
+  .card-foot .read svg{transition:transform .6s var(--ease)}
+  .card:hover .read svg{transform:translateX(6px)}
+  .chip{padding:3px 9px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.22)}
+
+  .dots{display:flex;justify-content:center;gap:6px;margin-top:2px;padding:0 22px;flex-wrap:wrap}
+  .dot{width:7px;height:7px;border-radius:999px;border:0;padding:0;background:rgba(255,255,255,.2);cursor:pointer;
+    transition:width .35s var(--ease),background .35s var(--ease)}
+  .dot.on{width:28px;background:rgba(255,255,255,.26);position:relative;overflow:hidden}
+  /* The lit dot is also the clock: it fills over the time this card has left. */
+  .dot.on::after{content:"";position:absolute;inset:0;border-radius:inherit;background:#fff;transform-origin:left center;
+    animation:dotfill var(--auto,4600ms) linear both}
+  .resting .dot.on::after{animation:none}
+  @keyframes dotfill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .arrow.play svg.pause{display:block} .arrow.play svg.go-on{display:none}
+  .resting .arrow.play svg.pause{display:none} .resting .arrow.play svg.go-on{display:block}
+  .hint{margin:14px 0 0;text-align:center;color:var(--faint);font-size:12px}
+  .hint kbd{font:500 10.5px var(--mono);padding:2px 6px;border-radius:6px;border:1px solid var(--edge);background:var(--glass);color:var(--dim)}
+
+  /* ── the reader: a card, popped out ── */
+  .veil{position:fixed;inset:0;z-index:40;background:rgba(3,5,8,.62);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    opacity:0;pointer-events:none;transition:opacity .35s var(--ease)}
+  .veil.on{opacity:1;pointer-events:auto}
+  .reader{position:fixed;z-index:41;left:50%;top:50%;width:min(880px,calc(100vw - 32px));
+    height:auto;min-height:min(340px,80vh);max-height:min(86vh,900px);
+    margin:0;transform:translate(-50%,-50%);display:none;flex-direction:column;border-radius:var(--r);overflow:hidden;
+    background:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.04) 30%,rgba(9,13,19,.72) 70%);
+    border:1px solid rgba(255,255,255,.18);
+    backdrop-filter:blur(34px) saturate(150%);-webkit-backdrop-filter:blur(34px) saturate(150%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 60px 140px -50px rgba(0,0,0,.95);transform-origin:center}
+  .reader.on{display:flex}
+  .reader::before{content:"";position:absolute;width:420px;height:420px;right:-140px;top:-170px;border-radius:50%;
+    background:radial-gradient(circle,var(--tint),transparent 68%);opacity:.22;pointer-events:none}
+  .r-head{position:relative;flex:none;display:flex;align-items:center;gap:14px;padding:20px 24px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
+  .r-head .ico{flex:none}
+  .r-head .num{display:block}
+  .r-head h2{margin:2px 0 0;font:300 25px/1.15 var(--display);letter-spacing:-.02em;color:var(--ink)}
+  .r-ctl{margin-left:auto;display:flex;gap:8px}
+  .r-btn{width:38px;height:38px;border-radius:50%;border:1px solid var(--edge-2);background:rgba(0,0,0,.25);cursor:pointer;
+    display:grid;place-items:center;transition:transform .25s var(--ease),background .25s var(--ease)}
+  .r-btn:hover{transform:scale(1.08);background:var(--glass-2)}
+  .r-btn:disabled{opacity:.3;cursor:default;transform:none}
+  .r-body{position:relative;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:26px 30px 40px;scroll-padding-top:20px}
+  .r-body > *{opacity:0;transform:translateY(8px);transition:opacity .4s var(--ease),transform .4s var(--ease)}
+  .reader.shown .r-body > *{opacity:1;transform:none}
+
+  .r-body h3{margin:30px 0 8px;font:500 17px var(--sans);color:var(--ink)}
+  .r-body h4{margin:22px 0 6px;font:500 14.5px var(--sans);color:var(--ink)}
+  .r-body p{margin:0 0 14px;max-width:72ch}
+  .r-body ul,.r-body ol{margin:0 0 16px;padding-left:22px;max-width:72ch}
+  .r-body li{margin:5px 0}
+  .r-body code{font:13px var(--mono);background:rgba(0,0,0,.4);border:1px solid var(--edge);padding:1.5px 6px;border-radius:6px;color:var(--live)}
+  .r-body pre{margin:0 0 18px;padding:14px 16px;border:1px solid var(--edge);border-radius:var(--r-sm);background:rgba(0,0,0,.45);overflow-x:auto}
+  .r-body pre code{background:none;border:0;padding:0;color:var(--soft);font-size:12.5px;line-height:1.6}
+  .r-body table{width:100%;border-collapse:collapse;margin:0 0 18px;font-size:13.5px;display:block;overflow-x:auto}
+  .r-body th,.r-body td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--edge);vertical-align:top}
+  .r-body th{color:var(--ink);font-weight:500;white-space:nowrap}
+  .r-body blockquote{margin:0 0 16px;padding:12px 16px;border-left:2px solid rgba(90,169,255,.5);background:var(--glass);border-radius:0 var(--r-sm) var(--r-sm) 0}
+  .r-body hr{border:0;border-top:1px solid var(--edge);margin:28px 0}
+  .r-body b{color:var(--ink);font-weight:600}
+
+  .store{display:none}
+
+  .foot{position:relative;z-index:1;max-width:1180px;width:100%;margin:0 auto;padding:14px 22px 20px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+
+  @media (max-width:720px){
+    :root{--card-w:80vw;--card-h:400px}
+    .hero{align-items:flex-start}
+    .reader{width:100vw;height:100dvh;border-radius:0;border:0}
+    .r-body{padding:20px 18px 36px}
+    .r-head{padding:16px 16px 14px}
+    .r-head h2{font-size:20px}
+    .hint{display:none}
+  }
+  @media (max-height:700px){ :root{--card-h:370px} .hero p{display:none} }
+  @media (prefers-reduced-motion:reduce){
+    .card{transform:none!important;opacity:1!important}
+    .glass,.veil,.r-body > *,.arrow,.dot{transition:none}
+    .dot.on::after{animation:none}
+    .r-body > *{opacity:1;transform:none}
+  }
+</style>
+</head>
+<body>
+<div class="ground"></div><div class="bloom"></div><div class="grain"></div>
+
+<header class="top">
+  <a class="brand" href="/"><i></i>Continuity <span class="tiny" style="margin-left:8px">docs</span></a>
+  <a class="go" href="/chat">Open the chat &rarr;</a>
+</header>
+
+<main>
+  <div class="hero">
+    <div>
+      <h1>How it <em>works.</em></h1>
+      <p>16 sections, one card each. Pick one up to read it. Generated from the project's own README,
+        so it cannot drift from the code.</p>
+    </div>
+    <div class="ctl" aria-label="Carousel controls">
+      <button class="arrow play" id="auto" aria-label="Pause the carousel" aria-pressed="true">
+        <svg class="pause" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4.5 2.5v9M9.5 2.5v9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <svg class="go-on" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 2.5l7.5 4.5L4 11.5z" fill="currentColor"/></svg>
+      </button>
+      <button class="arrow" id="prev" aria-label="Previous section">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="count" aria-live="polite"><b id="at">01</b> / 16</span>
+      <button class="arrow" id="next" aria-label="Next section">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="track" id="track" role="list" aria-label="Documentation sections">
+      <button class="card" role="listitem" data-id="overview" style="--tint:#5AA9FF" aria-label="Overview — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">01</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></svg></span></span>
+          <h2>Overview</h2>
+          <p>A support chatbot that remembers you on the web, on Telegram and on Discord — because all three read and write the same memory on Walrus mainnet.</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="the-idea" style="--tint:#7FE3D4" aria-label="The idea — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">02</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></span></span>
+          <h2>The idea</h2>
+          <p>Most "chatbot with memory" demos remember you within one app. Move to another device or another platform and you are a stranger again, because the memory was never…</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="try-it" style="--tint:#C7A6FF" aria-label="Try it — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">03</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10 8.5l5.5 3.5-5.5 3.5z"/></svg></span></span>
+          <h2>Try it</h2>
+          <p>Where to find it on the web, Telegram and Discord, and the one thing to try first: tell it something on one, ask on another.</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="commands" style="--tint:#FFB86B" aria-label="Commands — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">04</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15H17"/></svg></span></span>
+          <h2>Commands</h2>
+          <p>Five slash commands: link an app, redeem a code, see what it remembers about you, stop recording, start again.</p>
+          <span class="card-foot"><span class="chip">2 min</span><span class="chip">3 parts</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="how-memory-works" style="--tint:#FF8EB4" aria-label="How memory works — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">05</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6M4.5 12v6c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6"/></svg></span></span>
+          <h2>How memory works</h2>
+          <p>Writing. Conversation turns go to the relayer's analyze(), which extracts discrete facts server-side inside the TEE. The raw conversation is never sent to the chat…</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="layout" style="--tint:#9BD0FF" aria-label="Layout — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">06</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v6H4zM13 5h7v3h-7zM13 11h7v8h-7zM4 14h7v5H4z"/></svg></span></span>
+          <h2>Layout</h2>
+          <p>Where everything lives in the repository, file by file, and what each one is responsible for.</p>
+          <span class="card-foot"><span class="chip">2 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="the-app-shell" style="--tint:#5AA9FF" aria-label="The app shell — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">07</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18M7 6.8h.01M10 6.8h.01"/></svg></span></span>
+          <h2>The app shell</h2>
+          <p>/chat, /memory and /history are three panels in one document, not three pages. Switching between them shows one and hides another — the header is never replaced, no…</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="the-memory-page" style="--tint:#7FE3D4" aria-label="The memory page — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">08</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="7" height="7" rx="1.5"/><rect x="13.5" y="4" width="7" height="7" rx="1.5"/><rect x="3.5" y="14" width="7" height="6" rx="1.5"/><rect x="13.5" y="14" width="7" height="6" rx="1.5"/></svg></span></span>
+          <h2>The memory page</h2>
+          <p>/memory is a shelf of collections rather than one long list: Photos, Still open, Plans, Your setup, Projects &amp; work, Preferences, About you, and Everything else. A…</p>
+          <span class="card-foot"><span class="chip">2 min</span><span class="chip">1 part</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="the-introduction" style="--tint:#C7A6FF" aria-label="The introduction — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">09</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10.5A.5.5 0 0 1 6.5 20V4a.5.5 0 0 1 .5-.5zM14 3.5V8h4M9.5 12h5M9.5 15.5h5"/></svg></span></span>
+          <h2>The introduction</h2>
+          <p>A chatbot that remembers has nothing to show in its first conversation, so a new person can choose to be introduced first. /welcome asks five things, one to a…</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="modes" style="--tint:#FFB86B" aria-label="Modes — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">10</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10.5A.5.5 0 0 1 6.5 20V4a.5.5 0 0 1 .5-.5zM14 3.5V8h4M9.5 12h5M9.5 15.5h5"/></svg></span></span>
+          <h2>Modes</h2>
+          <p>Four of them — Tutor, Coding partner, Planner, Support desk — and none by default. A mode changes the manner and nothing else: the same memories, the same…</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="chip">1 part</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="attachments" style="--tint:#FF8EB4" aria-label="Attachments — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">11</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 11l-6 6a3.5 3.5 0 0 1-5-5l6.8-6.8a2.4 2.4 0 0 1 3.4 3.4l-6.8 6.8a1.2 1.2 0 0 1-1.7-1.7l6.2-6.2"/></svg></span></span>
+          <h2>Attachments</h2>
+          <p>An image cannot itself be a memory: Walrus Memory stores text, and every write method on the SDK takes a string. What can be a memory is a description — and a good…</p>
+          <span class="card-foot"><span class="chip">3 min</span><span class="chip">2 parts</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="conversations" style="--tint:#9BD0FF" aria-label="Conversations — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">12</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12c0-3.6 3.6-6.5 8-6.5s8 2.9 8 6.5-3.6 6.5-8 6.5c-1 0-2-.2-2.9-.4L5 19.5l1.2-3.2C4.8 15.2 4 13.7 4 12z"/></svg></span></span>
+          <h2>Conversations</h2>
+          <p>Transcripts live in their own namespace, apart from memories, because the two want different handling: a memory is a fact worth keeping forever and gets extracted,…</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="time-and-what-it-does-with-it" style="--tint:#5AA9FF" aria-label="Time, and what it does with it — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">13</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.2l3.2 2"/></svg></span></span>
+          <h2>Time, and what it does with it</h2>
+          <p>Relative dates are pinned to the calendar in the text that gets stored: "interview on Thursday" is written as "interview on Thursday (1 Oct 2026)" (time.mjs,…</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="what-s-next-v2" style="--tint:#7FE3D4" aria-label="What's next (v2) — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">14</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19L19 5M19 5h-8M19 5v8"/></svg></span></span>
+          <h2>What's next (v2)</h2>
+          <p>The direction this is heading, after the hackathon submission: an AI workspace rather than a chat window, where conversations, memories, files and things the…</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="running-it" style="--tint:#C7A6FF" aria-label="Running it — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">15</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M6.5 6.5a8 8 0 1 0 11 0"/></svg></span></span>
+          <h2>Running it</h2>
+          <p>The environment variables it needs and the single command that starts the web chat and both bots.</p>
+          <span class="card-foot"><span class="chip">1 min</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+      <button class="card" role="listitem" data-id="memwal-findings" style="--tint:#FFB86B" aria-label="MemWal findings — open to read">
+        <span class="glass">
+          <span class="card-top"><span class="num">16</span><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7a3 3 0 0 1 6 0M7.5 9.5h9v5a4.5 4.5 0 0 1-9 0v-5zM4 12h3.5M16.5 12H20M5 6.5l3 3M19 6.5l-3 3M5 19l3-2.5M19 19l-3-2.5M12 12v6.5"/></svg></span></span>
+          <h2>MemWal findings</h2>
+          <p>What building on Walrus Memory turned up, with reproductions. Filed as the bug-bounty part of the submission.</p>
+          <span class="card-foot"><span class="chip">7 min</span><span class="chip">8 parts</span><span class="read">Read <svg width="14" height="14" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <div class="dots" id="dots"><button class="dot" data-i="0" aria-label="Go to Overview"></button><button class="dot" data-i="1" aria-label="Go to The idea"></button><button class="dot" data-i="2" aria-label="Go to Try it"></button><button class="dot" data-i="3" aria-label="Go to Commands"></button><button class="dot" data-i="4" aria-label="Go to How memory works"></button><button class="dot" data-i="5" aria-label="Go to Layout"></button><button class="dot" data-i="6" aria-label="Go to The app shell"></button><button class="dot" data-i="7" aria-label="Go to The memory page"></button><button class="dot" data-i="8" aria-label="Go to The introduction"></button><button class="dot" data-i="9" aria-label="Go to Modes"></button><button class="dot" data-i="10" aria-label="Go to Attachments"></button><button class="dot" data-i="11" aria-label="Go to Conversations"></button><button class="dot" data-i="12" aria-label="Go to Time, and what it does with it"></button><button class="dot" data-i="13" aria-label="Go to What's next (v2)"></button><button class="dot" data-i="14" aria-label="Go to Running it"></button><button class="dot" data-i="15" aria-label="Go to MemWal findings"></button></div>
+  <p class="hint">Turns on its own &nbsp;·&nbsp; <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to move &nbsp;·&nbsp; <kbd>Enter</kbd> to open &nbsp;·&nbsp; <kbd>Esc</kbd> to close</p>
+</main>
+
+<!-- Every section's full text, out of sight until its card is opened. Kept in
+     the document rather than fetched, so the page works offline and a search
+     engine can still read all of it. -->
+<div class="store" id="store">
+<section data-for="overview">
+<p>A support chatbot that remembers you on the web, on Telegram and on Discord — because all three read and write the same memory on <b>Walrus mainnet</b>.</p>
+<p>Built for <b>Walrus Sessions 8: Chatbots That Remember</b> (Sept 18 – Oct 9, 2026). Runs on open-weight models via OpenRouter (Kimi K2.5, DeepSeek v3.2 fallback) — no Claude, no GPT.</p>
+</section>
+<section data-for="the-idea">
+<p>Most "chatbot with memory" demos remember you within one app. Move to another device or another platform and you are a stranger again, because the memory was never really <em>yours</em> — it was a row in that app's database.</p>
+<p>Here, memory is a set of blobs on Walrus, keyed to a person rather than to a surface. Type <code>/link</code> on Discord, redeem the code on Telegram, and the two accounts collapse into one person who is remembered in both places. Nothing is copied between them; the namespaces are simply read together.</p>
+</section>
+<section data-for="try-it">
+<table><thead><tr><th>Surface</th><th>Where</th></tr></thead><tbody><tr><td>Web chat</td><td>_(deploy URL)_</td></tr><tr><td>Telegram</td><td>_(@bot)_</td></tr><tr><td>Discord</td><td>_(invite)_</td></tr></tbody></table>
+<p>Then: tell it something on one surface, <code>/link</code> to another, and ask it there.</p>
+</section>
+<section data-for="commands">
+<table><thead><tr><th>Command</th><th>What it does</th></tr></thead><tbody><tr><td><code>/menu</code></td><td>The things it does most, as buttons</td></tr><tr><td><code>/link</code></td><td>Issue a 6-character code (valid 10 minutes)</td></tr><tr><td><code>/link CODE</code></td><td>Redeem a code from another surface</td></tr><tr><td><code>/whatyouknow</code></td><td>List what it remembers about you</td></tr><tr><td><code>/search WORDS</code>, <code>/shot URL</code></td><td>Look something up, or screenshot a page</td></tr><tr><td><code>/forgetme confirm</code></td><td>Stop recording and stop reading you back</td></tr><tr><td><code>/remember me</code></td><td>Undo the above</td></tr></tbody></table>
+<p>The list itself lives in one place (<code>MENU_COMMANDS</code> in <code>src/core/commands.mjs</code>) and both adapters build their menus from it. They used to keep a copy each, which is how <code>/mode</code> came to be registered with neither of them while working perfectly if you typed it. <code>tools/check-bots.mjs</code> now fails if Discord stops offering something the shared menu lists.</p>
+<h3 id="buttons-not-memorised-commands">Buttons, not memorised commands</h3>
+<p>A bot whose abilities are invisible until you read its help is a blank box that happens to accept slashes. So a reply that has an obvious next step carries it as a button: <em>What do you know about me?</em> after <code>/help</code>, <em>Connect another app</em> after a link code, <em>See everything I remember</em> — a link straight to the memory page — after a list of facts.</p>
+<p>The actions are <b>named once</b> in <code>src/core/commands.mjs</code> and drawn by each surface in its own idiom: Telegram makes an inline keyboard, Discord a row of components, and either can carry a link button. A command added to that registry becomes a button on both bots without either adapter changing, which is what stops the three surfaces drifting apart.</p>
+<p>A tapped button runs the command it stands for through exactly the same path as typing it: same memory, same writes, same streaming. The button is a shortcut for the person, never a shortcut in the code — and <code>/forgetme</code> keeps its two-step confirmation on both bots, because a destructive thing one tap away is a destructive thing done by accident.</p>
+<h3 id="laid-out-not-printed">Laid out, not printed</h3>
+<p>Conversation stays as streaming text: a chat should look like a chat. A command's answer is not conversation — it is a list, or a code — so the structured half of what <code>handleCommand</code> returns travels as <code>data</code> and each surface lays it out its own way. Discord gets an embed with the brand colour and every memory linked to the blob that holds it; Telegram gets the same in HTML, with link previews off so ten memories don't drag a preview card behind them.</p>
+<p>HTML rather than Markdown on Telegram, and only for these: a memory is whatever somebody typed, and one unbalanced <code>*</code> in it makes Telegram reject the whole message rather than render it plainly. That is how a memory list becomes silence. In HTML three characters need escaping and they always can be.</p>
+<h3 id="the-bots-own-profile">The bots' own profile</h3>
+<p>Telegram gets a description (the text on the empty chat, its one chance to explain itself before being spoken to), a short description for its profile card, and command lists scoped per chat type — a group is never offered <code>/whatyouknow</code>, because printing someone's memories into a room full of people is not a thing to put one tap away. Discord sets its own avatar on first connect and a listening status.</p>
+<p>The mark itself is <code>src/web/assets/avatar.png</code>: the site's own icon, rendered and re-centred so it survives a circular crop down to 32px.</p>
+</section>
+<section data-for="how-memory-works">
+<ul><li><b>Writing.</b> Conversation turns go to the relayer's <code>analyze()</code>, which extracts discrete facts <b>server-side inside the TEE</b>. The raw conversation is never sent to the chat model just to be summarised, and fact extraction costs no model tokens. Turns carry an <code>occurredAt</code> anchor so "next Friday" is resolved to a real date before it is embedded.</li><li><b>Reading.</b> Recall runs across every namespace the person owns (their own, plus any merged in by linking), budgeted with <code>maxTokens</code> so a long memory never crowds the context window, and weighted slightly toward recency so a correction beats the thing it corrected.</li><li><b>Receipts.</b> A memory exists only when a confirmed <code>blob_id</code> comes back. Every confirmed write is appended to <code>blob-ledger.jsonl</code> and served at <code>/api/ledger</code>, so any blob id can be checked on Walruscan. The web chat shows them landing live.</li><li><b>Identity is exact, never semantic.</b> A surface account maps to a person via a namespace derived deterministically from its id. Identity is never resolved by vector similarity — a "close enough" match would hand one user another user's memories.</li><li><b>Recalled text is data, never instructions.</b> Memories are fenced in the prompt and the model is told they can be written by anyone. In a multi-user bot this matters: a memory one person creates can surface in another's context.</li><li><b>Supersession.</b> Walrus Memory is append-only, so mutable records (identity, opt-out) are superseded rather than edited, and the current value is selected on <code>created_at</code> — not on relevance rank, which happily returns stale records. See <code>docs/memwal-feedback.md</code>.</li></ul>
+</section>
+<section data-for="layout">
+<table><thead><tr><th>Path</th><th>What it is</th></tr></thead><tbody><tr><td><code>src/core/memory.mjs</code></td><td>Walrus Memory layer: receipts, recall budgets, newest-wins reads</td></tr><tr><td><code>src/core/identity.mjs</code></td><td>People, surface accounts, link codes, opt-out</td></tr><tr><td><code>src/core/agent.mjs</code></td><td>One chat turn: recall → fenced prompt → answer → learn</td></tr><tr><td><code>src/core/commands.mjs</code></td><td><code>/link</code> and friends, shared by every surface</td></tr><tr><td><code>src/core/session.mjs</code></td><td>The single entry point all surfaces call</td></tr><tr><td><code>src/core/llm.mjs</code></td><td>OpenRouter, open-weight models only</td></tr><tr><td><code>src/adapters/</code></td><td>Telegram (long polling) and Discord (gateway)</td></tr><tr><td><code>src/web/index.html</code></td><td>Landing page — centred, ceramic/suede ground, one button per surface</td></tr><tr><td><code>src/web/chat.html</code></td><td>The chat panel (source)</td></tr><tr><td><code>src/web/memory.html</code></td><td>The memory dashboard (source)</td></tr><tr><td><code>src/web/history.html</code></td><td>Past conversations (source)</td></tr><tr><td><code>src/web/app.html</code></td><td><b>Generated.</b> The three above fused into one document — do not edit</td></tr><tr><td><code>src/web/assets/router.js</code></td><td>Switches panels, keeps the URLs real, opens a panel's data once</td></tr><tr><td><code>src/web/assets/shell.css</code></td><td>Panel layout: one header, one panel showing</td></tr><tr><td><code>src/web/assets/app.js</code></td><td>Shared request cache, nav counts, plain-English failures</td></tr><tr><td><code>tools/build-shell.mjs</code></td><td>Builds <code>app.html</code> — scopes each panel's CSS so they cannot collide</td></tr><tr><td><code>tools/check-nav.mjs</code></td><td>Drives the shell in a real browser: no reloads, no lost state</td></tr><tr><td><code>tools/record-handoff.mjs</code></td><td>Records a real Telegram → Discord → web handoff, with the blob ids, for the landing page to replay</td></tr><tr><td><code>src/web/assets/handoff.json</code></td><td>That recording. Real turns, real link codes, real Walrus writes; only the transport was scripted</td></tr><tr><td><code>src/web/use-cases.html</code></td><td>What it does, on one screen: six glass tiles, and a stage with a dock that a tile grows into. Real screenshots, auto-advancing, nothing below the fold</td></tr><tr><td><code>src/web/assets/shots/</code></td><td>Those screenshots. Captured with puppeteer against real accounts, not drawn</td></tr><tr><td><code>tools/seed-resume.mjs</code></td><td>Gives a web user a few finished conversations, so the "pick it back up" capture has real rows</td></tr><tr><td><code>src/core/time.mjs</code></td><td>Pins relative dates to the calendar in stored text; parses them back</td></tr><tr><td><code>src/core/followups.mjs</code></td><td>Picks a plan whose day has passed to ask about, once, and remembers having asked</td></tr><tr><td><code>src/core/documents.mjs</code></td><td>Reads a text file into something worth remembering, and refuses what it cannot read</td></tr><tr><td><code>src/core/modes.mjs</code></td><td>The four modes, where the chosen one is stored, and what a message suggests</td></tr><tr><td><code>src/core/onboard.mjs</code></td><td>The introduction: turns each answer into a memory, tracks the blob it landed in, marks it done</td></tr><tr><td><code>src/web/welcome.html</code></td><td>The introduction itself: five optional steps on glass cards, receipts landing along the bottom</td></tr><tr><td><code>src/web/assets/avatar.png</code></td><td>The bots' face. Discord uploads it itself; Telegram's is set through BotFather, which has no API for it</td></tr><tr><td><code>src/web/assets/og.jpg</code></td><td>The card a shared link unfurls into</td></tr><tr><td><code>tools/check-telegram.mjs</code></td><td>The Telegram adapter driven by a Telegram that isn't there: <code>fetch</code> is stood in for, and what the bot tried to send is read back</td></tr><tr><td><code>tools/check-files.mjs</code></td><td>What the chat offers to accept is what it can actually read and keep</td></tr><tr><td><code>tools/check-bots.mjs</code></td><td>The quick actions both bots offer, checked without a bot: every button leads to a real command, fits its platform's limits, and is drawn by the real keyboard builders</td></tr><tr><td><code>tools/check-known.mjs</code></td><td>Runs turns with memory switched off for a known person and fails if it ever greets them as a stranger</td></tr><tr><td><code>tools/build-docs.mjs</code></td><td>Turns this README and the MemWal findings into <code>/docs</code>: a carousel of glass cards, one per section, each opening into a reader. Generated, so it cannot drift from the source</td></tr><tr><td><code>tools/shot.mjs</code></td><td>Screenshots the running UI, for designing against what it really looks like</td></tr><tr><td><code>docs/memwal-feedback.md</code></td><td>Bugs and improvements found while building</td></tr></tbody></table>
+</section>
+<section data-for="the-app-shell">
+<p><code>/chat</code>, <code>/memory</code> and <code>/history</code> are three panels in one document, not three pages. Switching between them shows one and hides another — the header is never replaced, no script re-runs, and a panel you have already opened keeps its scroll position, its data, and whatever you had typed. A lap around all three reads nothing from Walrus; measured, a switch takes about 30ms.</p>
+<p>The header carries two pills, Chat and Memory. Past conversations live in the rail beside the chat, listed with which app each one happened on — seeing "Telegram · 2h ago" in the web sidebar is the cross-surface story without a word of explanation. The History panel is still there behind "See all", with search across everything and the Walrus blob badges; it just no longer needs a pill.</p>
+<p>They stay three separate source files, because they collide everywhere: <code>.list</code> and <code>.sub</code> mean different things in each, and <code>--r</code> is 24px in chat and 20px in the other two. <code>npm run build</code> scopes each panel's CSS under its own id and re-points its variables, then writes <code>src/web/app.html</code>.</p>
+<p><b>Edit <code>chat.html</code>, <code>memory.html</code> or <code>history.html</code>, then run <code>npm run build</code>.</b> Never edit <code>app.html</code> — it is overwritten. Each source page is still served at its own <code>.html</code> name, so either half can be opened standalone when something breaks and you need to know which one owns the bug.</p>
+</section>
+<section data-for="the-memory-page">
+<p><code>/memory</code> is a shelf of collections rather than one long list: Photos, Still open, Plans, Your setup, Projects &amp; work, Preferences, About you, and Everything else. A memory lands on the first shelf whose keyword test matches, in that order, so "stuck on a 403" is Still open before it is anything else and an interview on Thursday is a plan before it is the tools it names. Keyword tests, not a model: they run on every render, and being wrong costs a memory sitting one shelf over.</p>
+<p>Covers are drawn in type: an ASCII figure for each shelf over a field of scattered characters seeded from the shelf's name, so every cover differs and every reload draws the same one. Photos shows a collage of real pictures instead, once there are any.</p>
+<p>Each cover opens into its collection, where every memory still carries its date, the app it was written on, whether it was ever read again, the id of the blob that holds it, and "Not right". Photos are a grid with a lightbox, built from the picture namespace (<code>listImages()</code>), with the vision model's description and what you said when you sent it. Which collection is open lives in the URL hash, so the back button steps out of it.</p>
+<h3 id="while-it-thinks">While it thinks</h3>
+<p>The three dots are gone. A turn opens with a slate in the reply bubble: <em>Reading your memory</em> with a clock, then <em>Thinking</em>, then <em>Saving to Walrus</em> (which happens after the reply, through the outbox). The server sends one stage event on the stream when recall finishes — how many things it found, how many pictures, how long that took — and the first streamed word replaces the slate. Past six seconds the label changes to "Memory is slow right now", because a slow relayer read looks exactly like a hung page without a clock on it.</p>
+<p>Above the composer sit quick controls: <b>New chat</b> (also ⌘K / Ctrl+K), <em>What do you know about me?</em>, <em>Bring back a picture</em> (prefills the composer), <em>Summarise this chat</em>, and <em>Link Telegram or Discord</em>. New chat was in the ⋯ menu before, and nobody found it.</p>
+</section>
+<section data-for="the-introduction">
+<p>A chatbot that remembers has nothing to show in its first conversation, so a new person can choose to be introduced first. <code>/welcome</code> asks five things, one to a screen, every one skippable: a name, what they want it for, how they like answers (plus their tools, if they picked coding), a picture, and their other apps. Someone arriving at the site for the first time is sent there by the landing page's own button; anyone this browser has seen before goes straight to the chat, and the introduction is one tap to leave from every screen. It is also offered from a card on the chat's empty state, and never stands in the way of just talking.</p>
+<p>Every answer is an ordinary memory (<code>src/core/onboard.mjs</code>): written verbatim to the person's own namespace through the outbox, one blob per step rather than per chip, with its blob id shown on the page as it lands. Nothing is kept in a side table, so a wrong answer is corrected on the memory page like any other. The picture goes to the picture bank. A record in <code>ws8::onboard::&lt;person&gt;</code> marks it done, so opening it again starts from the earlier answers and writes only what changed.</p>
+<p>Afterwards the chat greets them by name and offers starters that match the jobs they chose, and the first real message is answered using the name, the tools and the preferred length and tone.</p>
+</section>
+<section data-for="modes">
+<p>Four of them — Tutor, Coding partner, Planner, Support desk — and none by default. A mode changes the manner and nothing else: the same memories, the same namespace, the same person answering. One that also partitioned memory would turn a single assistant that knows you into four that each know a quarter, which is the thing this was built to avoid.</p>
+<p>It is stored in <code>ws8::mode::&lt;person&gt;</code>, superseded on change and cached per person, which makes it a memory rather than a session setting — so choosing Tutor on Telegram is choosing it on Discord and the web. That is the cross-app claim demonstrated in one tap rather than described.</p>
+<p><code>/mode</code> on either bot lists them as buttons; the web has the same thing as chips. The introduction already asks what you want it for, and four of those six answers <em>are</em> modes, so picking "a tutor" there sets it rather than asking the same question twice.</p>
+<h3 id="it-offers-once">It offers, once</h3>
+<p>A message that plainly asks to be taught, or carries a stack trace, gets a sentence at the end of the reply asking whether you want that mode — with a button next to it. Only ever to someone who has not chosen: once you have picked, being nudged elsewhere is second-guessing you, and this exists for people who do not know the feature is there. At most one offer every twenty minutes, so a decline is respected.</p>
+<p>The overlays are about manner and grant nothing. <code>tools/check-bots.mjs</code> asserts that, along with every mode having a button on both bots.</p>
+</section>
+<section data-for="attachments">
+<p>An image cannot itself be a memory: Walrus Memory stores text, and every write method on the SDK takes a string. What can be a memory is a <em>description</em> — and a good one outlives the file. "A 403 from publisher.walrus.space with an empty Authorization header" is worth carrying to Telegram; the PNG is not.</p>
+<p>So an attachment takes two paths. A small vision model reads the image and the description goes into memory like anything else said in that conversation, which means it crosses surfaces and shows up in recall. The bytes are kept and served back separately.</p>
+<p>The looking is done by a cascade, not one model: <code>qwen/qwen3.8-flash</code>, then <code>qwen/qwen3-vl-8b-instruct</code>, then <code>meta-llama/llama-4-scout</code> (override with <code>VISION_MODEL</code>, comma-separated), in three rounds. One evening the first was rate-limited upstream for an hour and every photo sent in that hour came back "could not read", which meant unfindable for good. The browser also shrinks photos over 600KB to 1600px before upload; a 2MB phone screenshot was pushing the model past its 40-second limit for no gain in what it could see.</p>
+<h3 id="text-files">Text files</h3>
+<p>A <code>.txt</code>, <code>.md</code>, <code>.csv</code> or <code>.json</code> is read rather than looked at, and the words become the memory. A short one is kept verbatim — nothing a model could write about a two-line note is more findable than the note. A longer one gets a description in the same spirit as a photo's, with the exact names, errors and numbers preserved and its opening quoted, then flows into memory by the same path an attachment always has.</p>
+<p>Send a deployment runbook and ask a week later where the volume is mounted; the answer comes from the seven facts the file turned into, each its own blob.</p>
+<p><b>PDFs are no longer offered.</b> The accept list used to include them and stored "a PDF file named report.pdf (240KB)" — a sentence matching nothing anyone would ever search for, so the file was lost the moment it arrived. Extracting text from a PDF needs a real parser, and half-accepting one is worse than saying no; they belong to the v2 plan, where a file becomes a blob in its own right. <code>tools/check-files.mjs</code> fails if the accept list ever offers something <code>documents.mjs</code> cannot read.</p>
+<p>Worth being precise about what is durable: <b>the description is on Walrus, the file is on disk.</b> On a platform with an ephemeral filesystem the file does not survive a redeploy and the memory of it does. Putting the bytes on Walrus too needs either a publisher (there are no public unauthenticated publishers on Mainnet) or <code>rememberManual()</code>, which accepts SEAL-encrypted bytes and an embedding you generate yourself — a second implementation of the memory layer rather than a flag to flip.</p>
+<h3 id="when-memory-does-not-answer">When memory does not answer</h3>
+<p>The relayer returns nothing for a matching query about four times in ten, and rate-limits on top. Three rules keep that from showing:</p>
+<ul><li><b>What it read last is still true.</b> The agent keeps each person's last non-empty recall for six hours and falls back on it when a turn's recall comes back empty or fails, marked to the model as not a fresh search.</li><li><b>Known is not the same as readable.</b> If a person's namespace has ever held anything, the model is told it knows them even when nothing could be read, and it is forbidden from calling this a first conversation or saying it has no memory of them. <code>tools/check-known.mjs</code> produces that failure on purpose and reads the replies for the sentences it must never say.</li><li><b>A write is never dropped for want of a read.</b> When the opt-out cannot be read, the write is queued with a guard and the outbox asks again before it sends. Pictures still in the queue are found by <code>findImages()</code> too, so "did you keep that photo?" a minute after sending it is answered yes, with the photo.</li></ul>
+</section>
+<section data-for="conversations">
+<p>Transcripts live in their own namespace, apart from memories, because the two want different handling: a memory is a fact worth keeping forever and gets extracted, deduped and recalled semantically, while a transcript is read whole and in order.</p>
+<p>One blob per conversation, not per turn — writing every message would double the cost of a turn against an hourly quota that is already tight. A conversation saves itself once it goes quiet, and on <code>SIGTERM</code>, so a redeploy does not eat what is in flight. The save goes through the same outbox as every other write: for a while it was a direct call, and a conversation that closed during a relayer rate limit was logged and lost.</p>
+</section>
+<section data-for="time-and-what-it-does-with-it">
+<p>Relative dates are pinned to the calendar in the text that gets stored: "interview on Thursday" is written as "interview on Thursday (1 Oct 2026)" (<code>time.mjs</code>, deterministic, no model). The model is told today's date and what the brackets mean, so it can tell what has happened from what is still to come.</p>
+<p>Once a plan's day has passed, the bot asks about it — once. Each turn looks at the dated memories already in context (plus one extra read for dated plans on a person's first message of the day) for a plan whose date fell in the last ten days, hands the model a single follow-up note, and records it as asked in <code>followups.json</code> beside the outbox (<code>followups.mjs</code>). Asking about the same interview every message would be worse than never asking.</p>
+<p>Recall is conversation-aware: a short or anaphoric message ("and the second option?", "yes, that one") is searched with the previous user turn in front of it, and extraction is given the assistant's question a short answer replies to, so "yes, part-time" becomes a fact about the person instead of nothing. Same number of reads either way.</p>
+</section>
+<section data-for="what-s-next-v2">
+<p>The direction this is heading, after the hackathon submission: an AI workspace rather than a chat window, where conversations, memories, files and things the assistant makes for you all hang off the same identity.</p>
+<ul><li><b>Files as first-class memories.</b> The <code>rememberManual()</code> path — SEAL encryption and embeddings generated client-side — so a PDF or an image is itself a blob the account owns, not just a description of one.</li><li><b>Things the assistant creates.</b> Ask for a to-do list and get a real page, saved under <em>What I Created</em>, openable and editable later. This needs the model to call tools rather than only answer, plus somewhere durable for the artefacts and a way to version them.</li><li><b>Spaces.</b> Sections a person or the assistant can create to group related conversations, files and artefacts.</li></ul>
+<p>The hard part is not the UI. It is that an artefact is mutable and Walrus is append-only, so editing a page means superseding it — the same problem identity records already have, at a larger size and with a version history people expect to be able to walk back through.</p>
+</section>
+<section data-for="running-it">
+<pre><code>npm install
+cp .env.example .env    # add OPENROUTER_API_KEY, bot tokens
+npm start</code></pre>
+<p>Walrus credentials come from <code>~/.memwal/credentials.json</code> in local development, or from <code>MEMWAL_PRIVATE_KEY</code> / <code>MEMWAL_ACCOUNT_ID</code> in a deployment.</p>
+<p>Surfaces are optional: with no bot tokens set, only the web chat runs.</p>
+</section>
+<section data-for="memwal-findings">
+<p>What building on Walrus Memory turned up, with reproductions. Filed as the bug-bounty part of the submission.</p>
+<h2 id="memwal-feedback-from-building-this-bot">MemWal feedback from building this bot</h2>
+<p>Found while building a multi-surface chatbot on <code>@mysten-incubation/memwal@0.1.7</code> against the mainnet relayer (<code>relayer.memory.walrus.xyz</code>, apiVersion 1.0.0, relayerVersion 0.1.0).</p>
+<hr>
+<h3 id="bug-1-recall-intermittently-returns-an-empty-result-set">Bug 1 — recall intermittently returns an empty result set</h3>
+<p><b>Severity: high.</b> This is the one that matters. For a memory product it is close to existential, and it hides itself completely.</p>
+<p>The same <code>recall()</code> call, against the same namespace, with the same query, sometimes returns <code>total: 0, results: []</code> — and sometimes returns the matches. Nothing distinguishes the two responses. There is no error, no flag, no <code>dropped_count</code>.</p>
+<h4 id="reproduction">Reproduction</h4>
+<p>Namespace <code>ws8::person::199d6d8a-…</code> holds 13 memories. Fourteen identical calls, 800 ms apart:</p>
+<pre><code>for (let i = 0; i &lt; 14; i++) {
+  const r = await memwal.recall({ query: "publisher 403", namespace: NS, limit: 5 });
+  process.stdout.write(r.results.length + " ");
+}
+// 5 5 5 5 0 0 5 5 0 0 0 0 5 5      → empty on 6 of 14</code></pre>
+<p>Runs are not independent — the zeros arrive in clusters, which suggests a window of bad state (a replica, a cache, an index lease) rather than a per-query dice roll.</p>
+<h4 id="why-it-matters">Why it matters</h4>
+<p>An empty recall is indistinguishable from a namespace that genuinely has nothing in it. That is the <em>expected</em> response for a first-time user, so no caller can detect the failure: a memory-backed chatbot simply greets a returning user as a stranger, at random, roughly 40% of the time. Nothing logs an error. The bug is invisible from the outside and destroys the product's only promise.</p>
+<p>This compounds with the absence of a no-match signal (previously raised as MemWal #741): callers cannot tell "nothing stored" from "lookup failed", so there is no way to build a correct client on top of the current contract.</p>
+<h4 id="what-it-actually-cost-us">What it actually cost us</h4>
+<p>Not a degraded answer — a user's entire history.</p>
+<p>Identity here is a record in a key-like namespace (<code>ws8::id::web::&lt;account&gt;</code>). On a cold start the bot reads it to learn who you are. One of those reads came back empty five times running, so the bot concluded it had never met this account and minted a <b>second</b> person for it. Because append-only storage means "current value" is the newest record, every later read returned the new, empty person, and the four memories under the original were orphaned permanently:</p>
+<pre><code>ws8::id::web::web-proof-2 →
+  d083f353-…   (minted by the false empty — no memories)
+  fcc93702-…   (the real one — 4 memories, now unreachable)</code></pre>
+<p>Nothing errored. The user would simply have been greeted as a stranger forever.</p>
+<p>We now defend against this in two ways: identity reads retry far harder than ordinary recalls (an empty answer there is indistinguishable from "new user", and acting on a false one is unrecoverable), and duplicate identity records are <em>healed</em> rather than resolved newest-wins — every person id ever recorded for an account is folded into the namespace union, so a split account knits itself back together. Both are workarounds for the flake, not fixes.</p>
+<h4 id="suggested-fix">Suggested fix</h4>
+<p>Fix the flake, but also make it detectable: distinguish "no matches" from "search did not run" in the response. Even a boolean would let callers retry honestly instead of silently serving amnesia.</p>
+<h4 id="workaround-in-this-codebase">Workaround in this codebase</h4>
+<p><code>recall()</code> in <code><code>src/core/memory.mjs</code></code> retries on empty — four attempts with exponential backoff (200/400/800/1600 ms). That took the observed empty rate from 6/14 to <b>0/16</b>. Retrying on empty is only acceptable because a genuinely empty namespace is cheap to re-query; it should not be the application's job.</p>
+<hr>
+<h3 id="bug-2-rememberandwait-reports-failure-on-writes-that-succeed">Bug 2 — <code>rememberAndWait</code> reports failure on writes that succeed</h3>
+<p><b>Severity: medium-high.</b> Causes duplicate memories and double spend.</p>
+<p><code>rememberAndWait(text, namespace)</code> polls with a 60 000 ms default and throws <code>504 remember job timed out</code>. On mainnet, jobs routinely exceed 60 s <b>and then complete normally</b>.</p>
+<pre><code>await memwal.rememberAndWait("the project codename is Halibut.", "ws8::test::smoke");
+// throws: Error: remember job timed out after 60000ms (job_id=7b213135-…)
+
+await memwal.getRememberStatus("7b213135-f4ff-4dd4-862e-4fa084607ce3");
+// { status: "done", blob_id: "1orLRyP-9HQB95NSyxHmC92QdZnpUW6rbI1MGgRTDic", … }</code></pre>
+<p>Observed round trips ranged from ~34 s to well over 90 s for a single small fact.</p>
+<p>A caller that reads the throw as failure and retries writes the same fact twice. Both are real blobs, both are paid for, and both return on every later recall — we saw a retried fact come back as two hits at distance 0.450 and 0.458, with nothing marking one as a duplicate.</p>
+<p><b>Suggested fix:</b> raise the default past the observed p99; or throw a distinct <code>pending</code> error so "not yet" is not shaped like "failed"; or apply <code>idempotencyKey</code> automatically inside <code>rememberAndWait</code>.</p>
+<p><b>Workaround:</b> <code>rememberFact()</code> waits 180 s and, on timeout, returns <code>{ pending: true, jobId }</code> for later settlement via <code>getRememberStatus</code> — it never re-sends the text.</p>
+<hr>
+<h3 id="bug-3-a-reused-idempotency-key-is-a-permanent-lockout">Bug 3 — a reused idempotency key is a permanent lockout</h3>
+<p><b>Severity: medium.</b> Correct server behaviour, but the failure is terminal and undocumented.</p>
+<p>Writing with an <code>idempotencyKey</code> that was already used with <em>different</em> content returns:</p>
+<pre><code>409 {"error":"idempotency_key was already used for a request with different content"}</code></pre>
+<p>That is reasonable in isolation. What makes it a trap is that it never expires. A caller using a natural stable key (<code>user:&lt;id&gt;</code>) whose payload contains anything volatile — a <code>createdAt</code>, a display name, a counter — poisons that key permanently on the first retry. Every subsequent write under it fails forever. We locked out a live Telegram account this way and the only symptom was silence.</p>
+<p><b>Suggested fix:</b> document the constraint prominently, and consider scoping the key's uniqueness to a TTL so a stale key eventually frees.</p>
+<p><b>Workaround:</b> bind the key to a hash of its own content (<code>${key}:${sha256(text).slice(0,12)}</code>), which makes key and payload consistent by construction — identical writes dedupe, changed writes get a fresh key.</p>
+<hr>
+<h3 id="reliability-transient-5xx-on-analyze">Reliability — transient 5xx on <code>analyze</code></h3>
+<p>Intermittent <code>500 Internal server error</code> from <code>analyzeAndWait</code> under normal load (e.g. traceId <code>ec68f0fd-4443-4bda-a147-3f938f61eabb</code>), alongside occasional <code>Upstream Unavailable: Memory encryption backend is unavailable</code> and bare <code>fetch failed</code>. All cleared on retry within seconds; <code>health()</code> reported <code>status: ok, write_ready: true</code> throughout, including while writes were failing.</p>
+<p>Two asks: have <code>health()</code> reflect degraded write capability, and note in the docs that <code>analyze</code>/<code>remember</code> need client-side retry. A write path that silently drops a memory on a hiccup is a bad default for a memory product — the reply has already been sent to the user, so nothing surfaces the loss.</p>
+<hr>
+<h3 id="bug-4-bulk-writes-report-failure-as-a-value-nobody-checks">Bug 4 — bulk writes report failure as a value nobody checks</h3>
+<p><b>Severity:</b> medium. Silent data loss, same family as the two above.</p>
+<p><code>rememberBulkAndWait()</code> <b>resolves</b> when individual items fail — the failures are entries inside <code>results</code>, not an exception. Any caller with retry logic wrapped around the call never sees them, and a caller that counts successes loses the rest without a word.</p>
+<p>Seeding a knowledge base, 190 statements went in and 113 landed. Nothing threw. The 77 that vanished only became visible after we started inspecting every result entry, and the cause was transient and eminently retryable:</p>
+<pre><code>failed: Upstream Unavailable: Memory encryption backend is unavailable
+timeout: polling timed out after 300000ms</code></pre>
+<p>Both cleared on a retry seconds later.</p>
+<p><b>Suggested fix:</b> either reject when every item in a batch fails, or document prominently that per-item status must be inspected. The current shape means the happy path and the 40%-data-loss path look identical to a caller.</p>
+<p><b>Workaround:</b> <code>rememberMany()</code> in <code><code>src/core/memory.mjs</code></code> inspects every entry and retries the failures itself with backoff, because the outer retry wrapper cannot see a failure that arrives as a value.</p>
+<hr>
+<h3 id="operational-the-rate-limits-are-easy-to-hit-and-undocumented-in-the-sdk">Operational — the rate limits are easy to hit and undocumented in the SDK</h3>
+<p>There are at least two layers, and only one of them is obvious:</p>
+<table><thead><tr><th>layer</th><th>limit</th><th><code>retry_after_seconds</code></th></tr></thead><tbody><tr><td><code>account_sustained</code></td><td>1000 weighted-requests/hour</td><td>300</td></tr><tr><td><code>delegate_key</code></td><td>60 weighted-requests/min</td><td>60</td></tr></tbody></table>
+<p>The per-minute one caught us out late. An hourly ceiling you can pace against; a 60/min burst limit is something a normal chat turn can trip on its own, because one turn spends several requests. Running an end-to-end test suite of twenty-odd HTTP calls hit it immediately, and the error surfaces at the SDK boundary as a generic 500 wrapping the real message:</p>
+<pre><code>remember job failed: Internal Error: seal encrypt failed:
+seal/encrypt failed during read_account_identity: RpcError: Too Many Requests</code></pre>
+<p>That is a 429 reported as a 500, with the actual cause buried three layers down. Nothing in it is machine-readable, so a caller cannot back off correctly — <code>err.status</code> says 500, and honouring <code>retry_after_seconds</code> is impossible because the field is not there.</p>
+<p>Seeding a few hundred knowledge-base facts and capturing a dozen conversations reached it inside an hour, and the symptoms before the 429 finally surfaced were indirect: writes that never landed, recalls that returned empty, jobs that timed out. All of which look like the flakiness described above, so the limit is easy to mistake for instability.</p>
+<p>Three asks: surface the weighting (what counts as a weighted request, and what a recall or a bulk write costs); document both layers next to the methods that consume them; and propagate the 429 with its <code>retry_after_seconds</code> intact rather than re-wrapping it as a 500. A caller with no visibility into its own budget cannot pace itself, and one that cannot tell a rate limit from a server error will retry into the wall.</p>
+<p>Worth noting for anyone building on this: a chatbot spends several weighted requests per turn — identity read, personal recall, knowledge recall, then the writes — so 1000/hour is a real ceiling, not a theoretical one.</p>
+<hr>
+<h3 id="minor-client-sends-malformed-bodies-instead-of-validating">Minor — client sends malformed bodies instead of validating</h3>
+<p><code>rememberAndWait</code> is positional (<code>text, namespace</code>). Passing the object form that <code>recall()</code> accepts (<code>{ text, namespace }</code>) is not caught client-side; it is serialised into the request and the server answers:</p>
+<pre><code>422 Failed to deserialize the JSON body into the target type:
+text: invalid type: map, expected a string at line 1 column 8</code></pre>
+<p>TypeScript users are protected; JavaScript users get a deserialiser error that never mentions the argument shape. A <code>typeof text !== "string"</code> guard would fix it. <code>recall()</code> accepting both object and positional forms while <code>remember*</code> does not is what makes this easy to hit.</p>
+<hr>
+<h3 id="credit-where-due">Credit where due</h3>
+<p>Two things in 0.1.7 solved real problems for us and deserve saying:</p>
+<ul><li><b><code>analyze()</code></b> doing extraction server-side in the TEE is the right shape. One support message became four clean facts with no model tokens of our own spent and no raw conversation shipped to a third-party provider.</li><li><b><code>sort: "recent"</code></b> is exactly the primitive append-only storage needs, and the doc comment explaining <em>why</em> <code>scoringWeights</code> cannot substitute for it — weights re-rank the returned window, they do not widen it — saved us from shipping a subtly broken newest-wins read. More comments like that one, please.</li></ul>
+</section>
+</div>
+
+<div class="veil" id="veil"></div>
+<article class="reader" id="reader" role="dialog" aria-modal="true" aria-labelledby="r-title">
+  <header class="r-head">
+    <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true" id="r-ico"></svg></span>
+    <div><span class="num" id="r-num"></span><h2 id="r-title"></h2></div>
+    <div class="r-ctl">
+      <button class="r-btn" id="r-prev" aria-label="Previous section"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="r-btn" id="r-next" aria-label="Next section"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="r-btn" id="r-close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 2.5l9 9M11.5 2.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+  </header>
+  <div class="r-body" id="r-body"></div>
+</article>
+
+<footer class="foot">
+  <span class="tiny">Answered by an open-weight model · never Claude or GPT</span>
+  <span class="tiny"><a href="https://walrus.xyz" target="_blank" rel="noopener">Walrus mainnet</a></span>
+</footer>
+
+<script>
+(function () {
+  var track = document.getElementById("track");
+  var cards = [].slice.call(track.querySelectorAll(".card"));
+  var dots = [].slice.call(document.querySelectorAll(".dot"));
+  var still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var current = 0;
+  var open = -1;   // which section the reader is showing, or -1
+
+  /* ── the carousel ──
+     Each card leans away from the centre in proportion to how far it is from
+     it, so the one in the middle faces you and the rest fall back. Measured
+     on every scroll frame; nothing else moves them. */
+  var ticking = false;
+  function shape() {
+    ticking = false;
+    var mid = track.scrollLeft + track.clientWidth / 2;
+    var best = 0, bestD = Infinity;
+    cards.forEach(function (c, i) {
+      var centre = c.offsetLeft + c.offsetWidth / 2;
+      var d = (centre - mid) / c.offsetWidth;          // in card-widths
+      var a = Math.min(Math.abs(d), 2.2);
+      if (!still) {
+        c.style.setProperty("--ry", (-Math.max(-1.6, Math.min(1.6, d)) * 15).toFixed(2) + "deg");
+        c.style.setProperty("--s", (1 - a * 0.085).toFixed(3));
+        c.style.setProperty("--o", (1 - Math.min(a, 2) * 0.24).toFixed(3));
+      }
+      if (Math.abs(d) < bestD) { bestD = Math.abs(d); best = i; }
+    });
+    if (best !== current) { current = best; mark(); }
+  }
+  function mark() {
+    if (typeof sync === "function") setTimeout(sync, 0);
+    document.getElementById("at").textContent = String(current + 1).padStart(2, "0");
+    dots.forEach(function (d, i) { d.classList.toggle("on", i === current); });
+    document.getElementById("prev").disabled = current === 0;
+    document.getElementById("next").disabled = current === cards.length - 1;
+  }
+  function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(shape); } }
+  function goTo(i, instant) {
+    i = Math.max(0, Math.min(cards.length - 1, i));
+    var c = cards[i];
+    track.scrollTo({ left: c.offsetLeft + c.offsetWidth / 2 - track.clientWidth / 2, behavior: instant || still ? "auto" : "smooth" });
+  }
+  track.addEventListener("scroll", onScroll, { passive: true });
+  addEventListener("resize", onScroll);
+  document.getElementById("prev").addEventListener("click", function () { goTo(current - 1); });
+  document.getElementById("next").addEventListener("click", function () { goTo(current + 1); });
+  dots.forEach(function (d) { d.addEventListener("click", function () { goTo(Number(d.dataset.i)); }); });
+
+  /* ── it turns on its own ──
+     Every few seconds the next card comes round, and after the last one the
+     first. It rests while you are doing something with it — pointing at it,
+     tabbing through it, dragging it, reading a section — and picks up again
+     when you stop. Anyone who has asked their system for less motion gets a
+     carousel that stays where they put it. */
+  var AUTO = 4600, clock = null, wanted = !still, holds = 0;
+  var root = document.documentElement;
+  root.style.setProperty("--auto", AUTO + "ms");
+  function resting() { return !wanted || holds > 0 || open >= 0 || document.hidden; }
+  function sync() {
+    root.classList.toggle("resting", resting());
+    clearTimeout(clock); clock = null;
+    if (resting()) return;
+    // restart the dot's fill so the clock on screen matches the one here
+    var on = document.querySelector(".dot.on");
+    if (on) { on.classList.remove("on"); void on.offsetWidth; on.classList.add("on"); }
+    clock = setTimeout(function () { goTo(current === cards.length - 1 ? 0 : current + 1); }, AUTO);
+  }
+  function hold() { holds++; sync(); }
+  function release() { holds = Math.max(0, holds - 1); sync(); }
+  var stageEl = document.querySelector(".stage");
+  stageEl.addEventListener("pointerenter", function (e) { if (e.pointerType === "mouse") hold(); });
+  stageEl.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") release(); });
+  stageEl.addEventListener("focusin", hold);
+  stageEl.addEventListener("focusout", release);
+  document.addEventListener("visibilitychange", sync);
+  document.getElementById("auto").addEventListener("click", function () {
+    wanted = !wanted;
+    this.setAttribute("aria-pressed", String(wanted));
+    this.setAttribute("aria-label", wanted ? "Pause the carousel" : "Play the carousel");
+    sync();
+  });
+
+  // A mouse wheel moves the carousel sideways; a trackpad already does.
+  track.addEventListener("wheel", function (e) {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { track.scrollLeft += e.deltaY; e.preventDefault(); }
+  }, { passive: false });
+
+  // Drag to move. A drag that travelled is not a click on whatever it ended on.
+  var drag = null, moved = false;
+  track.addEventListener("pointerdown", function (e) {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    drag = { x: e.clientX, left: track.scrollLeft }; moved = false;
+  });
+  addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.x;
+    if (!moved && Math.abs(dx) > 6) { moved = true; track.classList.add("dragging"); }
+    if (moved) track.scrollLeft = drag.left - dx;
+  });
+  addEventListener("pointerup", function () {
+    if (!drag) return;
+    drag = null;
+    if (moved) { track.classList.remove("dragging"); goTo(current); setTimeout(function () { moved = false; }, 0); }
+  });
+
+  /* ── the reader ──
+     The card's own rectangle is where the reader starts, so it reads as that
+     card coming forward rather than a box appearing over the page. The section
+     is MOVED in from the store and moved back, never copied: its heading ids
+     stay unique, so a link to a sub-heading keeps working. */
+  var reader = document.getElementById("reader"), veil = document.getElementById("veil"), body = document.getElementById("r-body");
+  var store = document.getElementById("store");
+  var lastFocus = null;
+
+  function sectionOf(id) { return store.querySelector('section[data-for="' + id + '"]'); }
+  function putBack() {
+    if (open < 0) return;
+    var home = sectionOf(cards[open].dataset.id);
+    while (body.firstChild) home.appendChild(body.firstChild);
+  }
+  function fill(i) {
+    var c = cards[i];
+    putBack();
+    var src = sectionOf(c.dataset.id);
+    while (src.firstChild) body.appendChild(src.firstChild);
+    document.getElementById("r-num").textContent = c.querySelector(".num").textContent;
+    document.getElementById("r-title").textContent = c.querySelector("h2").textContent;
+    document.getElementById("r-ico").innerHTML = c.querySelector(".ico svg").innerHTML;
+    reader.style.setProperty("--tint", c.style.getPropertyValue("--tint"));
+    document.getElementById("r-prev").disabled = i === 0;
+    document.getElementById("r-next").disabled = i === cards.length - 1;
+    body.scrollTop = 0;
+    open = i;
+  }
+  function fromRect(el) {
+    var r = el.getBoundingClientRect(), f = reader.getBoundingClientRect();
+    return "translate(-50%,-50%) translate(" + (r.left + r.width / 2 - (f.left + f.width / 2)) + "px," +
+      (r.top + r.height / 2 - (f.top + f.height / 2)) + "px) scale(" + (r.width / f.width) + "," + (r.height / f.height) + ")";
+  }
+  function show(i, opts) {
+    opts = opts || {};
+    var already = open >= 0;
+    lastFocus = lastFocus || document.activeElement;
+    fill(i);
+    reader.classList.add("on"); veil.classList.add("on"); sync();
+    document.documentElement.style.overflow = "hidden";
+    if (!opts.quiet) history.replaceState(null, "", "#" + cards[i].dataset.id);
+    if (already || still) {                       // stepping between sections: just restage the text
+      reader.classList.remove("shown"); void reader.offsetWidth; reader.classList.add("shown");
+    } else {
+      reader.classList.remove("shown");
+      reader.style.transition = "none";
+      reader.style.transform = "translate(-50%,-50%)";
+      var start = fromRect(cards[i]);
+      reader.style.transform = start; reader.style.opacity = "0.4";
+      void reader.offsetWidth;
+      reader.style.transition = "transform .5s cubic-bezier(.22,1,.36,1), opacity .3s ease";
+      reader.style.transform = "translate(-50%,-50%)"; reader.style.opacity = "1";
+      setTimeout(function () { reader.classList.add("shown"); }, 160);
+    }
+    goTo(i, true);
+    if (opts.anchor) setTimeout(function () { var t = document.getElementById(opts.anchor); if (t) t.scrollIntoView({ block: "start" }); }, 380);
+    document.getElementById("r-close").focus({ preventScroll: true });
+  }
+  function hide() {
+    if (open < 0) return;
+    var i = open;
+    reader.classList.remove("shown");
+    veil.classList.remove("on");
+    document.documentElement.style.overflow = "";
+    history.replaceState(null, "", location.pathname);
+    var done = function () {
+      reader.classList.remove("on");
+      reader.style.transition = ""; reader.style.transform = ""; reader.style.opacity = "";
+      putBack(); open = -1; sync();
+      if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
+      lastFocus = null;
+    };
+    if (still) return done();
+    reader.style.transition = "transform .38s cubic-bezier(.4,0,.2,1), opacity .3s ease .08s";
+    reader.style.transform = "translate(-50%,-50%)"; void reader.offsetWidth;
+    reader.style.transform = fromRect(cards[i]); reader.style.opacity = "0";
+    setTimeout(done, 390);
+  }
+
+  cards.forEach(function (c, i) {
+    c.addEventListener("click", function () {
+      if (moved) return;
+      if (i !== current) { goTo(i); setTimeout(function () { show(i); }, still ? 0 : 320); return; }
+      show(i);
+    });
+  });
+  document.getElementById("r-close").addEventListener("click", hide);
+  veil.addEventListener("click", hide);
+  document.getElementById("r-prev").addEventListener("click", function () { if (open > 0) show(open - 1); });
+  document.getElementById("r-next").addEventListener("click", function () { if (open < cards.length - 1) show(open + 1); });
+
+  addEventListener("keydown", function (e) {
+    if (open >= 0) {
+      if (e.key === "Escape") hide();
+      else if (e.key === "ArrowLeft" && open > 0) show(open - 1);
+      else if (e.key === "ArrowRight" && open < cards.length - 1) show(open + 1);
+      return;
+    }
+    if (e.key === "ArrowLeft") { goTo(current - 1); e.preventDefault(); }
+    else if (e.key === "ArrowRight") { goTo(current + 1); e.preventDefault(); }
+    else if (e.key === "Enter" && document.activeElement === document.body) show(current);
+  });
+
+  // Links to a heading, from inside a section or from another page: find the
+  // section that holds it and open that one at the heading.
+  function openHash(hash, quiet) {
+    var id = decodeURIComponent(String(hash || "").replace("#", ""));
+    if (!id) return false;
+    var i = cards.findIndex(function (c) { return c.dataset.id === id; });
+    if (i >= 0) { show(i, { quiet: quiet }); return true; }
+    var el = document.getElementById(id);
+    var sec = el && el.closest("section[data-for]");
+    if (!sec && el && body.contains(el)) { el.scrollIntoView({ block: "start" }); return true; }
+    if (!sec) return false;
+    i = cards.findIndex(function (c) { return c.dataset.id === sec.dataset.for; });
+    if (i < 0) return false;
+    show(i, { quiet: quiet, anchor: id });
+    return true;
+  }
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest('a[href^="#"]');
+    if (a && openHash(a.getAttribute("href"))) e.preventDefault();
+  });
+  addEventListener("hashchange", function () { openHash(location.hash, true); });
+
+  goTo(0, true); shape(); mark(); sync();
+  if (location.hash) openHash(location.hash, true);
+})();
+</script>
+</body>
+</html>

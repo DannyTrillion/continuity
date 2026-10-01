@@ -1,0 +1,221 @@
+{
+  "recordedAt": "2026-09-27T09:48:59.691Z",
+  "personId": "4de1e27c-4a96-454d-8197-df382f682c2f",
+  "how": "Recorded through the server's own respond() \u2014 the code path the Telegram and Discord adapters call \u2014 with real link codes and real Walrus writes. Only the transport is scripted.",
+  "events": [
+    {
+      "at": 0,
+      "type": "user",
+      "surface": "telegram",
+      "text": "Hi \u2014 I'm Danny. I use pnpm, never npm, and I'm on Node 22 on a Mac."
+    },
+    {
+      "at": 17702,
+      "type": "bot",
+      "surface": "telegram",
+      "text": "Hey Danny. Good setup \u2014 pnpm and Node 22 is the right side of the tracks.\n\nWhat's up?",
+      "ms": 17701,
+      "recalled": 0
+    },
+    {
+      "at": 34087,
+      "type": "write",
+      "kind": "remember",
+      "surface": null,
+      "blobId": "nqzVnaLwZW34tphAso2EOv6hgYa9vytsfnFRNOGFOKM",
+      "namespace": "ws8::profile::4de1e27c-4a96-454d-8197-df382f682c2f",
+      "label": "profile 4de1e27c-4a96-454d-8197-df382f682c2f"
+    },
+    {
+      "at": 37767,
+      "type": "write",
+      "kind": "remember",
+      "surface": null,
+      "blobId": "WXmocsVAHWzNo20QyUDcsUxwXZTcXoIWMOws6eyAWqw",
+      "namespace": "ws8::id::telegram::handoff-tg-1790502539691",
+      "label": "new person telegram"
+    },
+    {
+      "at": 74143,
+      "type": "write",
+      "kind": "analyze",
+      "surface": "telegram",
+      "blobId": "ucrfXm-nk2x2-NerWu84-NZ1AJScU-ZKpKQrDZxtJgI",
+      "namespace": "ws8::person::4de1e27c-4a96-454d-8197-df382f682c2f",
+      "label": null,
+      "facts": [
+        "User's name is Danny"
+      ]
+    },
+    {
+      "at": 74143,
+      "type": "write",
+      "kind": "analyze",
+      "surface": "telegram",
+      "blobId": "Z1cIvEkRupcxa7e1qMWDZOFxADuV338tlYwF2dvh0Do",
+      "namespace": "ws8::person::4de1e27c-4a96-454d-8197-df382f682c2f",
+      "label": null,
+      "facts": [
+        "User uses pnpm, never npm"
+      ]
+    },
+    {
+      "at": 74143,
+      "type": "write",
+      "kind": "analyze",
+      "surface": "telegram",
+      "blobId": "iy5l7GD4tWjvMpZdcFupgFIkZXWmXTnW_qpYAPuTdFw",
+      "namespace": "ws8::person::4de1e27c-4a96-454d-8197-df382f682c2f",
+      "label": null,
+      "facts": [
+        "User is on Node 22"
+      ]
+    },
+    {
+      "at": 74143,
+      "type": "write",
+      "kind": "analyze",
+      "surface": "telegram",
+      "blobId": "42HUEfY4bHk-oYpDKZZvEJYfYtuNkSeZfEns2a9SQPc",
+      "namespace": "ws8::person::4de1e27c-4a96-454d-8197-df382f682c2f",
+      "label": null,
+      "facts": [
+        "User is using a Mac"
+      ]
+    },
+    {
+      "at": 74761,
+      "type": "code",
+      "surface": "telegram",
+      "code": "UTK9UJ"
+    },
+    {
+      "at": 76947,
+      "type": "linked",
+      "surface": "discord",
+      "text": "linked to telegram"
+    },
+    {
+      "at": 76948,
+      "type": "user",
+      "surface": "discord",
+      "text": "quick one \u2014 which package manager do I use?"
+    },
+    {
+      "at": 85095,
+      "type": "bot",
+      "surface": "discord",
+      "text": "pnpm. You said never npm, and I remember that.",
+      "ms": 8147,
+      "recalled": 4
+    },
+    {
+      "at": 105937,
+      "type": "write",
+      "kind": "remember",
+      "surface": null,
+      "blobId": "nD1ratMPrEwekEIp9UHHAU-vxqjMjjHSZBBu6IPv31Q",
+      "namespace": "ws8::profile::4de1e27c-4a96-454d-8197-df382f682c2f",
+      "label": "profile 4de1e27c-4a96-454d-8197-df382f682c2f"
+    },
+    {
+      "at": 110504,
+      "type": "write",
+      "kind": "remember",
+      "surface": null,
+      "blobId": "hnpHDSf0Ts4YDBGkafv--axYa70HFrPwe1ogcvThOco",
+      "namespace": "ws8::id::discord::handoff-dc-1790502539691",
+      "label": "new person discord"
+    },
+    {
+      "at": 138560,
+      "type": "write",
+      "kind": "remember",
+      "surface": null,
+      "blobId": "3pe2vSF4SW5p6aj0UDzWGEv6PTUMYDsr0ifi-29z3OI",
+      "namespace": "ws8::id::discord::handoff-dc-1790502539691",
+      "label": "link discord"
+    },
+    {
+      "at": 142687,
+      "type": "write",
+      "kind": "remember",
+      "surface": null,
+      "blobId": "Ssh_T8S3KTd_q61hESZwSxTcrLQB3uce2QrdLKUfExg",
+      "namespace": "ws8::profile::6e1a135c-71cd-4c60-9a09-f5e09b7daf64",
+      "label": "profile 6e1a135c-71cd-4c60-9a09-f5e09b7daf64"
+    },
+    {
+      "at": 325252,
+      "type": "note",
+      "text": "no memory settled from discord in 240s"
+    },
+    {
+      "at": 325253,
+      "type": "code",
+      "surface": "discord",
+      "code": "EGN8GV"
+    },
+    {
+      "at": 329652,
+      "type": "linked",
+      "surface": "web",
+      "text": "linked to discord"
+    },
+    {
+      "at": 329652,
+      "type": "user",
+      "surface": "web",
+      "text": "and what Node version am I on again?"
+    },
+    {
+      "at": 340522,
+      "type": "bot",
+      "surface": "web",
+      "text": "Node 22.",
+      "ms": 10870,
+      "recalled": 4
+    },
+    {
+      "at": 363024,
+      "type": "write",
+      "kind": "remember",
+      "surface": null,
+      "blobId": "n5GwPyjbkfeikJ_MHL0P5plygu5RIggVcfwWZCgz5tY",
+      "namespace": "ws8::id::web::handoff-web-1790502539691",
+      "label": "new person web"
+    },
+    {
+      "at": 363562,
+      "type": "write",
+      "kind": "remember",
+      "surface": null,
+      "blobId": "sd9TflI3zk9MKTn6Xrsr4tm2EB2U41KL6eYcfS2ldIE",
+      "namespace": "ws8::profile::4de1e27c-4a96-454d-8197-df382f682c2f",
+      "label": "profile 4de1e27c-4a96-454d-8197-df382f682c2f"
+    },
+    {
+      "at": 394282,
+      "type": "write",
+      "kind": "remember",
+      "surface": null,
+      "blobId": "5UpxVrDMm-Cbe_HjrFwqeLxJjrfjonWdrlLbEbZdH7g",
+      "namespace": "ws8::profile::166ae6fe-cc32-4ecb-9d03-465c10c7a524",
+      "label": "profile 166ae6fe-cc32-4ecb-9d03-465c10c7a524"
+    },
+    {
+      "at": 396810,
+      "type": "write",
+      "kind": "remember",
+      "surface": null,
+      "blobId": "fE8ITx96fMMVMooPYT7Y72DUo2dONLohZj07ChTxp38",
+      "namespace": "ws8::id::web::handoff-web-1790502539691",
+      "label": "link web"
+    },
+    {
+      "at": 580675,
+      "type": "note",
+      "text": "no memory settled from web in 240s"
+    }
+  ]
+}

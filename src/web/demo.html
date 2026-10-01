@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-page="demo">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -44,7 +44,7 @@
   .tiny{font:400 10.5px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
   .cta{padding:10px 19px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
     font:600 13px var(--sans);cursor:pointer;transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
-  .cta:hover{transform:translateY(-1px);box-shadow:0 14px 30px -14px rgba(255,255,255,.5)}
+  .cta:hover{transform:scale(1.03)}
 
   h1{margin:0 0 14px;font:200 clamp(30px,4.6vw,50px)/1.08 var(--display);letter-spacing:-.03em;max-width:18ch}
   h1 em{font-style:normal;font-weight:400;
@@ -137,7 +137,7 @@
   #input:focus{border-color:rgba(90,169,255,.45);background:rgba(0,0,0,.46)}
   #send{width:44px;height:44px;border-radius:50%;border:0;background:#fff;color:#0A0D12;
     cursor:pointer;flex:none;display:grid;place-items:center;transition:.2s var(--ease)}
-  #send:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 12px 26px -12px rgba(255,255,255,.6)}
+  #send:hover:not(:disabled){transform:scale(1.03)}
   #send:disabled{opacity:.3;cursor:default}
 
   /* ── side ── */
@@ -193,7 +193,7 @@
   .skip:hover{color:var(--soft)}
   .next{padding:8px 16px;border-radius:999px;border:0;background:#fff;color:#0A0D12;
     font:600 12.5px var(--sans);cursor:pointer}
-  .next:hover{box-shadow:0 10px 22px -10px rgba(255,255,255,.6)}
+  .next:hover{transform:scale(1.03)}
 
   /* What the guide is pointing at. */
   .spot{position:relative;z-index:60;outline:1px solid rgba(90,169,255,.55);
@@ -226,6 +226,8 @@
     .stage.on .node::after{animation:none}
   }
 </style>
+  <link rel="stylesheet" href="/assets/motion.css">
+  <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
 </head>
 <body>
 <div class="ground"></div><div class="bloom"></div><div class="grain"></div>
@@ -358,6 +360,11 @@
   </div>
 </div>
 
+<a class="docs-fab" href="/docs" aria-label="Docs" title="Docs">
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M4 3.5h5.2c1 0 1.8.8 1.8 1.8V16.5c0-.9-.8-1.6-1.8-1.6H4V3.5zM16 3.5h-5.2c-1 0-1.8.8-1.8 1.8V16.5c0-.9.8-1.6 1.8-1.6H16V3.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+  </svg>
+</a>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
