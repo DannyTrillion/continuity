@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en" data-page="welcome">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Welcome — Continuity</title>
+<meta name="description" content="A one-minute introduction, asked once: tell Continuity your name, what you want it for and how you like answers, and your first message is answered by someone who already knows you.">
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#05070A; --ink:#F2F6FA; --soft:#C3CEDB; --dim:#8695A6; --faint:#5A6674;
+    --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.19);
+    --glass:rgba(255,255,255,.05); --glass-2:rgba(255,255,255,.085);
+    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.12); --wal:#7FE3D4; --hot:#FF8E7F;
+    --r:26px; --r-md:16px;
+    --ease:cubic-bezier(.22,1,.36,1);
+    --display:'Outfit',system-ui,sans-serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--void);color:var(--ink);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+  .ground,.bloom,.grain{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .ground{background-image:url("/assets/texture.jpg");background-size:cover;background-position:center;opacity:.9}
+  .bloom{background:
+    radial-gradient(1000px 560px at 80% -14%, rgba(90,169,255,.15), transparent 62%),
+    radial-gradient(700px 480px at 6% 102%, rgba(127,227,212,.08), transparent 60%)}
+  .grain{opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>")}
+  a{color:inherit;text-decoration:none}
+  button,input{font:inherit;color:inherit}
+  img{display:block;max-width:100%}
+
+  .wrap{position:relative;z-index:1;min-height:100dvh;max-width:1100px;margin:0 auto;padding:16px 24px 20px;
+    display:flex;flex-direction:column;gap:16px}
+
+  .top{flex:none;display:flex;align-items:center;gap:16px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand b{font:500 16px var(--display)}
+  .brand:hover{opacity:.75}
+  /* Where you are: one bar per step, filling as you go. */
+  .rail{flex:1;display:flex;gap:6px;max-width:340px;margin:0 auto}
+  .rail i{flex:1;height:3px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;position:relative}
+  .rail i::after{content:"";position:absolute;inset:0;background:#fff;transform:scaleX(0);transform-origin:left center;
+    transition:transform .7s var(--ease)}
+  .rail i.done::after{transform:scaleX(1)}
+  .rail[hidden]{display:flex;visibility:hidden}
+  .skipall{padding:9px 15px;border-radius:999px;border:1px solid var(--edge);background:none;color:var(--dim);
+    font:500 12.5px var(--sans);cursor:pointer;transition:color .4s var(--ease),border-color .4s var(--ease),transform .4s var(--ease)}
+  .skipall:hover{color:#fff;border-color:var(--edge-2);transform:scale(1.03)}
+
+  /* ── the card each question sits on ── */
+  .flow{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+  .card{position:relative;width:min(760px,100%);border-radius:var(--r);overflow:hidden;padding:38px 40px 28px;
+    background:linear-gradient(155deg,rgba(255,255,255,.12),rgba(255,255,255,.045) 40%,rgba(255,255,255,.02) 72%);
+    border:1px solid rgba(255,255,255,.15);
+    backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.26),inset 0 -1px 0 rgba(255,255,255,.04),0 40px 90px -44px rgba(0,0,0,.95)}
+  .card::before{content:"";position:absolute;width:320px;height:320px;right:-110px;top:-130px;border-radius:50%;
+    background:radial-gradient(circle,var(--tint,#5AA9FF),transparent 68%);opacity:.26;filter:blur(8px);pointer-events:none;
+    transition:background 1s var(--ease)}
+  .card > *{position:relative;z-index:1}
+
+  /* A step arrives from the side you are heading towards. Only the contents
+     move; the glass card stays where it is. */
+  .step > *{animation:step-in .7s var(--ease) both}
+  .step > *:nth-child(2){animation-delay:.05s}
+  .step > *:nth-child(3){animation-delay:.1s}
+  .step > *:nth-child(4){animation-delay:.15s}
+  .step > *:nth-child(n+5){animation-delay:.2s}
+  .step.back > *{animation-name:step-in-back}
+  @keyframes step-in{from{opacity:0;transform:translateX(28px)}}
+  @keyframes step-in-back{from{opacity:0;transform:translateX(-28px)}}
+
+  .kick{font:500 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--tint,var(--live))}
+  h1{margin:12px 0 0;font:200 clamp(28px,4vw,44px)/1.08 var(--display);letter-spacing:-.028em}
+  h1 em{font-style:normal;font-weight:400;background:linear-gradient(96deg,#fff 20%,var(--live) 130%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead{margin:12px 0 0;color:var(--soft);font-size:15px;line-height:1.65;max-width:56ch}
+
+  .promises{margin:24px 0 0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .promises li{padding:14px 15px;border-radius:var(--r-md);border:1px solid var(--edge);background:rgba(0,0,0,.24)}
+  .promises b{display:block;font:500 14.5px var(--display);color:#fff}
+  .promises span{color:var(--dim);font-size:12.5px;line-height:1.5}
+
+  .field{margin-top:24px}
+  .text{width:100%;padding:16px 18px;border-radius:16px;border:1px solid var(--edge-2);background:rgba(0,0,0,.32);
+    font:300 22px var(--display);outline:none;transition:border-color .4s var(--ease)}
+  .text::placeholder{color:var(--faint)}
+  .text:focus{border-color:rgba(255,255,255,.45)}
+  .text.small{font:400 14.5px var(--sans);padding:12px 15px;border-radius:13px}
+
+  .group{margin-top:22px}
+  .group > .lbl{display:block;margin-bottom:9px;font:500 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chips.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .chip{display:inline-flex;align-items:center;gap:9px;padding:10px 16px;border-radius:999px;border:1px solid var(--edge-2);
+    background:rgba(0,0,0,.24);color:var(--soft);font:500 13.5px var(--sans);cursor:pointer;
+    transition:background-color .4s var(--ease),color .4s var(--ease),border-color .4s var(--ease),transform .4s var(--ease)}
+  .chip:hover{transform:scale(1.03);color:#fff}
+  .chip[aria-pressed="true"],.chip[aria-pressed="true"]:hover{background:#fff;color:#0A0D12;border-color:transparent}
+  .chip.big{flex-direction:column;align-items:flex-start;gap:6px;padding:15px 16px;border-radius:18px;text-align:left}
+  .chip.big b{font:400 16px var(--display)}
+  .chip.big span{font:400 12px/1.45 var(--sans);color:var(--dim);transition:color .4s var(--ease)}
+  .chip.big[aria-pressed="true"] span{color:#4A5866}
+  .chip.big svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+  .chip:focus-visible,.btn:focus-visible,.skipall:focus-visible{outline:2px solid var(--live);outline-offset:3px}
+
+  /* ── the picture ── */
+  .drop{margin-top:22px;border:1.5px dashed rgba(255,255,255,.22);border-radius:20px;padding:30px 20px;text-align:center;cursor:pointer;
+    background:rgba(0,0,0,.2);transition:border-color .4s var(--ease),background-color .4s var(--ease)}
+  .drop:hover,.drop.over{border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.04)}
+  .drop svg{width:30px;height:30px;fill:none;stroke:var(--dim);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+  .drop b{display:block;margin-top:8px;font:400 16px var(--display)}
+  .drop span{color:var(--dim);font-size:12.5px}
+  .seen{margin-top:22px;display:grid;grid-template-columns:200px minmax(0,1fr);gap:18px;align-items:start}
+  .seen img{width:200px;height:150px;object-fit:cover;border-radius:16px;box-shadow:0 0 0 1px rgba(255,255,255,.14)}
+  .seen .what{font:500 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--wal)}
+  .seen p{margin:6px 0 12px;color:var(--soft);font-size:13.5px;line-height:1.55}
+  .again{background:none;border:0;padding:0;color:var(--dim);font-size:12px;cursor:pointer;border-bottom:1px dashed var(--edge-2)}
+  .again:hover{color:#fff}
+  .note{margin:12px 0 0;color:var(--hot);font-size:12.5px}
+  .note[hidden]{display:none}
+
+  /* ── linking ── */
+  .code{margin-top:22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .code b{font:500 34px var(--mono);letter-spacing:.2em;padding:10px 20px;border-radius:16px;border:1px solid var(--edge-2);background:rgba(0,0,0,.32)}
+  .apps{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .app{display:flex;flex-direction:column;gap:5px;padding:16px;border-radius:18px;border:1px solid var(--edge-2);background:rgba(0,0,0,.24);
+    transition:background-color .4s var(--ease),border-color .4s var(--ease),transform .4s var(--ease)}
+  .app:hover{background:var(--glass-2);border-color:rgba(255,255,255,.32);transform:scale(1.02)}
+  .app b{display:flex;align-items:center;gap:9px;font:400 16px var(--display)}
+  .app span{color:var(--dim);font-size:12.5px;line-height:1.5}
+  .app code{font:12px var(--mono);color:var(--live);background:rgba(0,0,0,.4);border:1px solid var(--edge);padding:1px 6px;border-radius:6px}
+  .app[hidden]{display:none}
+
+  /* ── what it knows now ── */
+  .know{margin:22px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;max-height:36vh;overflow-y:auto;scrollbar-width:thin}
+  .know li{display:flex;align-items:center;gap:12px;padding:12px 15px;border-radius:14px;border:1px solid var(--edge);background:rgba(0,0,0,.24);
+    animation:step-in .7s var(--ease) both}
+  .know li span{flex:1;min-width:0;color:var(--soft);font-size:14px}
+  .know .empty{color:var(--dim);justify-content:center}
+
+  /* ── moving on ── */
+  .nav{display:flex;align-items:center;gap:10px;margin-top:28px}
+  .nav .grow{flex:1}
+  .btn{display:inline-flex;align-items:center;gap:9px;padding:12px 22px;border-radius:999px;border:1px solid var(--edge-2);background:var(--glass);
+    color:var(--soft);font:500 13.5px var(--sans);cursor:pointer;
+    transition:transform .4s var(--ease),color .4s var(--ease),background-color .4s var(--ease),opacity .4s var(--ease)}
+  .btn:hover{transform:scale(1.04);color:#fff}
+  .btn.go{background:#fff;color:#0A0D12;border-color:transparent;font-weight:600}
+  .btn.go:hover{color:#0A0D12}
+  .btn.go svg{transition:transform .5s var(--ease)}
+  .btn.go:hover svg{transform:translateX(4px)}
+  .btn.quiet{border-color:transparent;background:none;color:var(--dim)}
+  .btn:disabled{opacity:.4;cursor:default;transform:none}
+  .btn[hidden]{display:none}
+
+  /* ── the receipts: each answer, landing ── */
+  .tray{flex:none;min-height:44px;display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0}
+  .tray::-webkit-scrollbar{display:none}
+  .tray .lbl{flex:none;font:500 10px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-right:4px}
+  .tray:empty{visibility:hidden}
+  .rcpt{flex:none;display:inline-flex;align-items:center;gap:9px;padding:8px 13px;border-radius:999px;border:1px solid var(--edge);
+    background:rgba(8,11,16,.7);font-size:12px;color:var(--soft);animation:rcpt-in .7s var(--ease) both}
+  @keyframes rcpt-in{from{opacity:0;transform:translateY(12px)}}
+  .rcpt i,.know li i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--warn,#F0A868);animation:pulse 1.4s ease-in-out infinite}
+  .rcpt.ok i,.know li.ok i{background:var(--wal);animation:none}
+  .rcpt.bad i,.know li.bad i{background:var(--hot);animation:none}
+  @keyframes pulse{50%{opacity:.35}}
+  .rcpt em,.know li em{font:400 11px var(--mono);font-style:normal;color:var(--faint);white-space:nowrap}
+  .rcpt a,.know li a{font:400 11px var(--mono);color:var(--wal);white-space:nowrap;border-bottom:1px solid transparent}
+  .rcpt a:hover,.know li a:hover{border-bottom-color:rgba(127,227,212,.5)}
+
+  @media (max-width:720px){
+    .wrap{padding:14px 16px 18px}
+    .card{padding:26px 20px 20px}
+    .promises,.chips.grid,.apps{grid-template-columns:1fr}
+    .seen{grid-template-columns:1fr}
+    .seen img{width:100%;height:190px}
+    .rail{max-width:none}
+    .nav{flex-wrap:wrap}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .step > *,.rcpt,.know li{animation:none}
+    .rail i::after,.chip,.btn{transition:none}
+  }
+</style>
+  <link rel="stylesheet" href="/assets/motion.css">
+  <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
+</head>
+<body>
+<div class="ground"></div><div class="bloom"></div><div class="grain"></div>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="/">
+      <svg width="26" height="26" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="wcore" cx="35%" cy="30%" r="74%">
+            <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#9BD0FF"/><stop offset="100%" stop-color="#2E7ACB"/>
+          </radialGradient>
+          <linearGradient id="warc" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff"/><stop offset="100%" stop-color="#5AA9FF"/>
+          </linearGradient>
+        </defs>
+        <circle cx="16" cy="16" r="11" fill="none" stroke="#5AA9FF" stroke-width="1.5" opacity=".22"/>
+        <path d="M16 5a11 11 0 0 1 11 11" fill="none" stroke="url(#warc)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 27A11 11 0 0 1 5 16" fill="none" stroke="url(#warc)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4.1" fill="url(#wcore)"/>
+      </svg>
+      <b>Continuity</b>
+    </a>
+    <div class="rail" id="rail" aria-hidden="true" hidden></div>
+    <button class="skipall" id="skipall" type="button">Skip, I'll learn as we talk</button>
+  </header>
+
+  <main class="flow">
+    <section class="card" id="card" aria-live="polite"></section>
+  </main>
+
+  <div class="tray" id="tray" aria-label="What has been saved"></div>
+</div>
+
+<noscript><p style="position:relative;z-index:2;padding:24px;color:#C3CEDB">This introduction needs JavaScript. You can go straight to <a href="/chat" style="color:#5AA9FF">the chat</a>; it learns as you talk.</p></noscript>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// The same id the chat uses, made here if this is the first page they open.
+const userId = (() => {
+  let id = null;
+  try { id = localStorage.getItem("ws8-user"); } catch {}
+  if (!id) {
+    id = "web-" + (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2));
+    try { localStorage.setItem("ws8-user", id); } catch {}
+  }
+  return id;
+})();
+
+const ARROW = '<svg width="15" height="15" viewBox="0 0 17 17" fill="none"><path d="M3 8.5h11M9.5 4l4.5 4.5L9.5 13" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const JOBS = [
+  { id: "tutor", t: "A tutor", d: "Learn in steps. It remembers where you got stuck.", i: '<path d="M4 5.5h6c1.1 0 2 .9 2 2V20c0-1-.9-1.800-2-1.800H4V5.5zM20 5.5h-6c-1.1 0-2 .9-2 2V20c0-1 .9-1.800 2-1.800h6V5.5z"/>' },
+  { id: "coding", t: "A coding partner", d: "Knows your stack. Reads your error screenshots.", i: '<path d="M8.5 8l-4 4 4 4M15.5 8l4 4-4 4M13.5 5.5l-3 13"/>' },
+  { id: "planner", t: "A planner", d: "Trips, interviews, deadlines. It follows up.", i: '<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3.5V7M16 3.5V7"/>' },
+  { id: "reader", t: "A reader", d: "Paste a link and it reads the page first.", i: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>' },
+  { id: "record", t: "A record of me", d: "Preferences, facts, photos, all checkable.", i: '<circle cx="12" cy="8.5" r="3.6"/><path d="M4.800 19.5c.9-3.4 3.7-5.2 7.2-5.2s6.3 1.800 7.2 5.2"/>' },
+  { id: "support", t: "A support desk", d: "For a team, with a handbook of its own.", i: '<path d="M5 13v-1a7 7 0 0 1 14 0v1M5 13a2 2 0 0 1 2 2v2a2 2 0 0 1-4 0v-2a2 2 0 0 1 2-2zM19 13a2 2 0 0 0-2 2v2a2 2 0 0 0 4 0v-2a2 2 0 0 0-2-2z"/>' },
+];
+const LENGTHS = [["short", "Short"], ["detailed", "Detailed"], ["depends", "As long as it needs"]];
+const TONES = [["plain", "Plain and direct"], ["friendly", "Warm and friendly"], ["blunt", "Blunt"]];
+const TOOLS = ["pnpm", "npm", "yarn", "bun", "Node", "Python", "TypeScript", "JavaScript", "React", "Go", "Rust", "VS Code", "macOS", "Windows", "Linux", "Docker", "Postgres"];
+const TINTS = ["#5AA9FF", "#9BD0FF", "#FFB86B", "#FF8EB4", "#7FE3D4", "#C7A6FF", "#7FE3D4"];
+
+const answers = { name: "", jobs: [], length: null, tone: null, tools: [], picture: null, caption: "" };
+let at = 0, going = "fwd", receipts = [], bot = { tg: "walrusmemory_bot", dc: null };
+
+/* ── saving ──
+   Each step is sent as you leave it, so by the time you reach the end the
+   first answers have already landed and their blob ids are on screen. */
+const sent = {}; // step -> the value last sent, so going back and forth does not write twice
+async function save(step, value, extra = {}) {
+  const mark = JSON.stringify([value, extra.attachment?.file ?? null]);
+  if (sent[step] === mark) return;
+  sent[step] = mark;
+  try {
+    const r = await fetch("/api/onboard/step", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, step, value, ...extra }),
+    }).then((r) => r.json());
+    if (r.receipts) { receipts = r.receipts; paintReceipts(); watch(); }
+  } catch { delete sent[step]; }
+}
+
+const youSay = (t) => String(t)
+  .replace(/^User's name is /, "Your name is ")
+  .replace(/^User's preference: wants the assistant as /, "You want me as ")
+  .replace(/^User's preference: /, "You like ")
+  .replace(/^User uses /, "You use ");
+const ORDER = ["name", "jobs", "style", "tools", "picture"];
+function receiptHtml(r, tag = "span") {
+  const state = r.failed ? "bad" : (r.blobId || r.settled) ? "ok" : "";
+  const tail = r.failed ? "<em>couldn't save, will retry</em>"
+    : r.blobId ? `<a href="https://walruscan.com/mainnet/blob/${encodeURIComponent(r.blobId)}" target="_blank" rel="noopener">${esc(r.blobId.slice(0, 10))}… ↗</a>`
+    : r.settled ? "<em>saved</em>" : "<em>writing to Walrus…</em>";
+  const text = r.step === "picture" ? "A picture: " + r.text : youSay(r.text);
+  return tag === "li"
+    ? `<li class="${state}"><i></i><span>${esc(text)}</span>${tail}</li>`
+    : `<span class="rcpt ${state}" data-step="${esc(r.step)}"><i></i>${esc(text.length > 46 ? text.slice(0, 44) + "…" : text)} ${tail}</span>`;
+}
+function paintReceipts() {
+  const sorted = [...receipts].sort((a, b) => ORDER.indexOf(a.step) - ORDER.indexOf(b.step));
+  const tray = $("tray");
+  // Update in place where a receipt is already showing, so it does not
+  // re-animate every time the list is refreshed.
+  const have = new Map([...tray.querySelectorAll(".rcpt")].map((el) => [el.dataset.step, el]));
+  if (sorted.length && !tray.querySelector(".lbl")) tray.insertAdjacentHTML("afterbegin", '<span class="lbl">Saved</span>');
+  for (const r of sorted) {
+    const html = receiptHtml(r);
+    const el = have.get(r.step);
+    if (!el) tray.insertAdjacentHTML("beforeend", html);
+    else if (el.outerHTML !== html) { const t = document.createElement("template"); t.innerHTML = html; const n = t.content.firstChild; n.style.animation = "none"; el.replaceWith(n); }
+  }
+  const know = document.getElementById("know");
+  if (know) know.innerHTML = sorted.length ? sorted.map((r) => receiptHtml(r, "li")).join("")
+    : '<li class="empty">Nothing yet, and that is fine. I\'ll learn as we talk.</li>';
+}
+let watching = null, watchedFor = 0;
+function watch() {
+  if (watching) return;
+  watchedFor = 0;
+  watching = setInterval(async () => {
+    watchedFor += 2500;
+    const pending = receipts.some((r) => !r.blobId && !r.settled && !r.failed);
+    if (!pending || watchedFor > 180000) { clearInterval(watching); watching = null; return; }
+    try {
+      const r = await fetch("/api/onboard/status?userId=" + encodeURIComponent(userId)).then((r) => r.json());
+      if (r.receipts?.length) { receipts = r.receipts; paintReceipts(); }
+    } catch {}
+  }, 2500);
+}
+
+/* ── the steps ── */
+const chip = (on, attrs, inner, cls = "") => `<button type="button" class="chip ${cls}" aria-pressed="${on}" ${attrs}>${inner}</button>`;
+
+const STEPS = [
+  { key: "hello", rail: false,
+    html: () => `
+      <span class="kick">A one-minute introduction</span>
+      <h1>Give me a minute.<br><em>I'll know you from the first message.</em></h1>
+      <p class="lead">I learn people by talking to them, which means the first conversation is the one where I know
+        nothing. You can skip that part. Answer a few questions and I start out already knowing your name, what you
+        want me for, and how you like to be answered.</p>
+      <ul class="promises">
+        <li><b>Five steps, all optional</b><span>Skip any of them, or all of them.</span></li>
+        <li><b>Every answer is a memory</b><span>Written to Walrus, with a blob you can open.</span></li>
+        <li><b>Asked once</b><span>Never again, on any of your apps.</span></li>
+      </ul>`,
+    next: "Let's start" },
+
+  { key: "name",
+    html: () => `
+      <span class="kick">01 · Your name</span>
+      <h1>What should I call you?</h1>
+      <p class="lead">Whatever you go by. It's what I'll use on the web, on Telegram and on Discord.</p>
+      <div class="field"><input class="text" id="f-name" maxlength="40" autocomplete="given-name" placeholder="Your name" value="${esc(answers.name)}"></div>`,
+    mount: () => { const f = $("f-name"); f.focus(); f.addEventListener("input", () => { const v = f.value.trim(); answers.name = v ? v[0].toUpperCase() + v.slice(1) : ""; }); f.addEventListener("keydown", (e) => { if (e.key === "Enter") next(); }); },
+    leave: () => answers.name && save("name", answers.name) },
+
+  { key: "jobs",
+    html: () => `
+      <span class="kick">02 · What you want me for</span>
+      <h1>${answers.name ? `Good to meet you, ${esc(answers.name)}.<br>` : ""}What do you want me for?</h1>
+      <p class="lead">Pick as many as you like. It decides what I suggest first, not what I can do.</p>
+      <div class="group"><div class="chips grid" id="f-jobs">${JOBS.map((j) =>
+        chip(answers.jobs.includes(j.id), `data-id="${j.id}"`, `<svg viewBox="0 0 24 24" aria-hidden="true">${j.i.replace(/(\d)\.(\d)00/g, "$1.$2")}</svg><b>${j.t}</b><span>${j.d}</span>`, "big")).join("")}</div></div>`,
+    mount: () => $("f-jobs").addEventListener("click", (e) => {
+      const b = e.target.closest(".chip"); if (!b) return;
+      const id = b.dataset.id, on = !answers.jobs.includes(id);
+      answers.jobs = on ? [...answers.jobs, id] : answers.jobs.filter((x) => x !== id);
+      b.setAttribute("aria-pressed", String(on));
+    }),
+    leave: () => answers.jobs.length && save("jobs", answers.jobs) },
+
+  { key: "style",
+    html: () => `
+      <span class="kick">03 · How you like answers</span>
+      <h1>How should I talk to you?</h1>
+      <p class="lead">I'll apply this to every reply. Change your mind later by just telling me.</p>
+      <div class="group"><span class="lbl">Length</span><div class="chips" id="f-length">${LENGTHS.map(([v, l]) => chip(answers.length === v, `data-v="${v}"`, l)).join("")}</div></div>
+      <div class="group"><span class="lbl">Tone</span><div class="chips" id="f-tone">${TONES.map(([v, l]) => chip(answers.tone === v, `data-v="${v}"`, l)).join("")}</div></div>
+      ${answers.jobs.includes("coding") ? `<div class="group"><span class="lbl">What you work with</span><div class="chips" id="f-tools">${TOOLS.map((t) => chip(answers.tools.includes(t), `data-v="${t}"`, t)).join("")}</div></div>` : ""}`,
+    mount: () => {
+      const one = (id, key) => $(id).addEventListener("click", (e) => {
+        const b = e.target.closest(".chip"); if (!b) return;
+        answers[key] = answers[key] === b.dataset.v ? null : b.dataset.v;
+        for (const c of $(id).querySelectorAll(".chip")) c.setAttribute("aria-pressed", String(c.dataset.v === answers[key]));
+      });
+      one("f-length", "length"); one("f-tone", "tone");
+      $("f-tools")?.addEventListener("click", (e) => {
+        const b = e.target.closest(".chip"); if (!b) return;
+        const v = b.dataset.v, on = !answers.tools.includes(v);
+        answers.tools = on ? [...answers.tools, v] : answers.tools.filter((x) => x !== v);
+        b.setAttribute("aria-pressed", String(on));
+      });
+    },
+    leave: () => {
+      if (answers.length || answers.tone) save("style", { length: answers.length, tone: answers.tone });
+      if (answers.tools.length) save("tools", answers.tools);
+    } },
+
+  { key: "picture",
+    html: () => `
+      <span class="kick">04 · A picture</span>
+      <h1>Give me one picture to keep.</h1>
+      <p class="lead">Any photo. I'll look at it, write down what I see, and bring it back whenever you ask,
+        on whichever app you're using.</p>
+      <input type="file" id="f-file" accept="image/*" hidden>
+      <div id="f-pic">${pictureHtml()}</div>
+      <p class="note" id="f-note" hidden></p>`,
+    mount: mountPicture,
+    leave: () => answers.picture && save("picture", answers.caption, { attachment: answers.picture }) },
+
+  { key: "link",
+    html: () => `
+      <span class="kick">05 · Your other apps</span>
+      <h1>Take me with you.</h1>
+      <p class="lead">Link Telegram or Discord and everything you just told me is already there. You can also do this
+        later from the chat.</p>
+      <div id="f-link"><p class="lead" style="color:var(--dim)">Getting you a code…</p></div>`,
+    mount: mountLink },
+
+  { key: "done", rail: false,
+    html: () => `
+      <span class="kick">All set</span>
+      <h1>${answers.name ? `That's you, ${esc(answers.name)}.` : "That's the introduction."}<br><em>Here's what I know now.</em></h1>
+      <p class="lead">Each line is a memory on Walrus mainnet that your account owns. They're on your memory page,
+        where you can open any of them and tell me when one is wrong.</p>
+      <ul class="know" id="know"></ul>`,
+    mount: paintReceipts,
+    next: "Open your chat" },
+];
+
+function pictureHtml() {
+  const p = answers.picture;
+  if (!p) return `
+    <div class="drop" id="f-drop" role="button" tabindex="0" aria-label="Choose a picture">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h1.2l1.1-1.6h6.4L16.3 5h1.2A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5v-9z"/><circle cx="12" cy="12" r="3.4"/></svg>
+      <b>Drop a picture here, or click to choose</b>
+      <span>JPG, PNG or WebP. Big photos are shrunk before they leave your browser.</span>
+    </div>`;
+  return `
+    <div class="seen">
+      <img src="${esc(p.url)}" alt="">
+      <div>
+        <span class="what">${p.sawIt ? "What I saw" : "I couldn't look at it just now"}</span>
+        <p>${esc(p.sawIt ? p.description : "I've kept the file. Tell me what it is below and I'll remember it by that.")}</p>
+        <input class="text small" id="f-cap" maxlength="200" placeholder="Anything to add? e.g. me at the beach in Lagos" value="${esc(answers.caption)}">
+        <p style="margin:10px 0 0"><button class="again" id="f-again" type="button">Choose a different picture</button></p>
+      </div>
+    </div>`;
+}
+function mountPicture() {
+  const file = $("f-file"), note = $("f-note");
+  const bind = () => {
+    const drop = $("f-drop");
+    if (drop) {
+      drop.addEventListener("click", () => file.click());
+      drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } });
+      for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); });
+      for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); });
+      drop.addEventListener("drop", (e) => { const f = e.dataTransfer?.files?.[0]; if (f) take(f); });
+    }
+    $("f-cap")?.addEventListener("input", (e) => { answers.caption = e.target.value.trim(); });
+    $("f-again")?.addEventListener("click", () => { answers.picture = null; answers.caption = ""; $("f-pic").innerHTML = pictureHtml(); bind(); });
+  };
+  async function take(f) {
+    note.hidden = true;
+    if (!/^image\//.test(f.type)) { note.textContent = "That isn't a picture. Try a JPG, PNG or WebP."; note.hidden = false; return; }
+    if (f.size > 8 * 1024 * 1024) { note.textContent = "That's over 8MB. Try a smaller one."; note.hidden = false; return; }
+    $("f-pic").innerHTML = '<div class="drop"><b>Looking at it…</b><span>A few seconds.</span></div>';
+    setBusy(true);
+    try {
+      const { data, type } = await prepare(f);
+      const out = await fetch("/api/attach", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, name: f.name, type, data }),
+      }).then((r) => r.json());
+      if (out.error) throw new Error(out.error);
+      answers.picture = out;
+    } catch (err) {
+      note.textContent = "I couldn't take that one: " + (err.message || "try again") + "."; note.hidden = false;
+    } finally {
+      setBusy(false);
+      $("f-pic").innerHTML = pictureHtml(); bind();
+    }
+  }
+  file.addEventListener("change", (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) take(f); });
+  bind();
+}
+/* The same shrink the chat does: big photos go to 1600px before upload. */
+async function prepare(file) {
+  const asDataUrl = (blob) => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(blob); });
+  if (!/^image\/(png|jpe?g|webp|bmp)$/.test(file.type) || file.size < 600 * 1024) return { data: await asDataUrl(file), type: file.type };
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.86));
+    if (!blob) throw new Error("no blob");
+    return { data: await asDataUrl(blob), type: "image/jpeg" };
+  } catch { return { data: await asDataUrl(file), type: file.type }; }
+}
+
+async function mountLink() {
+  const box = $("f-link");
+  try {
+    const res = await fetch("/api/link/code", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId }) });
+    if (res.status === 204) {
+      box.innerHTML = '<p class="lead" style="color:var(--dim)">There\'s nothing to carry across yet, since you skipped the questions. Say hello in the chat first, then use “Connect another app” there.</p>';
+      return;
+    }
+    const r = await res.json();
+    if (!r.code) throw new Error(r.error || "no code");
+    box.innerHTML = `
+      <div class="code"><b>${esc(r.code)}</b><button class="btn" id="f-copy" type="button">Copy code</button></div>
+      <div class="apps">
+        <a class="app" href="https://t.me/${esc(bot.tg)}?start=${encodeURIComponent(r.code)}" target="_blank" rel="noopener">
+          <b>Telegram</b><span>Opens the bot with your code already filled in. Press Start.</span></a>
+        <a class="app" href="${esc(bot.dc ?? "#")}" target="_blank" rel="noopener" ${bot.dc ? "" : "hidden"}>
+          <b>Discord</b><span>Join, then type <code>/link ${esc(r.code)}</code> in any channel the bot is in.</span></a>
+      </div>
+      <p class="lead" style="font-size:12.5px;color:var(--dim)">The code works once and expires in ten minutes.</p>`;
+    $("f-copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(r.code); $("f-copy").textContent = "Copied"; setTimeout(() => { if ($("f-copy")) $("f-copy").textContent = "Copy code"; }, 1600); } catch {}
+    });
+  } catch {
+    box.innerHTML = '<p class="lead" style="color:var(--dim)">I couldn\'t get a code just now. You can link your apps later from “Connect another app” in the chat.</p>';
+  }
+}
+
+/* ── moving through it ── */
+let busy = false;
+function setBusy(b) { busy = b; const n = document.getElementById("next"); if (n) n.disabled = b; }
+
+function render() {
+  const s = STEPS[at];
+  const railSteps = STEPS.filter((x) => x.rail !== false);
+  $("rail").hidden = s.rail === false;
+  $("rail").innerHTML = railSteps.map((x) => `<i class="${STEPS.indexOf(x) <= at ? "done" : ""}"></i>`).join("");
+  $("skipall").hidden = s.key === "done";
+  $("card").style.setProperty("--tint", TINTS[at] ?? TINTS[0]);
+  const last = at === STEPS.length - 1, first = at === 0;
+  $("card").innerHTML = `
+    <div class="step ${going === "back" ? "back" : ""}">
+      ${s.html()}
+      <div class="nav">
+        <button class="btn quiet" id="back" type="button" ${first || last ? "hidden" : ""}>Back</button>
+        <span class="grow"></span>
+        <button class="btn quiet" id="skip" type="button" ${first || last ? "hidden" : ""}>Skip this</button>
+        <button class="btn go" id="next" type="button">${esc(s.next ?? "Continue")} ${ARROW}</button>
+      </div>
+    </div>`;
+  $("back").addEventListener("click", () => move(-1, false));
+  $("skip").addEventListener("click", () => move(1, false));
+  $("next").addEventListener("click", next);
+  s.mount?.();
+  if (s.key !== "name") $("next").focus({ preventScroll: true });
+}
+function move(by, keep) {
+  if (busy) return;
+  if (keep) STEPS[at].leave?.();
+  going = by < 0 ? "back" : "fwd";
+  at = Math.max(0, Math.min(STEPS.length - 1, at + by));
+  render();
+}
+function next() {
+  if (busy) return;
+  if (at === STEPS.length - 1) return leaveFor("done");
+  move(1, true);
+}
+
+/* One time: the choice is remembered whichever way it goes. */
+async function leaveFor(how) {
+  try {
+    localStorage.setItem("ws8-onboarded", how);
+    if (how === "done") localStorage.setItem("ws8-profile", JSON.stringify({ name: answers.name, jobs: answers.jobs, length: answers.length, tone: answers.tone }));
+  } catch {}
+  if (how === "done" && receipts.length) {
+    fetch("/api/onboard/finish", {
+      method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
+      body: JSON.stringify({ userId, answers: { name: answers.name, jobs: answers.jobs, length: answers.length, tone: answers.tone, tools: answers.tools, picture: answers.picture?.file ?? null } }),
+    }).catch(() => {});
+  }
+  location.href = "/chat";
+}
+$("skipall").addEventListener("click", () => { STEPS[at].leave?.(); leaveFor(receipts.length || Object.keys(sent).length ? "done" : "skipped"); });
+
+fetch("/api/stats").then((r) => r.json()).then((s) => {
+  if (s.botUsername) bot.tg = s.botUsername;
+  if (s.discordInvite) bot.dc = s.discordInvite;
+}).catch(() => {});
+
+render();
+
+// Opened again on purpose ("Tell me about yourself" in the chat menu): start
+// from what was answered last time, so changing one thing does not mean
+// answering everything again. Unchanged answers are not written twice.
+fetch("/api/onboard/state?userId=" + encodeURIComponent(userId)).then((r) => r.json()).then((st) => {
+  const a = st?.done && st.answers;
+  if (!a || at > 1) return;
+  if (a.name && !answers.name) answers.name = a.name[0].toUpperCase() + a.name.slice(1);
+  if (a.jobs?.length && !answers.jobs.length) answers.jobs = a.jobs;
+  answers.length ??= a.length ?? null; answers.tone ??= a.tone ?? null;
+  if (a.tools?.length && !answers.tools.length) answers.tools = a.tools;
+  if (answers.name) sent.name = JSON.stringify([answers.name, null]);
+  if (answers.jobs.length) sent.jobs = JSON.stringify([answers.jobs, null]);
+  if (answers.length || answers.tone) sent.style = JSON.stringify([{ length: answers.length, tone: answers.tone }, null]);
+  if (answers.tools.length) sent.tools = JSON.stringify([answers.tools, null]);
+  if (at === 0) {
+    const h = document.querySelector("#card h1"), l = document.querySelector("#card .lead");
+    if (h) h.innerHTML = `Welcome back${answers.name ? ", " + esc(answers.name) : ""}.<br><em>Change anything you like.</em>`;
+    if (l) l.textContent = "Your earlier answers are filled in. Change what is different now and skip the rest; only what you change is written again.";
+  } else render();
+}).catch(() => {});
+</script>
+</body>
+</html>
