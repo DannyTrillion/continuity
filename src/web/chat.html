@@ -499,7 +499,19 @@
   }
 </style>
   <link rel="stylesheet" href="/assets/motion.css">
-  <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
+  <script>addEventListener("pagereveal",(e)=>{
+  if (!e.viewTransition) return;
+  document.documentElement.classList.add("vt-in");
+  /* Arrived from the button that borrowed this panel's name: style the morph
+     rather than the ordinary cross-fade. Read once and cleared, so a later
+     visit through any other route looks normal. */
+  try {
+    if (sessionStorage.getItem("vt.hero")) {
+      document.documentElement.dataset.vt = "hero";
+      sessionStorage.removeItem("vt.hero");
+    }
+  } catch { /* no store, no stamp, ordinary transition */ }
+});</script>
 </head>
 <body>
 <div class="ground"></div><div class="bloom"></div><div class="grain"></div>

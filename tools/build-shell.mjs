@@ -167,7 +167,19 @@ ${scope(styleOf(history), "#p-history", "hist")}
 ${scope(styleOf(modes), "#p-modes", "mode")}
   </style>
   <link rel="stylesheet" href="/assets/motion.css">
-  <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
+  <script>addEventListener("pagereveal",(e)=>{
+    if (!e.viewTransition) return;
+    document.documentElement.classList.add("vt-in");
+    /* Arrived from the button that borrowed this panel's name, so style the
+       morph rather than the ordinary cross-fade. Read once and cleared: a
+       later visit by any other route looks normal. */
+    try {
+      if (sessionStorage.getItem("vt.hero")) {
+        document.documentElement.dataset.vt = "hero";
+        sessionStorage.removeItem("vt.hero");
+      }
+    } catch { /* no store, no stamp */ }
+  });</script>
   <link rel="stylesheet" href="/assets/shell.css">
   <!-- Hold the first frame until the router has run. This document is ~115KB
        with its scripts at the bottom, and the browser painted it partway

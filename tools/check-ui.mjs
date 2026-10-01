@@ -410,6 +410,34 @@ try {
     const vt = await page.evaluate(() => ({ vt: window.__vt, first: window.__first }));
     check("landing → chat is a view transition", vt.vt === true);
     check("and the first frame is the finished page", vt.first?.panel === "chat" && vt.first?.chat === "1", vt.first);
+
+    /* The button borrows its destination's view-transition-name so the two
+       morph instead of cross-fading. It only works if three things line up:
+       the name matches where the button actually points (a first visit opens
+       the introduction, a return opens the chat), the arriving page stamps
+       the root before its first frame, and the note is cleared afterwards so
+       a later arrival by another route looks ordinary. Any one of those
+       silently degrades to a plain fade, which is exactly the kind of thing
+       nobody notices has stopped working. */
+    const hero = await open("/chat", { store: { "ws8-user": "vt-hero-check" } });
+    await hero.page.goto(BASE + "/", { waitUntil: "networkidle0" }); await sleep(600);
+    const dest = await hero.page.$eval("#open", (a) => new URL(a.href).pathname);
+    const borrowed = await hero.page.evaluate(() => {
+      const go = document.querySelector("#open");
+      go.click();
+      return go.style.viewTransitionName || "";
+    });
+    await sleep(1600);
+    const landed = await hero.page.evaluate(() => ({
+      url: location.pathname,
+      stamped: document.documentElement.dataset.vt ?? null,
+      cleared: !sessionStorage.getItem("vt.hero"),
+    }));
+    check("the button borrows the name of where it actually goes",
+      borrowed === (dest === "/welcome" ? "welcome-main" : "app-main"), `${dest} → ${borrowed || "(none)"}`);
+    check("and the page it opens knows to morph rather than fade", landed.stamped === "hero", landed);
+    check("and the note is cleared so the next arrival is ordinary", landed.cleared === true);
+    await hero.page.close();
     check("no errors", errors.length === 0, errors.slice(0, 2));
     await page.close(); }
 } catch (err) {

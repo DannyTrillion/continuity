@@ -20,6 +20,29 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/motion.css">
 <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
+<script>
+/* The button you press becomes the panel it opens: it borrows the
+   destination's view-transition-name for the length of the navigation, which
+   is what makes the browser morph one into the other instead of cross-fading
+   two unrelated rectangles. Set synchronously on click, because the snapshot
+   is taken before the navigation commits. The arriving document cannot know
+   what was pressed, so it is told. */
+addEventListener("click", (e) => {
+  const go = e.target.closest?.("#open");
+  if (!go || !document.startViewTransition) return;
+  /* Where this button points depends on whether the browser has been here
+     before — a first visit opens the introduction, a return opens the chat —
+     and the morph only happens if the button borrows the name its destination
+     actually uses. Getting this wrong is not a crash, just a cross-fade. */
+  const DEST = { "/welcome": "welcome-main", "/chat": "app-main" };
+  const name = DEST[new URL(go.href, location.href).pathname];
+  if (!name) return;
+  try {
+    go.style.viewTransitionName = name;
+    sessionStorage.setItem("vt.hero", "1");
+  } catch { /* a blocked store just means an ordinary cross-fade */ }
+}, true);
+</script>
 <link rel="expect" href="#page-ready" blocking="render">
 <style>
   /*

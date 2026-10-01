@@ -101,6 +101,48 @@ html { background: #05070A; }
 [data-page="welcome"] .flow           { view-transition-name: welcome-main; }
 [data-page="welcome"] .tray           { view-transition-name: welcome-tray; }
 
+/* ── the thing you pressed becomes the thing you opened ───────────────────
+
+   Giving the button and its destination the SAME view-transition-name is what
+   turns a cross-fade into a morph: the browser interpolates position and size
+   between them, so "Open the chat" grows into the chat panel. The name is put
+   on the button at click time, because it only means this for this one
+   journey — the rest of the time that element is a button.
+
+   The arriving document is the one that styles the transition, and it has no
+   idea what was pressed, so the leaving page leaves a note in sessionStorage
+   and `pagereveal` stamps the root before the first frame.
+
+   Inside a morphing group the two snapshots must only cross-fade. The default
+   `vt-in` translates as well, which fights the group's own movement and reads
+   as the panel overshooting. */
+html[data-vt="hero"]::view-transition-group(app-main),
+html[data-vt="hero"]::view-transition-group(welcome-main) {
+  animation-duration: 560ms;
+  animation-timing-function: var(--rise);
+}
+html[data-vt="hero"]::view-transition-old(app-main),
+html[data-vt="hero"]::view-transition-old(welcome-main) {
+  animation: 180ms ease both vt-out-flat;
+}
+html[data-vt="hero"]::view-transition-new(app-main),
+html[data-vt="hero"]::view-transition-new(welcome-main) {
+  animation: 420ms var(--rise) 100ms both vt-in-flat;
+  /* The one blur in the whole sequence. It resolves as the panel settles, so
+     the morph reads as something coming into focus rather than a box growing. */
+  filter: blur(0);
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-vt="hero"]::view-transition-new(app-main),
+  html[data-vt="hero"]::view-transition-new(welcome-main) {
+    animation: 420ms var(--rise) 100ms both vt-in-focus;
+  }
+}
+@keyframes vt-in-focus {
+  from { opacity: 0; filter: blur(7px); }
+  to   { opacity: 1; filter: blur(0); }
+}
+
 /* Whatever is not named: fades out quickly, fades back in under the rest. */
 ::view-transition-old(root) { animation: 240ms cubic-bezier(.4, 0, 1, 1) both vt-out; }
 ::view-transition-new(root) { animation: 520ms cubic-bezier(.16, 1, .3, 1) 120ms both vt-in-soft; }
@@ -251,12 +293,17 @@ html { background: #05070A; }
      handful of blocks once on a marketing page, and this stages seven in a
      panel you switch to constantly. Expo-out is front-loaded, so most of the
      movement is over well before the clock runs out either way. */
-  --rise-time: .42s;
-  --rise-step: 55ms;
+  --rise-time: .48s;
+  --rise-step: 60ms;
 }
 
+/* Up and forward, not just up. The small scale is what reads as coming out
+   of the background rather than sliding along it; kept at .965 because
+   anything deeper starts to look like a pop rather than an arrival. No blur
+   here — a filter on every staged child is what makes a mid-range phone drop
+   frames, and the only element that earns one is the hero that travels. */
 @keyframes enter-rise {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(14px) scale(.965); }
   to   { opacity: 1; transform: none; }
 }
 

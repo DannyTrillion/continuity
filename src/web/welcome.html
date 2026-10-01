@@ -192,7 +192,16 @@
   }
 </style>
   <link rel="stylesheet" href="/assets/motion.css">
-  <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
+  <script>addEventListener("pagereveal",(e)=>{
+  if (!e.viewTransition) return;
+  document.documentElement.classList.add("vt-in");
+  try {
+    if (sessionStorage.getItem("vt.hero")) {
+      document.documentElement.dataset.vt = "hero";
+      sessionStorage.removeItem("vt.hero");
+    }
+  } catch { /* no store, no stamp */ }
+});</script>
 </head>
 <body>
 <div class="ground"></div><div class="bloom"></div><div class="grain"></div>
