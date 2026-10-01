@@ -92,11 +92,20 @@ const toTelegram = (text) =>
  * Two short labels share a row and a long one gets its own, because Telegram
  * squeezes rather than wraps and three buttons abreast come out unreadable.
  */
-export function keyboard(actions) {
+export function keyboard(actions, { private: isPrivate = true } = {}) {
   if (!actions?.length) return undefined;
   const rows = [];
   for (const a of actions) {
-    const button = a.url ? { text: a.label, url: a.url } : { text: a.label, callback_data: `do:${a.id}` };
+    /* A Mini App opens the page inside Telegram, in the reader's own theme,
+       instead of throwing them into a browser and losing the thread. Telegram
+       only allows it in private chats, and only over HTTPS, so a group or a
+       local http:// URL falls back to the ordinary link. */
+    const asMiniApp = a.webApp && isPrivate && /^https:\/\//.test(a.url ?? "");
+    const button = asMiniApp
+      ? { text: a.label, web_app: { url: a.url } }
+      : a.url
+        ? { text: a.label, url: a.url }
+        : { text: a.label, callback_data: `do:${a.id}` };
     const last = rows[rows.length - 1];
     if (last && last.length === 1 && a.label.length <= 24 && last[0].text.length <= 24) last.push(button);
     else rows.push([button]);
@@ -203,14 +212,15 @@ async function send(token, chatId, text, actions, laidOut) {
 }
 
 /**
- * Pull a photo off Telegram and put it through the same pipeline as a web
- * upload: describe it, keep it, and hand back something the turn can use.
+ * Pull a file off Telegram and put it through the same pipeline as a web
+ * upload: look at it or read it, keep it, and hand back something the turn
+ * can use. `storeAttachment` decides which of those a file gets.
  *
  * Two calls, because Telegram gives you a file id and not a file: getFile
  * turns the id into a path, and the path is fetched from a different host.
  */
-async function fetchPhoto(token, photo, caption) {
-  const info = await call(token, "getFile", { file_id: photo.file_id });
+async function fetchFile(token, fileId, { name, type, hint }) {
+  const info = await call(token, "getFile", { file_id: fileId });
   const path = info?.file_path;
   if (!path) throw new Error("no file_path");
 
@@ -218,13 +228,62 @@ async function fetchPhoto(token, photo, caption) {
   if (!res.ok) throw new Error(`download failed (${res.status})`);
   const bytes = Buffer.from(await res.arrayBuffer());
 
-  const ext = path.split(".").pop()?.toLowerCase() ?? "jpg";
-  return storeAttachment({
-    bytes,
+  const ext = (name?.split(".").pop() ?? path.split(".").pop() ?? "").toLowerCase();
+  return storeAttachment({ bytes, name: name ?? `telegram-file.${ext || "bin"}`, type, hint: hint || undefined });
+}
+
+const fetchPhoto = (token, photo, caption) => {
+  const ext = "jpg";
+  return fetchFile(token, photo.file_id, {
     name: `telegram-photo.${ext}`,
-    type: ext === "png" ? "image/png" : "image/jpeg",
-    hint: caption || undefined,
+    type: "image/jpeg",
+    hint: caption,
   });
+};
+
+/* getFile tops out around 20MB, and the failure is a flat API error rather
+   than anything a person could act on. Checked up front so the refusal can
+   say what happened. */
+const TELEGRAM_FILE_LIMIT = 20 * 1024 * 1024;
+
+/**
+ * Who said the thing that was forwarded here, and when.
+ *
+ * Forwarding is the most Telegram-native way there is to say "keep this", and
+ * the content alone loses the half that matters: a line from a group chat is
+ * worth little without knowing who said it. Bot API 7 moved this to
+ * `forward_origin`; the older fields are still read because a message can
+ * arrive either way depending on the client.
+ *
+ * Returns null for anything not forwarded, which is the common case.
+ */
+export function forwardNote(msg) {
+  const o = msg?.forward_origin;
+  const when = (unix) => (unix ? new Date(unix * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null);
+
+  let who = null;
+  let at = null;
+  if (o) {
+    at = when(o.date);
+    if (o.type === "user") who = o.sender_user?.first_name ?? o.sender_user?.username ?? null;
+    else if (o.type === "hidden_user") who = o.sender_user_name ?? null;
+    else if (o.type === "chat") who = o.sender_chat?.title ?? null;
+    else if (o.type === "channel") who = o.chat?.title ?? null;
+  } else if (msg?.forward_from || msg?.forward_from_chat || msg?.forward_sender_name) {
+    at = when(msg.forward_date);
+    who =
+      msg.forward_from?.first_name ??
+      msg.forward_from?.username ??
+      msg.forward_from_chat?.title ??
+      msg.forward_sender_name ??
+      null;
+  } else {
+    return null;
+  }
+
+  // A forward whose origin is hidden is still a forward, and saying so is
+  // better than passing it off as something the person said themselves.
+  return { who: who ?? "someone", at };
 }
 
 export async function startTelegram({ token }) {
@@ -248,9 +307,10 @@ export async function startTelegram({ token }) {
       description:
         "I remember the people I talk to — here, on Discord, and on the web chat. " +
         "Tell me something once and I'll still know it tomorrow, on whichever one you open.\n\n" +
-        "Everything I keep is a blob on Walrus mainnet that your account owns. You can read " +
-        "it back with /whatyouknow, and tell me when I've got something wrong.\n\n" +
-        "Send me a photo and I'll remember it too. Ask for it later and it comes back.",
+        "Forward me anything worth keeping and I'll note who said it and when. " +
+        "Send a photo or a file and I'll read it, then bring it back when you ask.\n\n" +
+        "Everything I keep is a blob on Walrus mainnet that your account owns. Read it " +
+        "back with /whatyouknow, and tell me when I've got something wrong.",
     }],
     ["setMyShortDescription", {
       short_description: "One memory, across Telegram, Discord and the web — stored on Walrus mainnet.",
@@ -332,7 +392,8 @@ export async function startTelegram({ token }) {
           // to this bot was silently discarded.
           const text = msg?.text ?? msg?.caption ?? "";
           const hasPhoto = Array.isArray(msg?.photo) && msg.photo.length > 0;
-          if (!msg || (!text && !hasPhoto)) continue;
+          const doc = msg?.document ?? null;
+          if (!msg || (!text && !hasPhoto && !doc)) continue;
 
           // Each update is isolated: one failure must not abort the batch, and
           // it must never leave the user watching a typing indicator die.
@@ -345,12 +406,32 @@ export async function startTelegram({ token }) {
               await call(token, "sendChatAction", { chat_id: msg.chat.id, action: "typing" }).catch(() => {});
               attachment = await fetchPhoto(token, msg.photo[msg.photo.length - 1], text)
                 .catch((err) => { console.error("[telegram] could not read photo:", err.message); return null; });
+            } else if (doc) {
+              if ((doc.file_size ?? 0) > TELEGRAM_FILE_LIMIT) {
+                await send(token, msg.chat.id, "That file is over 20MB, which is more than Telegram will hand me. Send a smaller one and I'll read it.");
+                continue;
+              }
+              await call(token, "sendChatAction", { chat_id: msg.chat.id, action: "typing" }).catch(() => {});
+              attachment = await fetchFile(token, doc.file_id, {
+                name: doc.file_name, type: doc.mime_type, hint: text,
+              }).catch((err) => { console.error("[telegram] could not read document:", err.message); return null; });
             }
+
+            /* Forwarding something into the bot is Telegram's own gesture for
+               "keep this", so it is treated as one: the origin is carried into
+               the turn, because a line from a group chat is worth little
+               without knowing who said it. */
+            const fwd = forwardNote(msg);
+            const body = text || (attachment ? "What do you make of this?" : "");
+            const said = fwd
+              ? `I'm forwarding you something ${fwd.who} said${fwd.at ? ` on ${fwd.at}` : ""}. ` +
+                `Keep it, and say briefly what you've kept.\n\n"""\n${body}\n"""`
+              : body;
 
             await turn({
               chatId: msg.chat.id,
               from: msg.from,
-              text: text || "What do you make of this?",
+              text: said || "What do you make of this?",
               attachment,
             });
           } catch (err) {

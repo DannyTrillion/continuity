@@ -42,7 +42,12 @@ export const ACTIONS = {
   menu:          { label: "Quick actions", say: "/menu" },
   forgetconfirm: { label: "Yes, stop recording me", say: "/forgetme confirm", danger: true },
   web:           { label: "Open the web chat", url: SITE && `${SITE}/chat` },
-  memory:        { label: "See everything I remember", url: SITE && `${SITE}/memory` },
+  /* `webApp` asks Telegram to open this inside the app as a Mini App rather
+     than bouncing out to a browser. The memory page is the one worth it: it
+     is where someone checks what is stored and corrects it, and losing the
+     chat to do that is what stops people doing it at all. Surfaces that have
+     no such thing — Discord — see an ordinary link and ignore the flag. */
+  memory:        { label: "See everything I remember", url: SITE && `${SITE}/memory`, webApp: true },
   docs:          { label: "How it works", url: SITE && `${SITE}/docs` },
 };
 

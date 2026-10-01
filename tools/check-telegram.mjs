@@ -116,11 +116,20 @@ check("the answer carries buttons", Array.isArray(menu.reply_markup?.inline_keyb
 const buttons = (menu.reply_markup?.inline_keyboard ?? []).flat();
 check("a handful of them, and not a wall", buttons.length >= 4 && buttons.length <= 6, buttons.map((b) => b.text));
 check("including a way to pick how it works", buttons.some((b) => b.callback_data === "do:modes"));
-check("each does something", buttons.every((b) => b.callback_data || b.url));
+/* Three kinds of button now: one that runs a command, one that opens a link,
+   and one that opens a Mini App inside Telegram. A Mini App carries its URL
+   under `web_app` and has no `url` of its own, so anything checking links has
+   to look in both places or it quietly stops checking the memory button. */
+const linkOf = (b) => b.url ?? b.web_app?.url ?? null;
+check("each does something", buttons.every((b) => b.callback_data || linkOf(b)));
 check("the tappable ones name a real action",
   buttons.filter((b) => b.callback_data).every((b) => ACTIONS[b.callback_data.replace(/^do:/, "")]?.say));
-check("the link one opens the memory page", buttons.some((b) => /\/memory$/.test(b.url ?? "")), buttons.find((b) => b.url)?.url);
-check("and its URL is whole", buttons.filter((b) => b.url).every((b) => /^https:\/\/[\w.-]+\.\w{2,}\//.test(b.url)), buttons.find((b) => b.url)?.url);
+check("the memory page opens as a Mini App",
+  buttons.some((b) => /\/memory$/.test(b.web_app?.url ?? "")),
+  buttons.map((b) => b.web_app?.url ?? b.url).filter(Boolean));
+check("and every URL is whole",
+  buttons.filter((b) => linkOf(b)).every((b) => /^https:\/\/[\w.-]+\.\w{2,}\//.test(linkOf(b))),
+  buttons.map(linkOf).filter(Boolean));
 
 console.log("\n── someone taps a button");
 mark = sent.length;
@@ -149,6 +158,39 @@ mark = sent.length;
 queued.push({ update_id: 4, message: { message_id: 2, chat: { id: CHAT }, from: FROM } });
 await new Promise((r) => setTimeout(r, 900));
 check("is skipped rather than answered", messagesSince(mark).length === 0);
+
+/* ── forwarding ──
+   Forwarding is Telegram's own gesture for "keep this", and the content on
+   its own loses the half that matters: a line out of a group chat is worth
+   little without knowing who said it. The origin moved to `forward_origin`
+   in Bot API 7 and the older fields still arrive from some clients, so both
+   shapes are read. */
+console.log("\n── something forwarded in");
+const { forwardNote } = await import("../src/adapters/telegram.mjs");
+const DAY = 1790000000;
+
+check("a message nobody forwarded is not a forward", forwardNote({ text: "hi" }) === null);
+check("API 7 — a person", forwardNote({ forward_origin: { type: "user", sender_user: { first_name: "Sarah" }, date: DAY } })?.who === "Sarah");
+check("API 7 — a channel", forwardNote({ forward_origin: { type: "channel", chat: { title: "Walrus Devs" }, date: DAY } })?.who === "Walrus Devs");
+check("the older fields still work", forwardNote({ forward_from: { first_name: "Ada" }, forward_date: DAY })?.who === "Ada");
+check("a hidden sender is still named, not dropped",
+  forwardNote({ forward_origin: { type: "hidden_user", date: DAY } })?.who === "someone");
+check("and the date comes with it", /\d{4}$/.test(forwardNote({ forward_from: { first_name: "Ada" }, forward_date: DAY })?.at ?? ""));
+
+console.log("\n── a file, not a photo");
+mark = sent.length;
+queued.push({
+  update_id: 5,
+  message: {
+    message_id: 3, chat: { id: CHAT }, from: FROM,
+    document: { file_id: "doc-1", file_name: "notes.txt", mime_type: "text/plain", file_size: 40 * 1024 * 1024 },
+  },
+});
+await waitFor(() => messagesSince(mark).length > 0, 5000);
+const tooBig = messagesSince(mark);
+check("one over Telegram's own limit is refused in words, not swallowed",
+  tooBig.length === 1 && /20MB/.test(tooBig[0]?.body?.text ?? ""),
+  tooBig[0]?.body?.text);
 
 bot.stop();
 globalThis.fetch = realFetch;
