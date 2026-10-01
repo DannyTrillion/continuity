@@ -192,10 +192,30 @@ outer retry wrapper cannot see a failure that arrives as a value.
 
 ---
 
-## Operational — the account rate limit is easy to hit and undocumented in the SDK
+## Operational — the rate limits are easy to hit and undocumented in the SDK
 
-`1000 weighted-requests/hour` per account (`layer: account_sustained`), returned
-as a 429 with `retry_after_seconds: 300`.
+There are at least two layers, and only one of them is obvious:
+
+| layer | limit | `retry_after_seconds` |
+|---|---|---|
+| `account_sustained` | 1000 weighted-requests/hour | 300 |
+| `delegate_key` | 60 weighted-requests/min | 60 |
+
+The per-minute one caught us out late. An hourly ceiling you can pace against;
+a 60/min burst limit is something a normal chat turn can trip on its own,
+because one turn spends several requests. Running an end-to-end test suite of
+twenty-odd HTTP calls hit it immediately, and the error surfaces at the SDK
+boundary as a generic 500 wrapping the real message:
+
+```
+remember job failed: Internal Error: seal encrypt failed:
+seal/encrypt failed during read_account_identity: RpcError: Too Many Requests
+```
+
+That is a 429 reported as a 500, with the actual cause buried three layers
+down. Nothing in it is machine-readable, so a caller cannot back off correctly
+— `err.status` says 500, and honouring `retry_after_seconds` is impossible
+because the field is not there.
 
 Seeding a few hundred knowledge-base facts and capturing a dozen conversations
 reached it inside an hour, and the symptoms before the 429 finally surfaced were
@@ -203,10 +223,12 @@ indirect: writes that never landed, recalls that returned empty, jobs that timed
 out. All of which look like the flakiness described above, so the limit is easy
 to mistake for instability.
 
-Two asks: surface the weighting (what counts as a weighted request, and what a
-recall or a bulk write costs), and mention the limit in the SDK docs next to the
-methods that consume it. A caller with no visibility into its own budget cannot
-pace itself.
+Three asks: surface the weighting (what counts as a weighted request, and what
+a recall or a bulk write costs); document both layers next to the methods that
+consume them; and propagate the 429 with its `retry_after_seconds` intact
+rather than re-wrapping it as a 500. A caller with no visibility into its own
+budget cannot pace itself, and one that cannot tell a rate limit from a server
+error will retry into the wall.
 
 Worth noting for anyone building on this: a chatbot spends several weighted
 requests per turn — identity read, personal recall, knowledge recall, then the
