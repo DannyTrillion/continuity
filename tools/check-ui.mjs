@@ -230,6 +230,20 @@ try {
     await page.click('.nav a[href="/memory"]'); await sleep(900);
     const m = await swipe("#p-memory");
     check("memory scrolls under a thumb", m.room > 0 && m.moved > 0, m);
+    await page.click('.nav a[href="/modes"]'); await sleep(900);
+    const md = await swipe("#p-modes");
+    check("modes scrolls under a thumb", md.room > 0 && md.moved > 0, md);
+
+    /* Every reading panel has to scroll itself, and the way this broke was by
+       naming them: the shell granted overflow to #p-memory and #p-history, a
+       third panel was added, inherited `flex: 1` with no overflow, and clipped
+       silently. So the rule is checked as a rule rather than panel by panel —
+       a fourth one added tomorrow is covered without anyone remembering. */
+    const clipped = await page.$$eval(".panel", (ps) =>
+      ps.filter((el) => el.id !== "p-chat")
+        .filter((el) => getComputedStyle(el).overflowY !== "auto")
+        .map((el) => el.id));
+    check("every reading panel can scroll, not just the named ones", clipped.length === 0, clipped);
     check("and the header stays where it is", await page.$eval(".top", (e) => Math.round(e.getBoundingClientRect().top) >= 0));
     check("no errors", errors.length === 0, errors.slice(0, 2));
     await page.close(); }
