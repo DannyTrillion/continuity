@@ -150,6 +150,33 @@ const withImage = (out) =>
  * memory ("Your name is Danny"), so it is read back out of the facts rather
  * than stored as a field. No name is fine; the UI just stays generic.
  */
+/**
+ * The sentence inside a queued analyze job.
+ *
+ * A job carries the turn as the extractor needs to see it: prefixed with the
+ * surface, and sometimes trailed by what the assistant had just asked so the
+ * extractor can tell an answer from an assertion. That envelope is machinery.
+ * Once the job lands, what gets stored is a clean fact; until then the
+ * dashboard shows the person's own sentence rather than the plumbing.
+ */
+const sentenceOf = (text) =>
+  String(text ?? "")
+    .replace(/^On \w+, the user said:\s*/, "")
+    .replace(/\n\(That was their answer to[\s\S]*$/, "")
+    .trim();
+
+/**
+ * Is this worth showing as a memory in progress?
+ *
+ * Every turn is queued for extraction, including the ones that teach nothing.
+ * "what do you already know about me?" is a question, and showing someone
+ * their own question back as something learned about them makes the page look
+ * broken. The extractor drops these anyway; this just keeps them off the page
+ * during the seconds before it does.
+ */
+const worthShowing = (s) =>
+  s.length > 2 && !/^(what|who|where|when|why|how|do|does|did|can|could|is|are|was|were|will|would|should|tell|show|remind)\b[\s\S]*\?$/i.test(s);
+
 function nameFrom(facts) {
   for (const f of facts) {
     const m = String(f.text).match(
@@ -303,7 +330,10 @@ const server = createServer(async (req, res) => {
          shown too, marked as still saving and without a blob id — there is
          no receipt to show yet, and inventing one would defeat the point. */
       const queued = withoutSuppressed(
-        who.namespaces.flatMap((ns) => pendingFor(ns)).map((j) => ({ text: j.text, at: j.createdAt })),
+        who.namespaces
+          .flatMap((ns) => pendingFor(ns))
+          .map((j) => ({ text: sentenceOf(j.text), at: j.createdAt }))
+          .filter((h) => worthShowing(h.text)),
         suppressed,
       ).map((h) => ({ ...h, blobId: null, saving: true }));
 
