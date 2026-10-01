@@ -8,19 +8,112 @@
 import { issueLinkCode, redeemLinkCode, resolvePerson, setOptOut } from "./identity.mjs";
 import { recall } from "./memory.mjs";
 import { searchWeb, screenshotUrl } from "./web.mjs";
+import { MODES, isMode, modeFor, setMode } from "./modes.mjs";
 
-const HELP = `I remember you across Discord, Telegram and the web chat.
+/**
+ * Where the website is, if it is anywhere.
+ *
+ * Railway names the domain it gave us whether or not anyone remembered to set
+ * PUBLIC_URL, so a deploy that forgot it still gets working link buttons
+ * rather than silently dropping them. Empty on a laptop, which is right: a
+ * button pointing at a site nobody else can reach is worse than no button.
+ */
+const SITE = (
+  process.env.PUBLIC_URL?.trim() ||
+  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN.trim()}` : "")
+).replace(/\/+$/, "");
 
-Just talk to me normally — anything worth keeping, I'll keep. Paste a link and
-I'll read it before I answer.
+/**
+ * What to offer next — named here, drawn by each surface in its own idiom.
+ *
+ * Telegram makes these inline buttons, Discord makes them a row of components,
+ * and the web could make them chips. Naming them in one place is what keeps
+ * the three bots feeling like one product: a command added here appears as a
+ * button everywhere, and nobody has to remember to update two adapters.
+ *
+ * An action either says something (as if the person had typed it) or opens a
+ * URL. A URL action disappears on its own when PUBLIC_URL is not set, so a
+ * local run never offers a button that goes nowhere.
+ */
+export const ACTIONS = {
+  whatyouknow:   { label: "What do you know about me?", say: "/whatyouknow" },
+  link:          { label: "Connect another app", say: "/link" },
+  help:          { label: "What can you do?", say: "/help" },
+  menu:          { label: "Quick actions", say: "/menu" },
+  forgetconfirm: { label: "Yes, stop recording me", say: "/forgetme confirm", danger: true },
+  web:           { label: "Open the web chat", url: SITE && `${SITE}/chat` },
+  memory:        { label: "See everything I remember", url: SITE && `${SITE}/memory` },
+  docs:          { label: "How it works", url: SITE && `${SITE}/docs` },
+};
 
-/link — get a code to connect this account to another app
-/link CODE — redeem a code from another app
-/shot URL — send back a screenshot of a page
-/search WORDS — look something up on the web
-/whatyouknow — show what I remember about you
-/forgetme — stop recording me
-/help — this message`;
+/* One action per mode, built from the registry so a mode added there becomes
+   a button on both bots without either adapter changing. Two of them: the
+   plain name for the picker, and a fuller sentence for when the assistant is
+   the one offering. */
+for (const [id, m] of Object.entries(MODES)) {
+  ACTIONS[`mode-${id}`] = { label: m.label, say: `/mode ${id}` };
+  ACTIONS[`switch-${id}`] = { label: `Switch to ${m.label}`, say: `/mode ${id}` };
+}
+ACTIONS["mode-off"] = { label: "No mode", say: "/mode off" };
+ACTIONS["modes"] = { label: "How I work", say: "/mode" };
+
+/** Resolve names to what a surface needs, dropping any that cannot be drawn. */
+export const actionsFor = (names) =>
+  (names ?? [])
+    .map((id) => ({ id, ...ACTIONS[id] }))
+    .filter((a) => a.label && (a.say || a.url));
+
+/**
+ * What it can do, listed once.
+ *
+ * The help text is built from this rather than written beside it: a command
+ * list kept in prose drifts from the one kept in code, and the stale one is
+ * always the one people read. Discord renders these as embed fields and
+ * Telegram as lines, from the same source.
+ */
+const COMMAND_LIST = [
+  ["/menu", "The things I do most, as buttons"],
+  ["/mode", "Pick how I work: tutor, coding partner, planner, support"],
+  ["/link", "Get a code to connect this account to another app"],
+  ["/link CODE", "Redeem a code from another app"],
+  ["/whatyouknow", "Show what I remember about you"],
+  ["/search WORDS", "Look something up on the web"],
+  ["/shot URL", "Send back a screenshot of a page"],
+  ["/forgetme", "Stop recording me"],
+  ["/help", "This message"],
+];
+
+/**
+ * The menu both bots register, in the order it should read.
+ *
+ * Telegram shows this the moment someone types "/", and Discord lists it in
+ * the command picker — so this IS the bot's menu, and it was drifting: two
+ * adapters each kept their own copy and `/mode` ended up in neither. Ordered
+ * deliberately: the things you do, then what it knows, then how to reach it,
+ * then the tools, then the way out.
+ *
+ * Descriptions stay short because Telegram truncates them mid-word.
+ */
+export const MENU_COMMANDS = [
+  { name: "menu", description: "Everything I do, as buttons" },
+  { name: "mode", description: "How I work: tutor, coding, planner, support" },
+  { name: "whatyouknow", description: "What I remember about you" },
+  { name: "link", description: "Connect Discord or the web chat" },
+  { name: "search", description: "Look something up on the web" },
+  { name: "shot", description: "Screenshot a web page" },
+  { name: "forgetme", description: "Stop recording me" },
+  { name: "help", description: "What I can do" },
+];
+
+/* A room full of people is no place to print one person's memories, so a
+   group is offered only what is safe to answer in public. */
+export const GROUP_SAFE = new Set(["search", "shot", "help", "menu"]);
+
+const INTRO = "I remember you across Discord, Telegram and the web chat.\n\n" +
+  "Just talk to me normally — anything worth keeping, I'll keep. Paste a link and " +
+  "I'll read it before I answer.";
+
+const HELP = `${INTRO}\n\n${COMMAND_LIST.map(([c, what]) => `${c} — ${what[0].toLowerCase()}${what.slice(1)}`).join("\n")}`;
 
 export async function handleCommand({ text, surface, surfaceUserId, person }) {
   const [cmd, ...rest] = text.trim().split(/\s+/);
@@ -28,7 +121,22 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
 
   switch (cmd.toLowerCase()) {
     case "/help":
-      return { handled: true, reply: HELP };
+      return {
+        handled: true,
+        reply: HELP,
+        // Named, not drawn: Discord makes an embed of this, Telegram a list.
+        data: { kind: "help", intro: INTRO, commands: COMMAND_LIST },
+        actions: ["whatyouknow", "link", "memory"],
+      };
+
+    // The same things the slash menu offers, as buttons, for anyone who would
+    // rather tap than remember a command.
+    case "/menu":
+      return {
+        handled: true,
+        reply: "One tap each:",
+        actions: ["whatyouknow", "modes", "link", "memory", "help"],
+      };
 
     case "/start": {
       // Telegram deep links (t.me/bot?start=CODE) arrive here as "/start CODE",
@@ -45,6 +153,57 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
           "Just talk to me normally. Anything worth keeping, I'll keep.\n\n" +
           "Already been chatting on the website? Send `/link` there, then send me `/link` and the code, " +
           "and everything you told it comes with you.",
+        actions: ["whatyouknow", "link", "help"],
+      };
+    }
+
+    /**
+     * A mode is a manner, not a second assistant: the memories are the same
+     * either way. Stored, so choosing one here chooses it everywhere.
+     */
+    case "/mode": {
+      const want = arg.toLowerCase().replace(/^\/+/, "");
+      const current = await modeFor(person.personId).catch(() => null);
+
+      if (want === "off" || want === "none" || want === "clear") {
+        setMode(person.personId, null);
+        return {
+          handled: true,
+          reply: "Back to no particular mode — I'll answer as a generalist. Same memory either way.",
+          actions: Object.keys(MODES).map((id) => `mode-${id}`),
+        };
+      }
+
+      if (isMode(want)) {
+        setMode(person.personId, want);
+        return {
+          handled: true,
+          reply:
+            `**${MODES[want].label}** mode. ${MODES[want].blurb}.\n\n` +
+            `This follows you — it's the same on Telegram, Discord and the web. ` +
+            `Nothing about what I remember changes; only how I answer. Say \`/mode off\` to drop it.`,
+          data: { kind: "mode", current: want, modes: MODES },
+          actions: ["whatyouknow", "mode-off"],
+        };
+      }
+
+      if (want) {
+        return {
+          handled: true,
+          reply: `I don't have a "${arg}" mode. Pick one of these:`,
+          data: { kind: "mode", current, modes: MODES },
+          actions: Object.keys(MODES).map((id) => `mode-${id}`),
+        };
+      }
+
+      return {
+        handled: true,
+        reply: current
+          ? `You're in **${MODES[current].label}** mode — ${MODES[current].blurb.toLowerCase()}. Switch any time:`
+          : "No mode set, so I answer as a generalist. Pick one and I'll work that way everywhere:",
+        data: { kind: "mode", current, modes: MODES },
+        actions: [...Object.keys(MODES).filter((id) => id !== current).map((id) => `mode-${id}`),
+                  ...(current ? ["mode-off"] : [])],
       };
     }
 
@@ -57,6 +216,8 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
             `Your link code is **${code}** — it expires in ${expiresInMinutes} minutes.\n\n` +
             `Send \`/link ${code}\` from another surface (Discord, Telegram or the web chat) ` +
             `and I'll know it's the same you. Everything you've told me on either one carries over.`,
+          data: { kind: "code", code, expiresInMinutes },
+          actions: ["web"],
         };
       }
       const res = await redeemLinkCode(surface, surfaceUserId, arg);
@@ -75,6 +236,7 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
           "Linked. This account and the one that issued the code are the same person to me now — " +
           "and nothing either of you told me is lost, both histories carry over.",
         relink: true,
+        actions: ["whatyouknow", "memory"],
       };
     }
 
@@ -114,10 +276,22 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
       );
       const hits = sets.flat().sort((a, b) => a.distance - b.distance);
       if (!hits.length) {
-        return { handled: true, reply: "Nothing yet — we haven't talked about anything worth keeping." };
+        return {
+          handled: true,
+          reply: "Nothing yet — we haven't talked about anything worth keeping.",
+          actions: ["help"],
+        };
       }
       const lines = hits.map((h) => `• ${h.text}`).join("\n");
-      return { handled: true, reply: `Here's what I have:\n\n${lines}` };
+      return {
+        handled: true,
+        reply: `Here's what I have:\n\n${lines}`,
+        data: {
+          kind: "memories",
+          items: hits.map((h) => ({ text: h.text, blobId: h.blob_id ?? null })),
+        },
+        actions: ["memory", "link"],
+      };
     }
 
     case "/forgetme": {
@@ -138,6 +312,7 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
           "those blobs live on Walrus until their storage epochs lapse, and any delete button I showed " +
           "you would be lying. What I can do is stop recording and stop reading you back. " +
           "Say `/forgetme confirm` and I'll treat you as a stranger from here on.",
+        actions: ["forgetconfirm"],
       };
     }
 
