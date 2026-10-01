@@ -166,7 +166,15 @@ await page.goto(BASE + "/chat", { waitUntil: "networkidle2", timeout: 60000 });
 await settle(3000);
 
 const pills = await page.evaluate(() => [...document.querySelectorAll(".nav a")].map((a) => a.dataset.nav));
-check("nav is down to Chat and Memory", pills.join(",") === "chat,memory", pills.join(",") || "(none)");
+/* Three tabs: what it's doing, what it knows, and how it works. History is
+   deliberately not among them — it lives in the overflow menu, because
+   somebody opens it occasionally and the nav is for the things they live in.
+   The count matters as much as the names: a fourth tab stops the glide
+   reading as one pill travelling and starts it reading as a toolbar. */
+check("the nav carries Chat, Memory and Modes",
+  pills.join(",") === "chat,memory,modes", pills.join(",") || "(none)");
+check("and nothing more, so the glide still reads as one pill",
+  pills.length === 3, `${pills.length} tabs`);
 
 /**
  * The white pill must be ONE element that travels. Two tabs each fading their

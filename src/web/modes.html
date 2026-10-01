@@ -28,6 +28,8 @@
     padding-inline:20px;padding-block:clamp(36px,7vw,72px) 80px}
 
   header{margin-bottom:38px}
+  .top{display:flex;align-items:center;margin-bottom:18px}
+  .top .brand{font-family:var(--display);font-weight:400;text-decoration:none;font-size:17px}
   .back{display:inline-flex;align-items:center;gap:7px;color:var(--dim);text-decoration:none;
     font-size:13px;margin-bottom:22px}
   .back:hover{color:var(--ink)}
@@ -95,6 +97,11 @@
 </head>
 <body>
 <div class="wrap">
+  <!-- The shell strips this and draws one nav for every panel; it is here so
+       /modes.html still stands on its own when something breaks. -->
+  <nav class="top">
+    <a class="brand" href="/">Continuity</a>
+  </nav>
   <header>
     <a class="back" href="/chat">← Back to the chat</a>
     <h1>Four ways to work,<br><em>one memory</em> behind them.</h1>

@@ -902,13 +902,13 @@ const server = createServer(async (req, res) => {
   const PAGES = {
     "/": "index.html", "/index.html": "index.html",
     "/demo": "demo.html", "/demo.html": "demo.html",
-    "/chat": "app.html", "/memory": "app.html", "/history": "app.html",
+    "/chat": "app.html", "/memory": "app.html", "/modes": "app.html", "/history": "app.html",
     "/memory.html": "memory.html",
     "/history.html": "history.html",
     "/chat.html": "chat.html",
     "/use-cases": "use-cases.html", "/use-cases.html": "use-cases.html",
     "/docs": "docs.html", "/docs.html": "docs.html",
-    "/modes": "modes.html", "/modes.html": "modes.html",
+    "/modes.html": "modes.html",
     "/welcome": "welcome.html", "/welcome.html": "welcome.html",
   };
   if (PAGES[url.pathname]) {

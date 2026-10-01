@@ -19,11 +19,12 @@
 window.PANELS = window.PANELS || {};
 
 const Router = (() => {
-  const PATH = { chat: "/chat", memory: "/memory", history: "/history" };
-  const NAME = { "/chat": "chat", "/memory": "memory", "/history": "history" };
+  const PATH = { chat: "/chat", memory: "/memory", modes: "/modes", history: "/history" };
+  const NAME = { "/chat": "chat", "/memory": "memory", "/modes": "modes", "/history": "history" };
   const TITLE = {
     chat: "Continuity — the assistant that remembers you",
     memory: "Your memory — Continuity",
+    modes: "How it works — Continuity",
     history: "Past conversations — Continuity",
   };
 
