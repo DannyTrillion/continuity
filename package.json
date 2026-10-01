@@ -13,7 +13,8 @@
     "check:ui": "node tools/check-ui.mjs",
     "check:bots": "node tools/check-bots.mjs",
     "check:telegram": "node --env-file=.env tools/check-telegram.mjs",
-    "check:files": "node --env-file=.env tools/check-files.mjs"
+    "check:files": "node --env-file=.env tools/check-files.mjs",
+    "check:fresh": "node --env-file=.env tools/check-fresh.mjs"
   },
   "dependencies": {
     "@mysten-incubation/memwal": "^0.1.7",

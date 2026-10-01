@@ -9,7 +9,7 @@
  */
 
 import { recall, dedupe, personNs, KB_NS, suppressionsFor, withoutSuppressed, hasMemories } from "./memory.mjs";
-import { enqueueAnalyze } from "./outbox.mjs";
+import { enqueueAnalyze, pendingFor } from "./outbox.mjs";
 import { noteRead } from "./provenance.mjs";
 import { observe, count } from "./metrics.mjs";
 import { readPage } from "./web.mjs";
@@ -320,6 +320,37 @@ export async function handleTurn({
     const kept = lastGood.get(personId);
     if (kept && Date.now() - kept.at < STALE_OK_MS) { personal = kept.hits; stale = true; }
   }
+
+  /* READ-AFTER-WRITE.
+   *
+   * A write takes seconds — 14 on average against mainnet, a minute at p99 —
+   * and recall only sees what has landed. So the most natural second message
+   * anyone sends, "what do you know about me?", arrives inside that gap and
+   * reads back as amnesia. A new person tells us who they are and is a
+   * stranger again one message later, which is precisely the failure this
+   * whole project exists to avoid.
+   *
+   * What is still queued for this person is not a guess: they said it out
+   * loud a moment ago and it is on its way to Walrus. Only consulted when the
+   * search itself came back empty, so an ordinary turn is unaffected and this
+   * closes the window rather than widening what the model sees.
+   */
+  let fromQueue = false;
+  if (!personal.length && optedOut !== true && !transient) {
+    const waiting = withoutSuppressed(
+      pendingFor(namespaces[0] ?? personNs(personId)).map((j) => ({
+        text: j.text,
+        distance: 0.5,
+        pending: true,
+      })),
+      suppressed,
+    );
+    if (waiting.length) {
+      personal = waiting.slice(-6);
+      fromQueue = true;
+    }
+  }
+
   // Known to us, whether or not anything could be read this turn.
   const known = !transient && (personal.length > 0 || hasMemories(namespaces[0] ?? personNs(personId)));
 
@@ -412,7 +443,14 @@ export async function handleTurn({
                 "it is still true, but it is not a fresh search for what they just asked. If they ask about " +
                 "something that is not here, say you can't read everything back this second — never that " +
                 "you don't know them.\n\n"
-              : "") + fence("WHAT I KNOW ABOUT THIS PERSON", personal)
+              : fromQueue
+                ? "WHAT FOLLOWS IS STILL BEING SAVED. They told you this moments ago and it is on its way to " +
+                  "storage, so a search has not found it yet — but you do know it and you must use it. Never " +
+                  "say this is your first conversation and never say you have nothing on them. It is their " +
+                  "own words rather than a tidied-up note, so read it back naturally instead of quoting it. " +
+                  "If they ask about something older that is not here, say it is still saving and to ask " +
+                  "again shortly.\n\n"
+                : "") + fence("WHAT I KNOW ABOUT THIS PERSON", personal)
           : known
             ? "YOU KNOW THIS PERSON. You have memories of them and have spoken before, but none could be " +
               "read back this turn — the memory service returned nothing. This is NOT your first " +
