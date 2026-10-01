@@ -27,11 +27,15 @@ const buf = (s) => Buffer.from(s, "utf8");
 section("what it offers is what it can read");
 const accept = readFileSync("src/web/chat.html", "utf8").match(/id="file"[^>]*accept="([^"]+)"/)?.[1] ?? "";
 check("the chat still takes text files", /\.txt/.test(accept) && /\.md/.test(accept), accept);
-check("and no longer promises PDFs it cannot read", !/\.pdf/.test(accept), accept);
+/* PDFs were refused for a long time because extracting text from one needs a
+   real parser. It has one now (unpdf), and lecture notes and handouts are
+   overwhelmingly PDFs — so the promise is kept rather than withdrawn. A PDF
+   of scanned pages still cannot be read, and says so. */
+check("and offers PDFs, now that it can read them", /\.pdf/.test(accept), accept);
 for (const [type, ext, want] of [
   ["text/plain", "txt", true], ["text/markdown", "md", true], ["text/csv", "csv", true],
   ["application/json", "json", true], ["", "yaml", true],
-  ["image/png", "png", false], ["application/pdf", "pdf", false], ["application/octet-stream", "bin", false],
+  ["image/png", "png", false], ["application/pdf", "pdf", true], ["application/octet-stream", "bin", false],
 ]) check(`${ext} is ${want ? "readable" : "not"}`, canRead(type, ext) === want);
 check("everything the chat offers, it can read",
   accept.split(",").filter((a) => a.startsWith(".")).every((a) => canRead("", a.slice(1))), accept);

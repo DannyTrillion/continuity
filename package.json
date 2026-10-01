@@ -19,7 +19,8 @@
   "dependencies": {
     "@mysten-incubation/memwal": "^0.1.7",
     "@mysten/sui": "^2.31.3",
-    "discord.js": "^14.27.0"
+    "discord.js": "^14.27.0",
+    "unpdf": "^1.8.1"
   },
   "engines": {
     "node": ">=22"

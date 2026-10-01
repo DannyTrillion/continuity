@@ -9,6 +9,8 @@ import { issueLinkCode, redeemLinkCode, resolvePerson, setOptOut } from "./ident
 import { recall } from "./memory.mjs";
 import { searchWeb, screenshotUrl } from "./web.mjs";
 import { MODES, isMode, modeFor, setMode } from "./modes.mjs";
+import { listMaterials } from "./study.mjs";
+import { startQuiz, answerQuiz, LETTERS } from "./quiz.mjs";
 
 /**
  * Where the website is, if it is anywhere.
@@ -59,6 +61,13 @@ for (const [id, m] of Object.entries(MODES)) {
   ACTIONS[`mode-${id}`] = { label: m.label, say: `/mode ${id}` };
   ACTIONS[`switch-${id}`] = { label: `Switch to ${m.label}`, say: `/mode ${id}` };
 }
+ACTIONS["study"] = { label: "What I'm studying", say: "/study" };
+ACTIONS["quiz"]  = { label: "Quiz me", say: "/quiz" };
+/* The four options under a question. Built rather than written out so a
+   quiz with fewer options draws fewer buttons and never a dead one. */
+for (const [i, letter] of LETTERS.entries()) {
+  ACTIONS[`answer-${i}`] = { label: letter, say: `/answer ${i}` };
+}
 ACTIONS["mode-off"] = { label: "No mode", say: "/mode off" };
 ACTIONS["modes"] = { label: "How I work", say: "/mode" };
 
@@ -79,6 +88,8 @@ export const actionsFor = (names) =>
 const COMMAND_LIST = [
   ["/menu", "The things I do most, as buttons"],
   ["/mode", "Pick how I work: tutor, coding partner, planner, support"],
+  ["/study", "The notes and PDFs you've given me to teach you from"],
+  ["/quiz", "Test you on them, and remember what you missed"],
   ["/link", "Get a code to connect this account to another app"],
   ["/link CODE", "Redeem a code from another app"],
   ["/whatyouknow", "Show what I remember about you"],
@@ -102,6 +113,8 @@ const COMMAND_LIST = [
 export const MENU_COMMANDS = [
   { name: "menu", description: "Everything I do, as buttons" },
   { name: "mode", description: "How I work: tutor, coding, planner, support" },
+  { name: "study", description: "The notes and PDFs I'm teaching you from" },
+  { name: "quiz", description: "Ask me to test you on them" },
   { name: "whatyouknow", description: "What I remember about you" },
   { name: "link", description: "Connect Discord or the web chat" },
   { name: "search", description: "Look something up on the web" },
@@ -341,6 +354,98 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
         return { handled: true, reply: "Recording again. Picking up where we left off." };
       }
       return { handled: false };
+    }
+
+    /**
+     * What they have given the tutor to teach from.
+     *
+     * Only reachable in Tutor mode, because outside it there is nothing to
+     * list and a command that always answers "nothing here" teaches people
+     * the feature is broken rather than that they are in the wrong mode.
+     */
+    case "/study": {
+      const mode = await modeFor(person.personId).catch(() => null);
+      const materials = await listMaterials(person.personId).catch(() => []);
+
+      if (!materials.length) {
+        return {
+          handled: true,
+          reply:
+            mode === "tutor"
+              ? "Nothing to study yet. Send me a PDF or your notes and I'll read them, then /quiz will ask you about it."
+              : "Study materials live in Tutor mode. Switch to it, send me your notes, and I'll quiz you on them.",
+          actions: mode === "tutor" ? ["help"] : ["mode-tutor"],
+        };
+      }
+
+      return {
+        handled: true,
+        reply:
+          `You've given me ${materials.length} thing${materials.length === 1 ? "" : "s"} to study:\n\n` +
+          materials.map((m, i) => `${i + 1}. ${m.name}`).join("\n") +
+          `\n\n/quiz and I'll ask you about the newest one.`,
+        actions: ["quiz", "memory"],
+      };
+    }
+
+    /**
+     * Ask them about it.
+     *
+     * Starting a round costs one model call over the material's full text, so
+     * the reply is slow enough to be worth saying something about — the
+     * adapters keep a typing indicator alive for exactly this.
+     */
+    case "/quiz": {
+      const materials = await listMaterials(person.personId).catch(() => []);
+      if (!materials.length) {
+        return {
+          handled: true,
+          reply: "Send me something to quiz you on first — a PDF or your notes, in Tutor mode.",
+          actions: ["mode-tutor"],
+        };
+      }
+      const pick = materials[0];
+      const started = await startQuiz(person.personId, { file: pick.file, name: pick.name });
+      if (!started.ok) return { handled: true, reply: started.error, actions: ["study"] };
+
+      return {
+        handled: true,
+        reply:
+          `**${pick.name}** — question 1 of ${started.total}\n\n${started.question}\n\n` +
+          started.options.map((o, i) => `${LETTERS[i]}. ${o}`).join("\n"),
+        actions: started.options.map((_, i) => `answer-${i}`),
+      };
+    }
+
+    /* The reply to a tapped option. Not in any menu: it only ever arrives
+       from a button the bot drew a moment ago. */
+    case "/answer": {
+      const result = answerQuiz(person.personId, Number(arg));
+      if (!result.ok) return { handled: true, reply: result.error, actions: ["quiz"] };
+
+      const head = result.right ? "Right." : `Not quite — it's "${result.correct}".`;
+      const why = result.why ? `\n${result.why}` : "";
+
+      if (result.done) {
+        return {
+          handled: true,
+          reply:
+            `${head}${why}\n\n**${result.score} out of ${result.total}** on ${result.material}.` +
+            (result.score < result.total
+              ? `\n\nI've kept what you missed — ask me about it any time, on any app.`
+              : `\n\nNothing missed.`),
+          actions: ["quiz", "study", "memory"],
+        };
+      }
+
+      const n = result.next;
+      return {
+        handled: true,
+        reply:
+          `${head}${why}\n\n— — —\n\nQuestion ${n.number} of ${n.total}\n\n${n.question}\n\n` +
+          n.options.map((o, i) => `${LETTERS[i]}. ${o}`).join("\n"),
+        actions: n.options.map((_, i) => `answer-${i}`),
+      };
     }
 
     default:

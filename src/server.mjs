@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 
 import { respond } from "./core/session.mjs";
 import { rememberLastGood } from "./core/agent.mjs";
+import { listMaterials, listMistakes } from "./core/study.mjs";
 import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, findConflicts, NS_INDEX } from "./core/memory.mjs";
 import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
 import { startOutbox, onSettled, outboxStats, pendingFor, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
@@ -357,6 +358,34 @@ const server = createServer(async (req, res) => {
         name: nameFrom(facts),
         facts,
         saving: queued.length,
+      });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
+  }
+
+  /* What the tutor has been given to teach from, and what it has seen them
+     get wrong. Both live in the same namespace — a material carries a file
+     reference and a missed question does not, which is what tells them apart
+     — so one read answers the whole page. */
+  if (url.pathname === "/api/study") {
+    const userId = url.searchParams.get("userId");
+    if (!userId) return json(res, 400, { error: "userId is required" });
+    try {
+      const who = await resolvePerson("web", userId);
+      const [materials, missed] = await Promise.all([
+        listMaterials(who.personId).catch(() => []),
+        listMistakes(who.personId).catch(() => []),
+      ]);
+      return json(res, 200, {
+        personId: who.personId,
+        materials: materials.map((m) => ({
+          ...m,
+          // The bytes are on the volume; a material whose file went with a
+          // redeploy should say so rather than offering a dead link.
+          url: existsSync(join(UPLOADS, m.file)) ? `/uploads/${m.file}` : null,
+        })),
+        missed,
       });
     } catch (err) {
       return json(res, 503, { error: err.message });

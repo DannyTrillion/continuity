@@ -275,7 +275,13 @@ export async function storeAttachment({ bytes, name, type, hint }) {
     description = `a ${ext.toUpperCase()} file named "${name ?? "untitled"}" (${Math.round(bytes.length / 1024)}KB)`;
   }
 
-  return { id, file, url: `/uploads/${file}`, name: name ?? null, type: type ?? null, description, sawIt };
+  /* `kind` is what the caller needs to decide where this belongs. A photo and
+     a set of lecture slides are both attachments and want storing in
+     completely different places — one in the picture bank, one among the
+     things somebody is studying — and only this function knows which path the
+     bytes actually took. */
+  const kind = canRead(type, ext) && !canSee(type) ? "document" : canSee(type) ? "image" : "other";
+  return { id, file, url: `/uploads/${file}`, name: name ?? null, type: type ?? null, description, sawIt, kind };
 }
 
 const guessExt = (type) =>

@@ -114,6 +114,8 @@ const bodyFor = (reply, data, components) => {
 };
 
 export const COMMANDS = [
+  { name: "study", description: "The notes and PDFs I'm teaching you from" },
+  { name: "quiz", description: "Test you on them, and remember what you missed" },
   {
     name: "link",
     description: "Connect this Discord account to the web chat or Telegram",

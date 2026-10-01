@@ -16,6 +16,7 @@ import { readPage } from "./web.mjs";
 import { chat, DEFAULT_MODEL } from "./llm.mjs";
 import { isOptedOut } from "./identity.mjs";
 import { asksForPicture, findImages, loadImage, rememberImage } from "./images.mjs";
+import { rememberMaterial } from "./study.mjs";
 import { resolveDates, todayLine } from "./time.mjs";
 import { MODES, modeFor, suggestMode } from "./modes.mjs";
 import { firstTurnToday, pickFollowUps, markAsked } from "./followups.mjs";
@@ -122,15 +123,6 @@ Never claim you did something you didn't, and never pretend to remember somethin
 don't.`;
 
 /**
- * The last memories each person's recall actually returned.
- *
- * The relayer answers a matching query with nothing about four times in ten,
- * and rate-limits on top of that. Either way the turn used to go ahead with an
- * empty memory, and the model — told nothing about someone it had been talking
- * to for days — greeted them as a stranger. What it knew ten minutes ago is
- * still true, so that is what it is given, marked as such.
- */
-/**
  * The same assistant, in the room it is actually standing in.
  *
  * Every reply used to be written as though it would land in a browser column:
@@ -154,6 +146,15 @@ const VOICE = {
     "blocks with the language named. No headings.",
 };
 
+/**
+ * The last memories each person's recall actually returned.
+ *
+ * The relayer answers a matching query with nothing about four times in ten,
+ * and rate-limits on top of that. Either way the turn used to go ahead with an
+ * empty memory, and the model — told nothing about someone it had been talking
+ * to for days — greeted them as a stranger. What it knew ten minutes ago is
+ * still true, so that is what it is given, marked as such.
+ */
 const lastGood = new Map(); // personId -> { hits, at }
 const STALE_OK_MS = 6 * 60 * 60 * 1000;
 
@@ -589,14 +590,30 @@ export async function handleTurn({
     // A picture is also a memory of its own, written verbatim into its own
     // namespace so the file reference survives to be asked for later.
     if (attachment?.file && attachment?.description) {
-      rememberImage(personId, {
-        file: attachment.file,
-        name: attachment.name,
-        description: attachment.description,
-        surface,
-        said: message,
-        guard,
-      });
+      /* A document sent to a tutor is not a picture of one. Someone in Tutor
+         mode uploading lecture notes means "teach me this", so it goes to the
+         things they are studying rather than the picture bank — where a set
+         of slides would sit under Photos and be found by nobody. Everything
+         else, including a photo sent to a tutor, is a picture as before. */
+      if (mode === "tutor" && attachment.kind === "document") {
+        rememberMaterial(personId, {
+          file: attachment.file,
+          name: attachment.name,
+          description: attachment.description,
+          pages: attachment.pages,
+          surface,
+          guard,
+        });
+      } else {
+        rememberImage(personId, {
+          file: attachment.file,
+          name: attachment.name,
+          description: attachment.description,
+          surface,
+          said: message,
+          guard,
+        });
+      }
     }
   }
 
