@@ -51,6 +51,7 @@ export const ACTIONS = {
      no such thing — Discord — see an ordinary link and ignore the flag. */
   memory:        { label: "See everything I remember", url: SITE && `${SITE}/memory`, webApp: true },
   docs:          { label: "How it works", url: SITE && `${SITE}/docs` },
+  modepage:      { label: "See the four modes", url: SITE && `${SITE}/modes`, webApp: true },
 };
 
 /* One action per mode, built from the registry so a mode added there becomes
@@ -234,8 +235,11 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
           ? `You're in **${MODES[current].label}** mode — ${MODES[current].blurb.toLowerCase()}. Switch any time:`
           : "No mode set, so I answer as a generalist. Pick one and I'll work that way everywhere:",
         data: { kind: "mode", current, modes: MODES },
+        /* Four blurbs is not much to choose from, so the page that shows what
+           each one actually does sits under them — as a Mini App on Telegram,
+           so reading it does not cost you the chat you were in. */
         actions: [...Object.keys(MODES).filter((id) => id !== current).map((id) => `mode-${id}`),
-                  ...(current ? ["mode-off"] : [])],
+                  ...(current ? ["mode-off"] : []), "modepage"],
       };
     }
 

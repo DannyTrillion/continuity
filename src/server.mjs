@@ -890,6 +890,7 @@ const server = createServer(async (req, res) => {
     "/chat.html": "chat.html",
     "/use-cases": "use-cases.html", "/use-cases.html": "use-cases.html",
     "/docs": "docs.html", "/docs.html": "docs.html",
+    "/modes": "modes.html", "/modes.html": "modes.html",
     "/welcome": "welcome.html", "/welcome.html": "welcome.html",
   };
   if (PAGES[url.pathname]) {

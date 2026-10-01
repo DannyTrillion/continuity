@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Continuity — how it works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#05070A; --ink:#F2F6FA; --soft:#C3CEDB; --dim:#8695A6; --faint:#5A6674;
+    --edge:rgba(255,255,255,.1); --edge-2:rgba(255,255,255,.19);
+    --glass:rgba(255,255,255,.05); --glass-2:rgba(255,255,255,.085);
+    --live:#5AA9FF; --live-ghost:rgba(90,169,255,.12);
+    --wal:#7FE3D4; --warn:#F0A868; --hot:#FF8E7F;
+    --r:20px; --r-md:15px; --r-sm:11px;
+    --ease:cubic-bezier(.22,.7,.28,1);
+    --display:'Outfit',system-ui,sans-serif;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--void);color:var(--ink);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  .wrap{position:relative;z-index:1;max-width:1040px;margin:0 auto;
+    padding-inline:20px;padding-block:clamp(36px,7vw,72px) 80px}
+
+  header{margin-bottom:38px}
+  .back{display:inline-flex;align-items:center;gap:7px;color:var(--dim);text-decoration:none;
+    font-size:13px;margin-bottom:22px}
+  .back:hover{color:var(--ink)}
+  h1{font-family:var(--display);font-weight:300;font-size:clamp(30px,5.4vw,46px);
+    line-height:1.04;margin:0 0 12px;letter-spacing:-.015em;text-wrap:balance}
+  h1 em{font-style:normal;color:var(--live)}
+  .lede{color:var(--soft);margin:0;max-width:60ch;font-size:16px}
+
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));margin-top:30px}
+
+  .mode{position:relative;background:var(--glass);border:1px solid var(--edge);border-radius:var(--r);
+    padding:22px;display:flex;flex-direction:column;gap:12px;
+    transition:border-color .35s var(--ease),background .35s var(--ease)}
+  .mode:hover{border-color:var(--edge-2);background:var(--glass-2)}
+  .mode.open{grid-column:1/-1}
+
+  .mode h2{font-family:var(--display);font-weight:400;font-size:21px;margin:0;letter-spacing:-.01em}
+  .mode .blurb{color:var(--soft);margin:0;font-size:14px}
+  .tag{font-family:var(--mono);font-size:10px;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--faint);display:flex;align-items:center;gap:7px}
+  .tag b{color:var(--wal);font-weight:500}
+
+  .does{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+  .does li{color:var(--soft);font-size:13.5px;display:flex;gap:9px;align-items:flex-start}
+  .does li::before{content:"";flex:none;width:4px;height:4px;border-radius:50%;
+    background:var(--live);margin-top:8px;opacity:.65}
+
+  .cmds{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+  .cmd{font-family:var(--mono);font-size:11.5px;color:var(--soft);
+    background:rgba(255,255,255,.04);border:1px solid var(--edge);
+    border-radius:999px;padding:3px 10px}
+  .cmd.live{color:var(--live);border-color:rgba(90,169,255,.3)}
+
+  /* Tutor is the one with something behind it already. */
+  .shelf{border-top:1px solid var(--edge);margin-top:4px;padding-top:16px;display:grid;gap:12px}
+  .shelf h3{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--faint);margin:0;font-weight:500}
+  .materials{display:grid;gap:8px}
+  .material{display:flex;gap:12px;align-items:baseline;background:rgba(255,255,255,.035);
+    border:1px solid var(--edge);border-radius:var(--r-sm);padding:11px 13px}
+  .material .name{font-weight:500;font-size:14px;min-width:0;overflow-wrap:anywhere}
+  .material .meta{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--faint);white-space:nowrap}
+  .material a.verify{color:var(--faint);font-family:var(--mono);font-size:10.5px;text-decoration:none;
+    border-bottom:1px solid transparent}
+  .material a.verify:hover{color:var(--wal);border-bottom-color:rgba(127,227,212,.4)}
+  .missed{background:rgba(240,168,104,.07);border:1px solid rgba(240,168,104,.22);
+    border-radius:var(--r-sm);padding:11px 13px;font-size:13.5px;color:var(--soft)}
+  .empty{color:var(--dim);font-size:13.5px;margin:0}
+  .empty code{font-family:var(--mono);font-size:12.5px;color:var(--live)}
+
+  footer{margin-top:40px;color:var(--faint);font-size:12.5px;max-width:62ch}
+  footer a{color:var(--dim)}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="back" href="/chat">← Back to the chat</a>
+    <h1>Four ways to work,<br><em>one memory</em> behind them.</h1>
+    <p class="lede">A mode changes how it answers, never what it knows. Pick one on Telegram and
+      you have picked it on Discord and here — it is stored as a memory like everything else.</p>
+  </header>
+
+  <div class="grid" id="grid">
+    <!-- Tutor opens wide, because it has something in it. -->
+    <section class="mode open">
+      <div class="tag"><b>Tutor</b> · teaches, and remembers where you got stuck</div>
+      <h2>Hand it your notes and let it ask you about them</h2>
+      <p class="blurb">Works in steps, checks each one has landed, and starts where you stopped last time.</p>
+      <ul class="does">
+        <li>Send a PDF or your notes and it reads them — scanned pages it will tell you it cannot read.</li>
+        <li>It writes questions from the document's own words, four options, one tap each.</li>
+        <li>Getting one wrong is stored like any other memory, so it can bring it back on another app days later.</li>
+      </ul>
+      <div class="cmds">
+        <span class="cmd live">/mode tutor</span>
+        <span class="cmd live">/study</span>
+        <span class="cmd live">/quiz</span>
+      </div>
+
+      <div class="shelf">
+        <h3>What you've given it to teach from</h3>
+        <div class="materials" id="materials">
+          <p class="empty">Reading…</p>
+        </div>
+        <div id="missed"></div>
+      </div>
+    </section>
+
+    <section class="mode">
+      <div class="tag"><b>Coding partner</b> · code first</div>
+      <h2>Answers in the stack it already knows you use</h2>
+      <p class="blurb">One runnable fix rather than a survey of approaches, and it never asks you to
+        repeat your setup.</p>
+      <ul class="does">
+        <li>Reads an error back to you exactly, and says what it means before fixing it.</li>
+        <li>Uses the tools and versions it already knows you are on.</li>
+      </ul>
+      <div class="cmds"><span class="cmd live">/mode coding</span></div>
+    </section>
+
+    <section class="mode">
+      <div class="tag"><b>Planner</b> · deals in dates</div>
+      <h2>Pins the vague thing to a real day</h2>
+      <p class="blurb">Finishes with the single next thing to do, not a list of options.</p>
+      <ul class="does">
+        <li>Anything vague gets a calendar date, said back to you so you can correct it.</li>
+        <li>If something it remembers was due and has passed, it asks how it went.</li>
+      </ul>
+      <div class="cmds"><span class="cmd live">/mode planner</span></div>
+    </section>
+
+    <section class="mode">
+      <div class="tag"><b>Support desk</b> · diagnoses first</div>
+      <h2>Asks what you have tried once, and never again</h2>
+      <p class="blurb">Uses what it already knows about your setup instead of asking for it.</p>
+      <ul class="does">
+        <li>Diagnoses before it fixes, and says plainly when it does not know.</li>
+        <li>Where the knowledge base covers it, it follows the knowledge base.</li>
+      </ul>
+      <div class="cmds"><span class="cmd live">/mode support</span></div>
+    </section>
+  </div>
+
+  <footer>
+    Modes are stored on Walrus like any other memory, which is why choosing one here follows you
+    to <a href="/chat">the web chat</a>, Telegram and Discord. <a href="/memory">See everything it remembers →</a>
+  </footer>
+</div>
+
+<script>
+/* The tutor shelf is the only part of this page that is not static, and it is
+   deliberately allowed to fail quietly: a relayer wobble should leave four
+   mode cards standing, not an error where the page was. */
+(async function () {
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const slot = document.getElementById("materials");
+  const missedSlot = document.getElementById("missed");
+
+  let userId = null;
+  try { userId = localStorage.getItem("ws8.userId"); } catch { /* private window */ }
+  if (!userId) {
+    slot.innerHTML = '<p class="empty">Open <code>/chat</code> first, then come back — this shelf shows your own materials.</p>';
+    return;
+  }
+
+  let data;
+  try {
+    const r = await fetch("/api/study?userId=" + encodeURIComponent(userId));
+    if (!r.ok) throw new Error(String(r.status));
+    data = await r.json();
+  } catch {
+    slot.innerHTML = '<p class="empty">Couldn\'t read your materials just now. Refresh in a moment.</p>';
+    return;
+  }
+
+  if (!data.materials?.length) {
+    slot.innerHTML =
+      '<p class="empty">Nothing yet. Switch to Tutor mode and send it a PDF or your notes, then <code>/quiz</code>.</p>';
+  } else {
+    slot.innerHTML = data.materials.map((m) => `
+      <div class="material">
+        <span class="name">${esc(m.name)}</span>
+        ${m.blobId ? `<a class="verify" target="_blank" rel="noopener"
+          href="https://walruscan.com/mainnet/blob/${encodeURIComponent(m.blobId)}">${esc(String(m.blobId).slice(0, 14))}… ↗</a>` : ""}
+        <span class="meta">${m.url ? "on file" : "file gone"}</span>
+      </div>`).join("");
+  }
+
+  if (data.missed?.length) {
+    missedSlot.innerHTML =
+      `<h3 style="margin-bottom:8px">What you got wrong</h3>` +
+      data.missed.slice(0, 5).map((x) => `<div class="missed">${esc(x.text)}</div>`).join("");
+  }
+})();
+</script>
+</body>
+</html>
