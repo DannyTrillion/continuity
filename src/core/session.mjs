@@ -7,7 +7,7 @@
  */
 
 import { resolvePerson } from "./identity.mjs";
-import { handleCommand } from "./commands.mjs";
+import { handleCommand, actionsFor } from "./commands.mjs";
 import { handleTurn } from "./agent.mjs";
 import { record as recordTurn } from "./conversations.mjs";
 
@@ -32,13 +32,22 @@ export function resume(personId, turns) {
   return flat.length;
 }
 
+/** Whether the server still holds recent turns for this person — false after a restart. */
+export const hasHistory = (personId) => (histories.get(personId)?.length ?? 0) > 0;
+
 /** Short-term conversational context. Walrus holds the long term; this is just the last few turns. */
 function history(personId) {
   return histories.get(personId) ?? [];
 }
 
-function pushHistory(personId, userText, replyText) {
-  const h = [...history(personId), { role: "user", content: userText }, { role: "assistant", content: replyText }];
+function pushHistory(personId, userText, replyText, attachment) {
+  // What they attached goes into the history with what they said. Without it
+  // the very next message — "where do you think that was taken?" — arrived
+  // with no picture in sight, and the model asked what picture.
+  const said = attachment?.description
+    ? `${userText}\n[They attached ${attachment.name ? `"${attachment.name}"` : "a picture"}: ${String(attachment.description).slice(0, 600)}]`
+    : userText;
+  const h = [...history(personId), { role: "user", content: said }, { role: "assistant", content: replyText }];
   histories.set(personId, h.slice(-HISTORY_TURNS * 2));
 }
 
@@ -46,24 +55,70 @@ function pushHistory(personId, userText, replyText) {
  * Handle one inbound message from any surface.
  * Returns `{ reply, meta }`; never throws for ordinary failures.
  */
-export async function respond({ surface, surfaceUserId, displayName, text, onDelta, persona, remember = true, attachment }) {
+export async function respond({ surface, surfaceUserId, displayName, text, onDelta, onStage, persona, remember = true, attachment }) {
   const trimmed = (text ?? "").trim();
   if (!trimmed) return { reply: "Say something and I'll answer.", meta: {} };
+
+  // A retry can only be silent if nothing has been shown yet. Once deltas have
+  // streamed, a second attempt would append a whole new answer underneath the
+  // half of one the person is already reading.
+  let streamed = false;
+  const tap = onDelta
+    ? (chunk) => { streamed = true; return onDelta(chunk); }
+    : undefined;
 
   let who;
   try {
     who = await person(surface, surfaceUserId, displayName);
   } catch (err) {
-    // Without this the adapter reports a generic failure, and on a bad day
-    // an unreadable identity is how someone becomes a stranger.
+    /**
+     * Identity is unreadable — almost always a rate limit on the relayer.
+     *
+     * This used to end the turn with an apology and nothing else, which meant
+     * a Walrus hiccup took the entire chatbot offline: ask it anything at all
+     * during a 429 and the only thing it would say was that it could not reach
+     * its memory. Wrong trade. Not knowing who someone is costs us recall; it
+     * does not cost us the ability to answer the question in front of us.
+     *
+     * So the turn still runs, with every Walrus read and write switched off,
+     * and the model is told it is working blind so it cannot improvise a
+     * memory. Nothing is written, which is what keeps this safe: with no
+     * person id to write under, a memory saved here could land on the wrong
+     * person once the relayer recovers.
+     */
     console.error(`[${surface}] could not resolve identity:`, err.message);
-    return {
-      reply:
-        err?.status === 429
+    const rateLimited = err?.status === 429;
+    const wait = err?.retryAfterSeconds;
+
+    try {
+      if (streamed) throw err; // half an answer is already on screen
+      const blind = await handleTurn({
+        personId: `transient:${surface}:${surfaceUserId}`,
+        namespaces: [],
+        message: trimmed,
+        history: [],
+        surface,
+        onDelta: tap,
+        persona,
+        remember: false,
+        attachment,
+        memoryless: true,
+      });
+      const note = rateLimited
+        ? `\n\n-# My memory is rate-limited this minute, so I answered that one cold. ` +
+          `Nothing's lost — ask me again in ${wait && wait >= 60 ? `${Math.round(wait / 60)} minutes` : `${wait ?? 60} seconds`} and I'll know you again.`
+        : `\n\n-# I couldn't reach my memory just then, so I answered that one cold. Nothing's lost.`;
+      return { reply: blind.text + note, meta: { ...blind, error: err.message, rateLimited, memoryless: true } };
+    } catch (second) {
+      // The model is down too. Now there really is nothing to say.
+      console.error(`[${surface}] memoryless fallback also failed:`, second.message);
+      return {
+        reply: rateLimited
           ? "I can't reach my memory right now — too many requests at once. Give it a minute and I'll know you again."
           : "I can't reach my memory right now. Give it a moment and try again.",
-      meta: { error: err.message, rateLimited: err?.status === 429 },
-    };
+        meta: { error: err.message, rateLimited },
+      };
+    }
   }
 
   if (trimmed.startsWith("/")) {
@@ -88,6 +143,10 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
       return {
         reply: cmd.reply,
         image: cmd.image,           // /shot returns a PNG for the surface to send
+        // Named, not drawn: each surface turns these into its own buttons,
+        // and `data` into its own layout — an embed on Discord, a list here.
+        actions: actionsFor(cmd.actions),
+        data: cmd.data ?? null,
         meta: { command: true, personId: who.personId },
       };
     }
@@ -98,16 +157,29 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
       personId: who.personId,
       namespaces: who.namespaces,
       message: trimmed,
+      onStage,
       history: history(who.personId),
       surface,
-      onDelta,
+      onDelta: tap,
       persona,
       remember,
       attachment,
     });
-    pushHistory(who.personId, trimmed, turn.text);
-    recordTurn(who.personId, surface, trimmed, turn.text);
-    return { reply: turn.text, meta: { ...turn, personId: who.personId } };
+    pushHistory(who.personId, trimmed, turn.text, attachment);
+    recordTurn(who.personId, surface, trimmed, turn.text, {
+      attached: attachment?.file ? { file: attachment.file, name: attachment.name } : null,
+      picture: turn.picture?.file ? { file: turn.picture.file } : null,
+    });
+    // `image` rides alongside the reply rather than inside meta: every surface
+    // reads it from there already, which is how /shot has always worked. An
+    // ordinary turn can suggest something too, so actions come out here as
+    // well as from a command.
+    return {
+      reply: turn.text,
+      image: turn.image,
+      actions: actionsFor(turn.actions),
+      meta: { ...turn, personId: who.personId },
+    };
   } catch (err) {
     console.error(`[${surface}] turn failed:`, err.message);
 
@@ -117,6 +189,47 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
     const rateLimited = err?.status === 429;
     const wait = err?.retryAfterSeconds;
     const network = !err?.status;
+
+    // Same reasoning as the identity failure above: recall being unavailable is
+    // not a reason to stop answering, only a reason to stop pretending to
+    // remember. We know who they are here, so short-term history still applies.
+    try {
+      if (streamed) throw err;
+      const blind = await handleTurn({
+        personId: who.personId,
+        namespaces: [],
+        message: trimmed,
+        history: history(who.personId),
+        surface,
+        onDelta: tap,
+        persona,
+        // We know who this is, so what they said can still be queued for
+        // memory; the outbox lands it once the relayer is back.
+        remember,
+        attachment,
+        memoryless: true,
+      });
+      // If it could fall back on what it read a few minutes ago, it did not
+      // answer cold, and saying so would be its own small untruth.
+      const note = blind.stale
+        ? `\n\n-# My memory didn't answer just then, so I went on what I read a few minutes ago.`
+        : rateLimited
+          ? `\n\n-# I know who you are, I just couldn't read your memory back this ` +
+            `second — too many requests at once. Try again in ${wait ? (wait >= 60 ? `${Math.round(wait / 60)} minutes` : `${wait} seconds`) : "a minute"} and it'll be there.`
+          : network
+            ? `\n\n-# I lost my connection to my memory partway through that, so I answered it cold. Nothing's lost.`
+            : `\n\n-# I couldn't read my memory back just then, so I answered that one cold. Nothing's lost.`;
+      // Still part of the conversation: the next message has to be able to
+      // refer back to this one, and the transcript has to include it.
+      pushHistory(who.personId, trimmed, blind.text, attachment);
+      recordTurn(who.personId, surface, trimmed, blind.text, {
+        attached: attachment?.file ? { file: attachment.file, name: attachment.name } : null,
+        picture: blind.picture?.file ? { file: blind.picture.file } : null,
+      });
+      return { reply: blind.text + note, image: blind.image, meta: { ...blind, error: err.message, personId: who.personId, rateLimited, memoryless: true } };
+    } catch (second) {
+      console.error(`[${surface}] memoryless fallback also failed:`, second.message);
+    }
 
     return {
       reply: rateLimited

@@ -24,7 +24,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { writeFile, rename } from "node:fs/promises";
 import { learnFrom, rememberFact } from "./memory.mjs";
 
-const FILE = process.env.OUTBOX_PATH ?? new URL("../../outbox.json", import.meta.url).pathname;
+export const FILE = process.env.OUTBOX_PATH ?? new URL("../../outbox.json", import.meta.url).pathname;
 const CONCURRENCY = Number(process.env.OUTBOX_CONCURRENCY ?? 2);
 const GIVE_UP_AFTER_MS = 24 * 60 * 60 * 1000;
 const TICK_MS = 2000;
@@ -68,14 +68,24 @@ function enqueue(job) {
 }
 
 /** Queue a conversation turn for server-side fact extraction. */
-export function enqueueAnalyze(namespace, text, occurredAt = new Date(), surface) {
-  enqueue({ kind: "analyze", namespace, text, occurredAt: new Date(occurredAt).toISOString(), surface });
+export function enqueueAnalyze(namespace, text, occurredAt = new Date(), surface, { guard } = {}) {
+  enqueue({ kind: "analyze", namespace, text, occurredAt: new Date(occurredAt).toISOString(), surface, guard });
 }
 
 /** Queue one verbatim record (identity links, opt-outs). */
-export function enqueueRemember(namespace, text, { idempotencyKey, label } = {}) {
-  enqueue({ kind: "remember", namespace, text, idempotencyKey, label });
+export function enqueueRemember(namespace, text, { idempotencyKey, label, guard } = {}) {
+  enqueue({ kind: "remember", namespace, text, idempotencyKey, label, guard });
 }
+
+/**
+ * What is queued for a namespace and has not landed yet.
+ *
+ * A picture sent a minute ago is in here, not on Walrus, and recall cannot
+ * see it. Asked "did you keep that photo?", the honest answer is yes — it is
+ * being written — and this is how the reader finds that out.
+ */
+export const pendingFor = (namespace) =>
+  queue.filter((j) => j.namespace === namespace).map((j) => ({ text: j.text, createdAt: j.createdAt }));
 
 /** Called with `{ job, ok, stored?, facts?, error? }` whenever a write settles. */
 export function onSettled(fn) {
@@ -94,6 +104,18 @@ const emit = (event) => {
 };
 
 async function run(job) {
+  /**
+   * A guarded write is one queued while the opt-out could not be read — the
+   * relayer was rate-limiting, which is exactly when writes pile up here. It
+   * used to be dropped on the spot ("unknown, so write nothing"), and a photo
+   * sent during a busy minute was answered and never kept. Now the question
+   * is asked here instead, when the relayer is reachable again: opted out,
+   * the write is discarded; unreadable, it waits and is tried again.
+   */
+  if (job.guard) {
+    const { isOptedOut } = await import("./identity.mjs");
+    if (await isOptedOut(job.guard)) return { stored: [], dropped: "opted out" };
+  }
   if (job.kind === "analyze") {
     const res = await learnFrom(job.namespace, job.text, new Date(job.occurredAt));
     return { stored: res.stored, facts: res.facts };

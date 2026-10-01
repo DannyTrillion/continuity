@@ -15,7 +15,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { writeFile, rename } from "node:fs/promises";
 
-const FILE = process.env.PROVENANCE_PATH ?? new URL("../../provenance.json", import.meta.url).pathname;
+export const FILE = process.env.PROVENANCE_PATH ?? new URL("../../provenance.json", import.meta.url).pathname;
 const MAX_READS = 12; // per blob, newest kept
 
 /** blobId -> { wroteOn, at, reads: [{ surface, at }] } */

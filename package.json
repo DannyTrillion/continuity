@@ -8,7 +8,12 @@
     "dev": "node --env-file=.env src/server.mjs",
     "start": "node src/server.mjs",
     "smoke": "node tools/smoke.mjs",
-    "check": "node tools/check-pages.mjs"
+    "check": "node tools/build-shell.mjs && node tools/check-pages.mjs",
+    "build": "node tools/build-shell.mjs",
+    "check:ui": "node tools/check-ui.mjs",
+    "check:bots": "node tools/check-bots.mjs",
+    "check:telegram": "node --env-file=.env tools/check-telegram.mjs",
+    "check:files": "node --env-file=.env tools/check-files.mjs"
   },
   "dependencies": {
     "@mysten-incubation/memwal": "^0.1.7",

@@ -11,7 +11,8 @@
  * conversation is flushed once it goes quiet.
  */
 
-import { rememberFact, recall } from "./memory.mjs";
+import { recall } from "./memory.mjs";
+import { enqueueRemember } from "./outbox.mjs";
 import { randomUUID } from "node:crypto";
 
 const NS = (personId) => `ws8::convo::${personId}`;
@@ -49,15 +50,24 @@ async function flush(personId) {
     turns: fit(convo.turns),
   };
 
-  try {
-    await rememberFact(NS(personId), JSON.stringify(record), { idempotencyKey: `convo:${convo.id}` });
-  } catch (err) {
-    console.error("[conversations] could not save:", err.message);
-  }
+  // Through the outbox, like every other write. Saving directly meant a
+  // conversation that closed during a relayer rate limit was simply gone:
+  // the 429 was logged and nothing retried it.
+  enqueueRemember(NS(personId), JSON.stringify(record), {
+    label: `conversation ${record.title.slice(0, 40)}`,
+    idempotencyKey: `convo:${convo.id}`,
+  });
 }
 
-/** Record one exchange. The conversation saves itself once it goes quiet. */
-export function record(personId, surface, you, bot) {
+/**
+ * Record one exchange. The conversation saves itself once it goes quiet.
+ *
+ * `files` carries the pictures in the exchange — the one they attached and
+ * the one it brought back — as file references, so a reopened conversation
+ * shows them instead of a bare "see" with nothing to see. Only the reference
+ * is kept; the bytes stay in uploads, like everywhere else.
+ */
+export function record(personId, surface, you, bot, files = {}) {
   if (!personId || !you) return;
   let convo = open.get(personId);
 
@@ -65,7 +75,10 @@ export function record(personId, surface, you, bot) {
     convo = { id: randomUUID(), surface, startedAt: new Date().toISOString(), turns: [] };
     open.set(personId, convo);
   }
-  convo.turns.push({ you, bot, at: new Date().toISOString() });
+  const turn = { you, bot, at: new Date().toISOString() };
+  if (files.attached?.file) turn.attached = { file: files.attached.file, name: files.attached.name ?? null };
+  if (files.picture?.file) turn.picture = { file: files.picture.file };
+  convo.turns.push(turn);
   convo.lastAt = Date.now();
 
   clearTimeout(convo.timer);

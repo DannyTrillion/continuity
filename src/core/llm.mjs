@@ -172,14 +172,29 @@ const canRetry = (err) => {
 
 export async function chat(messages, opts = {}) {
   const cascade = opts.model ? [opts.model] : [DEFAULT_MODEL, FALLBACK_MODEL];
-  const run = opts.onDelta ? callStream : call;
   const attempts = 3;
   let last;
+
+  /**
+   * Once an attempt has streamed anything, every later attempt runs whole.
+   *
+   * A stream that broke halfway has already put half a reply in front of the
+   * person. Streaming the retry into the same sink appended a second copy
+   * after the first — Telegram showed "…Either way," and then the full answer
+   * again underneath. Every surface replaces the streamed text with the final
+   * reply, so a retry that arrives in one piece lands cleanly.
+   */
+  let streamedSomething = false;
+  const tapped = opts.onDelta
+    ? { ...opts, onDelta: (d) => { streamedSomething = true; return opts.onDelta(d); } }
+    : opts;
 
   for (const [i, model] of cascade.entries()) {
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {
-        const res = await run(model, messages, opts);
+        const res = opts.onDelta && !streamedSomething
+          ? await callStream(model, messages, tapped)
+          : await call(model, messages, opts);
         return { ...res, fellBack: i > 0 };
       } catch (err) {
         last = err;

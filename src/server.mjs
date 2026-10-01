@@ -5,22 +5,24 @@
 
 import { createServer } from "node:http";
 import { readFile, appendFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { respond } from "./core/session.mjs";
-import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, findConflicts } from "./core/memory.mjs";
+import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, findConflicts, NS_INDEX } from "./core/memory.mjs";
 import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
-import { startOutbox, onSettled, outboxStats } from "./core/outbox.mjs";
+import { startOutbox, onSettled, outboxStats, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
 import { list as listConversations, get as getConversation, flushAll } from "./core/conversations.mjs";
-import { resume } from "./core/session.mjs";
+import { resume, hasHistory } from "./core/session.mjs";
 import { issueMemoryKey, redeemMemoryKey, issueChallenge, takeChallenge, attachWallet } from "./core/recovery.mjs";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { snapshot } from "./core/metrics.mjs";
-import { describeImage, canSee } from "./core/vision.mjs";
+import { storeAttachment, listImages, UPLOADS } from "./core/images.mjs";
+import { saveStep, savePicture, finish as finishOnboarding, receiptsFor, stateFor } from "./core/onboard.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile as writeFileAsync } from "node:fs/promises";
-import { noteWrite, provenanceFor, provenanceStats } from "./core/provenance.mjs";
+import { noteWrite, provenanceFor, provenanceStats, FILE as PROVENANCE_FILE } from "./core/provenance.mjs";
 import { personaList, getPersona } from "./core/personas.mjs";
 import { demoAllowance, recordDemoTurn, budgetSnapshot } from "./core/budget.mjs";
 import { DEFAULT_MODEL } from "./core/llm.mjs";
@@ -30,7 +32,6 @@ import { startDiscord } from "./adapters/discord.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 8080);
 const LEDGER = process.env.LEDGER_PATH ?? join(here, "..", "blob-ledger.jsonl");
-const UPLOADS = process.env.UPLOADS_PATH ?? join(here, "..", "uploads");
 
 /**
  * Every confirmed write, appended with its blob id. This is the receipt rule
@@ -38,6 +39,27 @@ const UPLOADS = process.env.UPLOADS_PATH ?? join(here, "..", "uploads");
  * and not just in a log line claiming success.
  */
 const recentWrites = [];
+
+/**
+ * Reload the tail of the ledger at boot.
+ *
+ * The ledger is the evidence this whole project rests on — real blob ids
+ * anyone can open on Walruscan. It was appended to a file and kept in memory,
+ * but never read back, so every restart served an empty proof list while the
+ * file sat there full. Someone arriving just after a deploy saw a bot that
+ * claimed to write to Walrus and could not show a single blob for it.
+ */
+try {
+  if (existsSync(LEDGER)) {
+    const lines = readFileSync(LEDGER, "utf8").trim().split("\n").filter(Boolean);
+    for (const line of lines.slice(-50).reverse()) {
+      try { recentWrites.push(JSON.parse(line)); } catch { /* skip a torn line */ }
+    }
+    if (recentWrites.length) console.log(`[ledger] restored ${recentWrites.length} write(s) from disk`);
+  }
+} catch (err) {
+  console.warn("[ledger] could not restore:", err.message);
+}
 onSettled(async ({ job, ok, stored = [], error }) => {
   if (!ok) {
     console.error(`[memory] write abandoned (${job.kind} → ${job.namespace}):`, error);
@@ -63,24 +85,57 @@ startOutbox();
  * while everything was fine. A single failure is noise; two in a row is a
  * signal, and only that turns the light off.
  */
-let healthState = { ok: null, relayer: "unknown", writeReady: false, misses: 0 };
+let healthState = { ok: null, relayer: "unknown", writeReady: true, misses: 0, notReady: 0 };
 
 async function pollHealth() {
   try {
     const h = await health();
+    /**
+     * `write_ready` flaps. Polling it a few seconds apart returns false and
+     * then true with nothing wrong in between, and a single false used to make
+     * the whole service report unhealthy: /healthz answered 503, the status
+     * light went red, and on a platform that health-checks this endpoint that
+     * is an invitation to restart a container that was working fine.
+     *
+     * It does not deserve that weight. Writes go through the outbox, which
+     * retries durably across restarts, so a momentary not-ready delays a blob
+     * rather than losing it — and reads and replies are unaffected either way.
+     * So liveness follows the relayer being reachable, and write readiness is
+     * reported alongside it, only believed once it has said so twice running.
+     */
+    const notReady = h.write_ready === false ? healthState.notReady + 1 : 0;
     healthState = {
-      ok: h.status === "ok" && h.write_ready !== false,
+      ok: h.status === "ok",
       relayer: h.status,
-      writeReady: h.write_ready !== false,
+      writeReady: notReady < 2,
       misses: 0,
+      notReady,
     };
-  } catch {
+  } catch (err) {
+    // A 429 is not an outage. The relayer received the request, understood it,
+    // and answered — it is simply busy. Counting that as a miss meant a burst
+    // of real traffic made the app light itself up red and tell every visitor
+    // it was reconnecting, at the exact moment it was working hardest. Worse,
+    // this poll spends the same rate-limit budget it was then misreporting.
+    // Not always a clean 429: the relayer sometimes wraps a rate limit inside
+    // a 500 with the real cause buried in the message, so the text is checked
+    // too. Reading that as an outage is how a busy minute turned the status
+    // light red while every request was still being served.
+    const busy = err?.status === 429 ||
+      /rate limit|too many requests/i.test(String(err?.message ?? ""));
+    if (busy) {
+      healthState = { ...healthState, relayer: "busy", misses: 0 };
+      return;
+    }
     const misses = healthState.misses + 1;
     healthState = { ...healthState, misses, ok: misses >= 2 ? false : healthState.ok };
   }
 }
 pollHealth();
-setInterval(pollHealth, 20_000).unref();
+// Every 20s was 180 requests an hour spent on a status dot, out of an account
+// budget of 1000 — and it counted against the 60-per-minute burst limit that
+// real turns need. A minute is fresh enough for a liveness light.
+setInterval(pollHealth, 60_000).unref();
 
 /** Screenshots come back as a PNG buffer; JSON can only carry it as a data URL. */
 const withImage = (out) =>
@@ -112,18 +167,57 @@ const json = (res, code, body) => {
 
 // 100KB is right for a chat message and far too small for a file: an ordinary
 // screenshot arrives as several megabytes of base64. The cap is per-route now.
+/**
+ * Read a JSON body, refusing anything over `maxBytes`.
+ *
+ * Two things here are less obvious than they look.
+ *
+ * Chunks are measured as bytes, not as string length. Concatenating Buffers
+ * onto a string counts UTF-16 code units, so a body of multibyte characters
+ * was measured at roughly half its real size and the cap let it through.
+ *
+ * And on overflow the request has to be DRAINED, not just abandoned. Rejecting
+ * the promise while the client is still uploading left an undrained socket:
+ * our 413 went out, the upload kept coming, the connection broke mid-flight,
+ * and Railway's proxy turned the whole thing into a 502. Refusing a large file
+ * should look like a refusal, not like a crash. So overflow stops accumulating,
+ * drains the rest, and lets the response go out on a healthy connection.
+ */
 const readBody = (req, maxBytes = 100_000) =>
   new Promise((resolve, reject) => {
-    let raw = "";
+    const chunks = [];
+    let size = 0;
+    let over = false;
+
     req.on("data", (c) => {
-      raw += c;
-      if (raw.length > maxBytes) reject(new Error("That's too large to send in one message."));
+      if (over) return; // draining; hold nothing
+      size += c.length;
+      if (size > maxBytes) {
+        over = true;
+        chunks.length = 0;
+        req.resume(); // let the client finish so the 413 is actually delivered
+        const err = new Error("That's too large to send in one message.");
+        err.status = 413;
+        return reject(err);
+      }
+      chunks.push(c);
     });
+
+    req.on("aborted", () => {
+      const err = new Error("upload interrupted");
+      err.status = 400;
+      reject(err);
+    });
+    req.on("error", reject);
+
     req.on("end", () => {
+      if (over) return; // already rejected
       try {
-        resolve(JSON.parse(raw || "{}"));
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
       } catch {
-        reject(new Error("invalid JSON"));
+        const err = new Error("invalid JSON");
+        err.status = 400;
+        reject(err);
       }
     });
   });
@@ -143,12 +237,29 @@ const server = createServer(async (req, res) => {
   // Health is cached: the relayer call takes a second or two, and every visitor
   // polling it would both feel sluggish and add load for no new information.
   if (url.pathname === "/healthz") {
+    // The state report is not decoration. Every one of these files is state we
+    // promised would survive a restart — the outbox above all, whose entire
+    // job is to keep retrying a write across one. On a container with no
+    // volume mounted they sit on an ephemeral filesystem and are silently
+    // wiped by each deploy, and nothing about that failure is visible from the
+    // outside: the bot looks healthy and just quietly loses pending memories.
+    // So the paths, and whether they are actually on the volume, are reported.
+    const state = Object.fromEntries(
+      Object.entries({
+        outbox: OUTBOX_FILE, namespaces: NS_INDEX, provenance: PROVENANCE_FILE,
+        ledger: LEDGER, uploads: UPLOADS,
+      }).map(([k, p]) => [k, { path: p, exists: existsSync(p) }]),
+    );
+    // 503 means "do not send traffic here". That is true when the relayer is
+    // unreachable, not when it is briefly declining writes.
     return json(res, healthState.ok === false ? 503 : 200, {
       ok: healthState.ok !== false,
       known: healthState.ok !== null,
       relayer: healthState.relayer,
       writeReady: healthState.writeReady,
       outbox: outboxStats(),
+      durable: Object.values(state).every((v) => v.path.startsWith("/data")),
+      state,
     });
   }
 
@@ -218,11 +329,14 @@ const server = createServer(async (req, res) => {
     if (!userId) return json(res, 400, { error: "userId is required" });
     try {
       const who = await resolvePerson("web", userId);
-      const [sets, suppressed, connected] = await Promise.all([
+      const [sets, suppressed, connected, pictures] = await Promise.all([
         Promise.all(who.namespaces.map((ns) =>
           recall(ns, "everything known about this person", { limit: 12, maxTokens: 1800 }))),
         suppressionsFor(who.personId).catch(() => new Set()),
         surfacesFor(who.personId).catch(() => []),
+        // Pictures are memories too, kept in their own namespace; the
+        // dashboard shows them as a collection beside the written ones.
+        listImages(who.personId).catch(() => []),
       ]);
 
       const live = withoutSuppressed(sets.flat(), suppressed);
@@ -246,6 +360,7 @@ const server = createServer(async (req, res) => {
         name: nameFrom(facts),
         connected,
         facts,
+        pictures,
         conflicts,
         stats: {
           total: facts.length,
@@ -291,7 +406,13 @@ const server = createServer(async (req, res) => {
    */
   if (url.pathname === "/api/attach" && req.method === "POST") {
     try {
-      const { userId, name, type, data, hint } = await readBody(req, 12 * 1024 * 1024);
+      let body;
+      try {
+        body = await readBody(req, 12 * 1024 * 1024);
+      } catch (err) {
+        return json(res, err.status ?? 400, { error: err.message });
+      }
+      const { userId, name, type, data, hint } = body;
       if (!userId || !data) return json(res, 400, { error: "userId and data are required" });
 
       const bytes = Buffer.from(String(data).replace(/^data:[^,]+,/, ""), "base64");
@@ -299,23 +420,8 @@ const server = createServer(async (req, res) => {
         return json(res, 413, { error: "That file is over 8MB. Try a smaller one." });
       }
 
-      const ext = (String(name ?? "").match(/\.([a-z0-9]{1,5})$/i)?.[1] ?? "bin").toLowerCase();
-      const id = randomUUID();
-      await mkdir(UPLOADS, { recursive: true });
-      await writeFileAsync(join(UPLOADS, `${id}.${ext}`), bytes);
-      const fileUrl = `/uploads/${id}.${ext}`;
-
-      let description = null;
-      let sawIt = false;
-      if (canSee(type)) {
-        const seen = await describeImage(`data:${type};base64,${bytes.toString("base64")}`, { hint });
-        if (seen.ok) { description = seen.description; sawIt = true; }
-        else description = `an image the assistant could not read (${seen.error})`;
-      } else {
-        description = `a ${ext.toUpperCase()} file named "${name ?? "untitled"}" (${Math.round(bytes.length / 1024)}KB)`;
-      }
-
-      return json(res, 200, { id, url: fileUrl, name: name ?? null, type: type ?? null, description, sawIt });
+      // Shared with Telegram and Discord, so all three behave identically.
+      return json(res, 200, await storeAttachment({ bytes, name, type, hint }));
     } catch (err) {
       return json(res, 400, { error: err.message });
     }
@@ -331,7 +437,21 @@ const server = createServer(async (req, res) => {
       const ext = upload[1].split(".").pop().toLowerCase();
       const type = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
         webp: "image/webp", pdf: "application/pdf", txt: "text/plain", md: "text/markdown" }[ext];
-      res.writeHead(200, { "Content-Type": type ?? "application/octet-stream", "Cache-Control": "public, max-age=86400" });
+      /**
+       * Cache hard in production, never locally.
+       *
+       * A day-long cache is right for a texture served from Railway and
+       * exactly wrong while someone is editing the stylesheet it is caching:
+       * the server picks the change up on the next request and the browser
+       * cheerfully ignores it, so the page looks unchanged and the edit looks
+       * broken. Decided from the request's own host, so it needs no env var
+       * and cannot be wrong about which one this is.
+       */
+      const local = /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(req.headers.host ?? "");
+      res.writeHead(200, {
+        "Content-Type": type ?? "application/octet-stream",
+        "Cache-Control": local ? "no-store" : "public, max-age=86400",
+      });
       return res.end(body);
     } catch {
       return json(res, 404, { error: "That file is no longer here." });
@@ -370,6 +490,79 @@ const server = createServer(async (req, res) => {
       if (!convo) return json(res, 404, { error: "No such conversation." });
       const restored = resume(who.personId, convo.turns);
       return json(res, 200, { conversation: convo, restored });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
+  }
+
+  /**
+   * A reloaded page bringing its own transcript back.
+   *
+   * The browser keeps the conversation on screen across reloads; this puts
+   * it back into short-term context too, but only when the server has none —
+   * after a redeploy, typically. If the server still remembers the last few
+   * turns, its copy is the fresher one and wins.
+   */
+  if (url.pathname === "/api/session/restore" && req.method === "POST") {
+    try {
+      const { userId, turns } = await readBody(req);
+      if (!userId || !Array.isArray(turns)) return json(res, 400, { error: "userId and turns are required" });
+      const who = await resolvePerson("web", String(userId));
+      if (hasHistory(who.personId)) return json(res, 200, { restored: 0, kept: true });
+      const clean = turns.slice(-12).map((t) => ({ you: String(t?.you ?? "").slice(0, 4000), bot: String(t?.bot ?? "").slice(0, 8000) }));
+      return json(res, 200, { restored: resume(who.personId, clean) });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
+  }
+
+  /* ── being introduced, once ── */
+
+  // One step's answer, stored as a memory. The reply carries every receipt so
+  // far, so the page can show each one landing without a second request.
+  if (url.pathname === "/api/onboard/step" && req.method === "POST") {
+    try {
+      const { userId, step, value, attachment } = await readBody(req, 64 * 1024);
+      if (!userId || !step) return json(res, 400, { error: "userId and step are required" });
+      const name = step === "name" ? String(value ?? "").slice(0, 40) : undefined;
+      const who = await resolvePerson("web", String(userId), name ? { displayName: name } : undefined);
+      const saved = step === "picture" ? savePicture(who.personId, attachment, value) : saveStep(who.personId, String(step), value);
+      return json(res, 200, { ok: true, saved: Boolean(saved), receipts: receiptsFor(who.personId) });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
+  }
+
+  if (url.pathname === "/api/onboard/status") {
+    const userId = url.searchParams.get("userId");
+    if (!userId) return json(res, 400, { error: "userId is required" });
+    try {
+      const me = await lookupAccount("web", String(userId));
+      return json(res, 200, { receipts: me ? receiptsFor(me.personId) : [] });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
+  }
+
+  if (url.pathname === "/api/onboard/finish" && req.method === "POST") {
+    try {
+      const { userId, answers } = await readBody(req, 64 * 1024);
+      if (!userId) return json(res, 400, { error: "userId is required" });
+      const who = await resolvePerson("web", String(userId));
+      finishOnboarding(who.personId, answers ?? {});
+      return json(res, 200, { ok: true, receipts: receiptsFor(who.personId) });
+    } catch (err) {
+      return json(res, 503, { error: err.message });
+    }
+  }
+
+  // Asked only by the welcome page itself, when someone opens it again.
+  if (url.pathname === "/api/onboard/state") {
+    const userId = url.searchParams.get("userId");
+    if (!userId) return json(res, 400, { error: "userId is required" });
+    try {
+      const me = await lookupAccount("web", String(userId));
+      return json(res, 200, me ? await stateFor(me.personId) : { done: false });
     } catch (err) {
       return json(res, 503, { error: err.message });
     }
@@ -534,7 +727,11 @@ const server = createServer(async (req, res) => {
     } catch (err) {
       return json(res, 400, { error: err.message });
     }
-    const { userId, text } = body;
+    // `attachment` is the description and url produced by /api/attach, not the
+    // bytes — those are already on disk. Leaving it out of this destructure
+    // meant the streaming path silently dropped every attachment, so the model
+    // was asked about an image it had never been told about.
+    const { userId, text, attachment } = body;
     if (!userId || !text) return json(res, 400, { error: "userId and text are required" });
 
     res.writeHead(200, {
@@ -552,7 +749,9 @@ const server = createServer(async (req, res) => {
         surface: "web",
         surfaceUserId: String(userId),
         text: String(text),
+        attachment,
         onDelta: (t) => send({ t }),
+        onStage: (st) => send({ s: st }),
       });
       // A command reply never streams, so send it whole.
       send({ done: true, ...withImage(out) });
@@ -578,14 +777,28 @@ const server = createServer(async (req, res) => {
     }
   }
 
-// "/" is the landing page; "/chat" is the app itself.
+  /**
+   * "/" is the landing page; the app itself is one document.
+   *
+   * Chat, memory and history are three panels in app.html, so all three paths
+   * serve the same file and the router picks the panel from the path. That is
+   * what makes moving between them instant: there is nothing to load.
+   *
+   * The paths stay real — a deep link, a bookmark or the back button all land
+   * on the right section. The standalone pages are still served at their
+   * .html names, so either half can be opened on its own when something breaks
+   * and you need to know which one owns the bug.
+   */
   const PAGES = {
     "/": "index.html", "/index.html": "index.html",
     "/demo": "demo.html", "/demo.html": "demo.html",
-    "/memory": "memory.html", "/memory.html": "memory.html",
-    "/history": "history.html", "/history.html": "history.html",
-    "/chat": "chat.html", "/chat.html": "chat.html",
+    "/chat": "app.html", "/memory": "app.html", "/history": "app.html",
+    "/memory.html": "memory.html",
+    "/history.html": "history.html",
+    "/chat.html": "chat.html",
     "/use-cases": "use-cases.html", "/use-cases.html": "use-cases.html",
+    "/docs": "docs.html", "/docs.html": "docs.html",
+    "/welcome": "welcome.html", "/welcome.html": "welcome.html",
   };
   if (PAGES[url.pathname]) {
     try {
@@ -611,14 +824,31 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  // Static assets that live beside the pages (the background texture).
-  const asset = url.pathname.match(/^\/assets\/([\w.-]+)$/);
+  // Static assets that live beside the pages: the texture, the stylesheets,
+  // and one folder deep for the screenshots the capabilities page shows.
+  const asset = url.pathname.match(/^\/assets\/((?:[\w-]+\/)?[\w.-]+)$/);
   if (asset) {
     try {
       const body = await readFile(join(here, "web", "assets", asset[1]));
       const ext = asset[1].split(".").pop().toLowerCase();
-      const type = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", svg: "image/svg+xml" }[ext];
-      res.writeHead(200, { "Content-Type": type ?? "application/octet-stream", "Cache-Control": "public, max-age=86400" });
+      const type = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", svg: "image/svg+xml",
+        css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8",
+        json: "application/json; charset=utf-8" }[ext];
+      /**
+       * Cache hard in production, never locally.
+       *
+       * A day-long cache is right for a texture served from Railway and
+       * exactly wrong while someone is editing the stylesheet it is caching:
+       * the server picks the change up on the next request and the browser
+       * cheerfully ignores it, so the page looks unchanged and the edit looks
+       * broken. Decided from the request's own host, so it needs no env var
+       * and cannot be wrong about which one this is.
+       */
+      const local = /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(req.headers.host ?? "");
+      res.writeHead(200, {
+        "Content-Type": type ?? "application/octet-stream",
+        "Cache-Control": local ? "no-store" : "public, max-age=86400",
+      });
       return res.end(body);
     } catch {
       return json(res, 404, { error: "not found" });

@@ -8,13 +8,17 @@
  * relayer bad patch delays a memory rather than losing it.
  */
 
-import { recall, dedupe, personNs, KB_NS, suppressionsFor, withoutSuppressed } from "./memory.mjs";
+import { recall, dedupe, personNs, KB_NS, suppressionsFor, withoutSuppressed, hasMemories } from "./memory.mjs";
 import { enqueueAnalyze } from "./outbox.mjs";
 import { noteRead } from "./provenance.mjs";
 import { observe, count } from "./metrics.mjs";
 import { readPage } from "./web.mjs";
 import { chat, DEFAULT_MODEL } from "./llm.mjs";
 import { isOptedOut } from "./identity.mjs";
+import { asksForPicture, findImages, loadImage, rememberImage } from "./images.mjs";
+import { resolveDates, todayLine } from "./time.mjs";
+import { MODES, modeFor, suggestMode } from "./modes.mjs";
+import { firstTurnToday, pickFollowUps, markAsked } from "./followups.mjs";
 
 /**
  * Who the bot says it is, built from the model actually being served.
@@ -98,8 +102,36 @@ forward, rest assured. Never write "it's worth noting that", "it's important to 
 X comes in", "at the end of the day", "in conclusion", or "I hope this helps". Don't
 end by offering three more things you could do.
 
+PICTURES
+You can show people pictures they sent you before. When one is found it is attached to
+your reply and appears in their chat — so talk about it as something they can now see.
+Never say you are unable to fetch or show images: you can, and denying it while one is
+attached to the very same reply makes you look broken.
+
+Pictures people send are kept: described, written to memory, and brought back on any app
+when they ask. Never tell someone that pictures, or anything else, "don't carry over
+between conversations" — carrying over is the one thing you are for.
+
+NEVER SAY "THIS IS OUR FIRST CONVERSATION", that you have never spoken to someone, or that
+you have no memory of them, unless a system note below says in so many words that this
+person is new. Finding nothing relevant to the question is not the same as never having
+met. If you cannot read your memory back, say exactly that — "I can't read my memory back
+right now, ask me again in a minute" — and nothing stronger.
+
 Never claim you did something you didn't, and never pretend to remember something you
 don't.`;
+
+/**
+ * The last memories each person's recall actually returned.
+ *
+ * The relayer answers a matching query with nothing about four times in ten,
+ * and rate-limits on top of that. Either way the turn used to go ahead with an
+ * empty memory, and the model — told nothing about someone it had been talking
+ * to for days — greeted them as a stranger. What it knew ten minutes ago is
+ * still true, so that is what it is given, marked as such.
+ */
+const lastGood = new Map(); // personId -> { hits, at }
+const STALE_OK_MS = 6 * 60 * 60 * 1000;
 
 /**
  * The rules a persona cannot opt out of: the trust boundary, how to use memory,
@@ -150,6 +182,8 @@ export async function handleTurn({
   history = [],
   surface = "web",
   onDelta,
+  /** Called once recall is done and the model is about to speak, with what was found. */
+  onStage,
   // A demo persona brings its own voice and its own handbook; everything else
   // about the turn — identity, memory, the trust boundary — is unchanged.
   persona = null,
@@ -160,6 +194,17 @@ export async function handleTurn({
   // that can see. Walrus Memory stores text, so the description is what
   // becomes a memory; the file itself is just served back.
   attachment = null,
+  /**
+   * Answer without touching Walrus at all.
+   *
+   * Reserved for the case where the memory layer is unreachable — usually a
+   * rate limit. The turn used to be refused outright then, which meant a
+   * Walrus hiccup took the whole chatbot down: ask it the capital of France
+   * during a 429 and it would only tell you it could not reach its memory.
+   * Losing recall is not a reason to stop answering. What it IS a reason to do
+   * is say so, and write nothing, so the gap is never mistaken for amnesia.
+   */
+  memoryless = false,
 }) {
   // Every read this turn needs happens at once. Checking the opt-out first and
   // then starting recall put two round trips end to end on the path to the
@@ -175,10 +220,47 @@ export async function handleTurn({
   // "I can't browse the web" about a page they just handed over.
   const links = [...new Set(String(message).match(URL_RE) ?? [])].slice(0, 2);
 
-  const [optedOut, suppressed, personalSets, profileSets, kb, pages] = await Promise.all([
+  /**
+   * Only when they have actually named a picture, and only when they are not
+   * sending one right now. This is an extra read on a relayer with sixty a
+   * minute to spare, so it does not run speculatively.
+   */
+  const lookingForPicture = asksForPicture(message) && !attachment;
+
+  // A memoryless turn still asks whether they opted out, because it may still
+  // write (below). `null` means the answer could not be read, and then nothing
+  // is written: recording someone who asked not to be would be the worse error.
+  /**
+   * What to search memory with.
+   *
+   * Recall embeds the sentence it is given. "And the second option?" or
+   * "yes, that one" embed to nothing useful, so a short or anaphoric message
+   * searches with the previous user turn in front of it — the thing it is
+   * actually about. Same number of reads; far better hits.
+   */
+  const lastUser = [...history].reverse().find((h) => h.role === "user")?.content ?? "";
+  const lastBot = [...history].reverse().find((h) => h.role === "assistant")?.content ?? "";
+  const leansOnContext = message.length < 60 || /^(yes|no|yeah|yep|nope|ok|okay|sure|that|this|it|the (first|second|third|last) one|and |what about|how about|same)\b/i.test(message);
+  const recallQuery = leansOnContext && lastUser ? `${lastUser}\n${message}` : message;
+
+  // Once a day, one extra read for dated plans, so a plan whose day has
+  // passed can be asked about even when today's message is about something
+  // else entirely. Every other turn works from what recall already found.
+  const firstToday = !memoryless && firstTurnToday(personId);
+
+  /* Which lens to answer through. Started here and awaited below so its read
+     — one per person per process, then cached — overlaps the recall it would
+     otherwise queue behind. A demo persona brings its own manner, so a mode
+     on top of one would be two voices at once. */
+  const modeRead = memoryless || persona ? Promise.resolve(null) : modeFor(personId).catch(() => null);
+
+  const [optedOut, suppressed, personalSets, profileSets, kb, pages, pictures, plans] = memoryless
+    ? [await isOptedOut(personId).catch(() => null), new Set(), [], [], [], await Promise.all(links.map((u) => readPage(u))),
+       lookingForPicture ? await findImages(personId, message, { offline: true }) : [], []]
+    : await Promise.all([
     isOptedOut(personId),
     suppressionsFor(personId).catch(() => new Set()),
-    Promise.all(namespaces.map((ns) => recall(ns, message, { limit: 6, maxTokens: 500 }))),
+    Promise.all(namespaces.map((ns) => recall(ns, recallQuery, { limit: 6, maxTokens: 500 }))),
     // A second, fixed query for the basics.
     //
     // Recall is semantic, so it answers the sentence in front of it. Ask "what
@@ -199,23 +281,29 @@ export async function handleTurn({
     // would reject the whole turn: a slow handbook would look like the bot
     // being down. Personal recall is NOT given this treatment; if we cannot
     // read who someone is, failing loudly beats greeting them as a stranger.
-    recall(persona?.kb ?? KB_NS, message, { limit: 4, maxTokens: 400 }).catch((err) => {
+    recall(persona?.kb ?? KB_NS, recallQuery, { limit: 4, maxTokens: 400 }).catch((err) => {
       console.warn("[agent] knowledge base recall skipped:", err.message.slice(0, 90));
       return [];
     }),
     Promise.all(links.map((u) => readPage(u))),
+    lookingForPicture ? findImages(personId, message).catch(() => []) : Promise.resolve([]),
+    firstToday
+      ? recall(namespaces[0], "plans, appointments, interviews, trips, deadlines and events on a date", { limit: 6, maxTokens: 400 }).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   // Record that THIS surface read these memories. Without it the dashboard can
   // assert that Discord sees what Telegram wrote but cannot show it.
-  noteRead(
-    [...personalSets.flat(), ...profileSets.flat()].map((h) => h.blob_id),
-    surface,
-  );
+  if (!memoryless) {
+    noteRead(
+      [...personalSets.flat(), ...profileSets.flat()].map((h) => h.blob_id),
+      surface,
+    );
+  }
 
   // Message-relevant hits first, then the profile baseline; dedupe collapses
   // anything the two queries both found.
-  const personal = optedOut
+  let personal = optedOut
     ? []
     : dedupe(withoutSuppressed(
         [...personalSets.flat().sort((a, b) => a.distance - b.distance),
@@ -223,10 +311,81 @@ export async function handleTurn({
         suppressed,
       )).slice(0, 10);
 
+  // Nothing came back. If we have read this person's memory before, fall back
+  // on what it said then rather than meeting them as a stranger.
+  let stale = false;
+  const transient = String(personId).startsWith("transient:");
+  if (personal.length) lastGood.set(personId, { hits: personal, at: Date.now() });
+  else if (optedOut !== true) {
+    const kept = lastGood.get(personId);
+    if (kept && Date.now() - kept.at < STALE_OK_MS) { personal = kept.hits; stale = true; }
+  }
+  // Known to us, whether or not anything could be read this turn.
+  const known = !transient && (personal.length > 0 || hasMemories(namespaces[0] ?? personNs(personId)));
+
+  const mode = await modeRead;
+
+  /* Offered, never imposed, and only to someone who has not chosen — see
+     suggestMode. The model does the asking so it can be asked in passing
+     rather than as a banner. */
+  const suggested = memoryless || persona ? null : suggestMode(personId, message, mode);
+
   const recallMs = Date.now() - turnStarted;
+
+  // A plan whose day has just passed, to ask about — once. Drawn from the
+  // memories already in context plus, on the first turn of the day, the
+  // dated-plans read above; never marked as asked until it reaches the model.
+  const { past: followUp, upcoming } = optedOut || memoryless
+    ? { past: null, upcoming: null }
+    : pickFollowUps(personId, [...personal, ...plans.filter((p) => !suppressed.has(p.blob_id))]);
+  const followNote = followUp
+    ? `FOLLOW-UP — DO THIS ONCE, THIS TURN: you remember "${followUp.text}", and that was ${followUp.daysAgo === 1 ? "yesterday" : `${followUp.daysAgo} days ago`}. ` +
+      `Answer what they said first, then ask in one short, natural sentence how it went (for example "Also — how did the interview go on Thursday?"). ` +
+      `Do not skip this because their message was about something else; that is the point. You will not be reminded again, and you must not ask about it again.`
+    : upcoming
+      ? `COMING UP: you remember "${upcoming.text}" — ${upcoming.daysAhead === 0 ? "that is today" : upcoming.daysAhead === 1 ? "that is tomorrow" : `in ${upcoming.daysAhead} days`}. Mention it only if it is relevant to what they said.`
+      : null;
   const answerModel = DEFAULT_MODEL;
   const fetched = pages.filter((p) => p.ok);
   const failed = links.filter((_, i) => !pages[i].ok).map((u, i) => `${u} — ${pages[i]?.error ?? "couldn't read it"}`);
+
+  /**
+   * The best match, if there is a confident one.
+   *
+   * Recall always returns its nearest neighbours, so without a threshold a
+   * question about a photo that was never sent comes back with whatever
+   * picture is least unlike it — which is a confident, wrong answer. Better to
+   * find nothing and say so.
+   */
+  const found = pictures.filter((p) => p.available).sort((a, b) => a.distance - b.distance);
+  const picture = found[0] && found[0].distance < 0.62 ? found[0] : null;
+  const sending = picture ? await loadImage(picture.file) : null;
+
+  const pictureNote = !lookingForPicture ? null
+    : pictures.failed
+      ? "THEY ASKED ABOUT A PICTURE AND YOU COULD NOT CHECK YOUR PICTURES THIS TURN — the memory " +
+        "service did not answer. Do NOT say you have none, and do not say they never sent one. " +
+        'Say something like: "I can\'t look through my pictures this second — ask me again in a minute ' +
+        'and I\'ll find it." Pictures they sent are kept; you just cannot reach them right now.'
+    : pictures.length === 0
+      ? "THEY ASKED ABOUT A PICTURE AND NONE IS STORED FOR THEM YET. Say you don't have one from " +
+        "them so far and that you will keep any they send — do not invent one, and do not say that " +
+        "pictures are not kept between conversations; they are."
+      : sending
+        ? `YOU HAVE FOUND THE PICTURE THEY ARE ASKING ABOUT AND IT IS ALREADY ATTACHED TO ` +
+          `THIS REPLY. It will appear in their chat. Do NOT say you cannot fetch or show ` +
+          `images, and do NOT ask them to send it again — it is right there. Speak about ` +
+          `it as something in front of both of you, and keep it brief; they can see it. ` +
+          `Here is what it shows:\n\n${picture.description}` +
+          `${picture.pending ? "\n\n(It was sent moments ago and is still being written to Walrus. It IS kept; if they ask whether you stored it, the answer is yes.)" : ""}` +
+          `${found.length > 1 ? `\n\nYou also have ${found.length - 1} other picture(s) that could match; mention that only if it seems useful.` : ""}`
+        : found.length
+          ? `THEY ASKED ABOUT A PICTURE. You have these stored, but none is a confident match for ` +
+            `what they described, so none is attached. Tell them which ones you have and ask which ` +
+            `they mean:\n\n${found.map((p) => `- ${p.description}`).join("\n")}`
+          : `THEY ASKED ABOUT A PICTURE. You remember these, but no longer have the files, ` +
+            `so you CANNOT show them — say that honestly rather than pretending to send ` +
+            `one:\n\n${pictures.map((p) => `- ${p.description}`).join("\n")}`;
 
   const attached = attachment?.description
     ? `THE PERSON ATTACHED SOMETHING TO THIS MESSAGE (a model looked at it and ` +
@@ -238,17 +397,45 @@ export async function handleTurn({
   const messages = [
     {
       role: "system",
-      content: `${identity(answerModel)}\n\n${persona ? `${persona.system}\n\n${SHARED_RULES}` : SYSTEM}`,
+      // A mode is appended to the rules, never in place of them: it changes
+      // the manner and nothing about the trust boundary or the memory.
+      content: `${identity(answerModel)}\n\n${persona ? `${persona.system}\n\n${SHARED_RULES}` : SYSTEM}` +
+        (mode ? `\n\n${MODES[mode].system}` : ""),
     },
     {
       role: "system",
-      content: `${fence("WHAT I KNOW ABOUT THIS PERSON", personal)}\n\n${fence("SUPPORT KNOWLEDGE", kb)}`,
+      content:
+        `${todayLine()} Dates in brackets after a phrase, like "(2 Oct 2026)", are the calendar date that phrase meant when it was said; use them to tell what has already happened from what is still to come.\n\n` +
+        (personal.length
+          ? (stale
+              ? "YOUR MEMORY DID NOT ANSWER THIS TURN. What follows is what it returned a little while ago; " +
+                "it is still true, but it is not a fresh search for what they just asked. If they ask about " +
+                "something that is not here, say you can't read everything back this second — never that " +
+                "you don't know them.\n\n"
+              : "") + fence("WHAT I KNOW ABOUT THIS PERSON", personal)
+          : known
+            ? "YOU KNOW THIS PERSON. You have memories of them and have spoken before, but none could be " +
+              "read back this turn — the memory service returned nothing. This is NOT your first " +
+              "conversation. Do not say you have no memory of them, and do not tell them they never said " +
+              "or sent something. Answer what you can from this conversation; for anything that depends " +
+              "on remembering, say you can't read your memory back this second and to ask again in a minute."
+            : memoryless
+              ? "YOUR MEMORY IS UNREACHABLE THIS TURN, so you cannot tell whether you know this person. " +
+                "Answer the question on its own merits from what is in this conversation. Do not claim to " +
+                "remember anything specific and do not guess — but do not say this is your first " +
+                "conversation or that you have nothing on them either; you do not know that. If what they " +
+                "asked depends on remembering them, say plainly that you cannot read your memory right now " +
+                "and that nothing has been lost."
+              : "THIS PERSON IS NEW TO YOU: nothing has been stored about them yet. " + fence("WHAT I KNOW ABOUT THIS PERSON", personal)) +
+        `\n\n${fence("SUPPORT KNOWLEDGE", kb)}`,
     },
+
     // A fetched page is the least trustworthy text in this prompt: anyone can
     // put anything on a web page, including instructions aimed at whatever
     // model reads it. Fenced hard, and the model is told to treat it as quoted
     // material rather than as something addressing it.
     ...(attached ? [{ role: "system", content: attached }] : []),
+
     ...(fetched.length
       ? [{
           role: "system",
@@ -264,11 +451,28 @@ export async function handleTurn({
         ? [{ role: "system", content: `The person linked pages you could not open: ${failed.join("; ")}. Say so plainly.` }]
         : []),
     ...history.slice(-6),
+    // Last, so it is the freshest instruction in the window. Earlier in the
+    // list the model read past it and fell back on insisting it cannot see
+    // images — while attaching one to that very reply.
+    ...(pictureNote ? [{ role: "system", content: pictureNote }] : []),
+    ...(followNote ? [{ role: "system", content: followNote }] : []),
+    ...(suggested ? [{
+      role: "system",
+      content:
+        `THEY HAVE NOT PICKED A WAY FOR YOU TO WORK, and this message sounds like ${MODES[suggested].label} ` +
+        `would suit it — ${MODES[suggested].blurb.toLowerCase()}. Answer them normally first, then in ONE short ` +
+        `sentence at the end ask whether they want you in ${MODES[suggested].label} mode. Ask; do not announce ` +
+        `that you have switched, because you have not. Do not explain what modes are.`,
+    }] : []),
     { role: "user", content: message },
   ];
 
   const startedAt = Date.now();
+  // The person has been looking at "reading your memory" until now; tell the
+  // surface what that found before the first word arrives.
+  onStage?.({ stage: "thinking", recalled: personal.length, pictures: pictures.length, ms: Date.now() - turnStarted });
   const answer = await chat(messages, { onDelta });
+  if (followUp) markAsked(personId, followUp.text);
   observe("answerMs", Date.now() - startedAt);
   count("turns");
 
@@ -279,19 +483,59 @@ export async function handleTurn({
   // 13 blobs, several of them inventions ("the command `walrus publisher --list`
   // can be used"), which would then be recalled later as things the user had
   // told us. A memory of what we guessed is worse than no memory.
-  if (!optedOut && remember) {
+  // Writes go through the outbox, which retries for as long as it takes, so
+  // a turn that could not READ memory can still add to it. Skipping these on
+  // memoryless turns made "nothing's lost" untrue: a photo sent during a bad
+  // patch was answered, and then never remembered.
+  if (optedOut !== true && remember && !transient) {
+    // Could not read whether they opted out: queue it anyway, guarded, and
+    // let the outbox ask again before it sends.
+    const guard = optedOut === null ? personId : undefined;
     // The attachment is part of what they said, so it goes into memory with it.
+    // "Yes" is not a fact. When the message only makes sense as an answer,
+    // the question it answers goes in with it, so the extractor can turn "yes,
+    // part-time" into something about the person rather than nothing. The
+    // assistant's words are marked as the question, and only that; they are
+    // still not to be stored as facts (see above).
+    const pinned = resolveDates(message);
+    const inReplyTo = leansOnContext && lastBot
+      ? `\n(That was their answer to the assistant asking: "${lastBot.replace(/\s+/g, " ").slice(0, 200)}" — extract what it tells you about the user, not what the assistant said.)`
+      : "";
     const utterance = attached
-      ? `On ${surface}, the user said: ${message}\nThey attached ${attachment.name ? `"${attachment.name}"` : "a file"}, which showed: ${attachment.description}`
-      : `On ${surface}, the user said: ${message}`;
-    enqueueAnalyze(personNs(personId), utterance, new Date(), surface);
+      ? `On ${surface}, the user said: ${pinned}${inReplyTo}\nThey attached ${attachment.name ? `"${attachment.name}"` : "a file"}, which showed: ${attachment.description}`
+      : `On ${surface}, the user said: ${pinned}${inReplyTo}`;
+    enqueueAnalyze(personNs(personId), utterance, new Date(), surface, { guard });
+
+    // A picture is also a memory of its own, written verbatim into its own
+    // namespace so the file reference survives to be asked for later.
+    if (attachment?.file && attachment?.description) {
+      rememberImage(personId, {
+        file: attachment.file,
+        name: attachment.name,
+        description: attachment.description,
+        surface,
+        said: message,
+        guard,
+      });
+    }
   }
 
   return {
     text: answer.text,
+    // Every surface already knows how to send one of these: an attachment on
+    // Discord, a photo on Telegram, inline on the web.
+    image: sending,
+    picture: picture ? { file: picture.file, distance: picture.distance } : null,
     model: answer.model,
     fellBack: answer.fellBack ?? false,
     recalled: { personal: personal.length, kb: kb.length },
+    followUp: followUp ? { text: followUp.text, daysAgo: followUp.daysAgo } : null,
+    mode,
+    // A button for the offer, drawn by whichever surface asked.
+    actions: suggested ? [`switch-${suggested}`] : [],
+    stale,
+    known,
+    memoryless,
     attachment: attachment ? { url: attachment.url, name: attachment.name, sawIt: attachment.sawIt } : null,
     read: fetched.map((p) => ({ url: p.url, title: p.title })),
     // The exact memories behind this answer. Surfaced so the console can show
