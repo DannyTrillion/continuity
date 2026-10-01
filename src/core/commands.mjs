@@ -6,11 +6,13 @@
  */
 
 import { issueLinkCode, redeemLinkCode, resolvePerson, setOptOut } from "./identity.mjs";
-import { recall } from "./memory.mjs";
+import { recall, personNs, KB_NS } from "./memory.mjs";
 import { searchWeb, screenshotUrl } from "./web.mjs";
 import { MODES, isMode, modeFor, setMode } from "./modes.mjs";
 import { listMaterials } from "./study.mjs";
 import { startQuiz, answerQuiz, LETTERS } from "./quiz.mjs";
+import { PLAN } from "./followups.mjs";
+import { datesIn, daysBetween } from "./time.mjs";
 
 /**
  * Where the website is, if it is anywhere.
@@ -69,6 +71,23 @@ ACTIONS["quiz"]  = { label: "Quiz me", say: "/quiz" };
 for (const [i, letter] of LETTERS.entries()) {
   ACTIONS[`answer-${i}`] = { label: letter, say: `/answer ${i}` };
 }
+ACTIONS["plans"] = { label: "What's coming up", say: "/plans" };
+ACTIONS["stack"] = { label: "What you know about my setup", say: "/stack" };
+ACTIONS["kb"]    = { label: "Search the handbook", say: "/kb" };
+/**
+ * The buttons that belong to each mode.
+ *
+ * A mode is a manner, but a manner with nothing to tap is indistinguishable
+ * from a setting nobody changed. These are what each one is actually for,
+ * offered the moment it is chosen and listed on /modes.
+ */
+export const MODE_LINKS = {
+  tutor:   ["study", "quiz"],
+  coding:  ["stack"],
+  planner: ["plans"],
+  support: ["kb"],
+};
+
 ACTIONS["mode-off"] = { label: "No mode", say: "/mode off" };
 ACTIONS["modes"] = { label: "How I work", say: "/mode" };
 
@@ -91,6 +110,9 @@ const COMMAND_LIST = [
   ["/mode", "Pick how I work: tutor, coding partner, planner, support"],
   ["/study", "The notes and PDFs you've given me to teach you from"],
   ["/quiz", "Test you on them, and remember what you missed"],
+  ["/plans", "What you have coming up, and what just went"],
+  ["/stack", "What I know about your tools and versions"],
+  ["/kb WORDS", "Look something up in the support handbook"],
   ["/link", "Get a code to connect this account to another app"],
   ["/link CODE", "Redeem a code from another app"],
   ["/whatyouknow", "Show what I remember about you"],
@@ -116,6 +138,8 @@ export const MENU_COMMANDS = [
   { name: "mode", description: "How I work: tutor, coding, planner, support" },
   { name: "study", description: "The notes and PDFs I'm teaching you from" },
   { name: "quiz", description: "Ask me to test you on them" },
+  { name: "plans", description: "What you have coming up, and what just passed" },
+  { name: "stack", description: "What I know about your setup" },
   { name: "whatyouknow", description: "What I remember about you" },
   { name: "link", description: "Connect Discord or the web chat" },
   { name: "search", description: "Look something up on the web" },
@@ -216,7 +240,10 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
             `This follows you — it's the same on Telegram, Discord and the web. ` +
             `Nothing about what I remember changes; only how I answer. Say \`/mode off\` to drop it.`,
           data: { kind: "mode", current: want, modes: MODES },
-          actions: ["whatyouknow", "mode-off"],
+          /* The mode's own thing to do, offered the moment it is picked.
+             Choosing Tutor and then being shown "What do you know about me?"
+             teaches nothing about what Tutor is for. */
+          actions: [...(MODE_LINKS[want] ?? []), "whatyouknow", "mode-off"],
         };
       }
 
@@ -449,6 +476,117 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
           `${head}${why}\n\n— — —\n\nQuestion ${n.number} of ${n.total}\n\n${n.question}\n\n` +
           n.options.map((o, i) => `${LETTERS[i]}. ${o}`).join("\n"),
         actions: n.options.map((_, i) => `answer-${i}`),
+      };
+    }
+
+    /**
+     * Planner's own view: what is coming, and what has just gone.
+     *
+     * Dates were already being pinned to the calendar on the way into memory,
+     * and already being noticed when one passed — this just shows the person
+     * the thing the assistant has been quietly tracking, instead of making
+     * them ask "what have I got on?" and hope it mentions everything.
+     */
+    case "/plans": {
+      const facts = await recall(
+        person.namespaces?.[0] ?? personNs(person.personId),
+        "plans, appointments, interviews, trips, deadlines and events on a date",
+        { limit: 12, maxTokens: 900 },
+      ).catch(() => []);
+
+      const now = new Date();
+      const dated = [];
+      for (const f of facts) {
+        const text = String(f.text ?? "");
+        if (!PLAN.test(text)) continue;
+        for (const d of datesIn(text)) {
+          dated.push({ text, date: d, away: -daysBetween(d, now) }); // +future, −past
+        }
+      }
+      dated.sort((a, b) => a.date - b.date);
+
+      // Only the recent past is worth showing. A deadline from March is not
+      // news, and a list that never shrinks stops being read.
+      const soon = dated.filter((d) => d.away >= 0);
+      const gone = dated.filter((d) => d.away < 0 && d.away >= -14).slice(-3);
+
+      if (!soon.length && !gone.length) {
+        return {
+          handled: true,
+          reply:
+            "Nothing with a date on it yet. Tell me when something is happening — \"my interview is next Tuesday\" — and I'll keep track of it and ask how it went.",
+          actions: ["mode-planner"],
+        };
+      }
+
+      const line = (d) =>
+        `• ${d.text.replace(/\s*\([^)]*\d{4}\)/g, "").replace(/\s+/g, " ").trim().slice(0, 110)}` +
+        ` — ${d.away === 0 ? "today" : d.away > 0 ? `in ${d.away} day${d.away === 1 ? "" : "s"}` : `${-d.away} day${d.away === -1 ? "" : "s"} ago`}`;
+
+      return {
+        handled: true,
+        reply:
+          (soon.length ? `Coming up:\n${soon.slice(0, 6).map(line).join("\n")}` : "Nothing coming up.") +
+          (gone.length ? `\n\nJust gone:\n${gone.map(line).join("\n")}` : ""),
+        actions: ["whatyouknow", "memory"],
+      };
+    }
+
+    /**
+     * The coding partner's promise, made checkable.
+     *
+     * "Never ask them to repeat their setup" is a claim the person has no way
+     * to verify until it fails. This shows them what it actually has, so a
+     * gap is something they can fix in one sentence rather than discover
+     * halfway through an answer written for the wrong stack.
+     */
+    case "/stack": {
+      const facts = await recall(
+        person.namespaces?.[0] ?? personNs(person.personId),
+        "the tools, languages, runtimes, editors, operating system and versions this person works with",
+        { limit: 10, maxTokens: 700 },
+      ).catch(() => []);
+
+      const kept = facts
+        .map((f) => String(f.text ?? "").replace(/\s+/g, " ").trim())
+        .filter((t) => /\b(use|uses|using|on|runs?|prefers?|never)\b/i.test(t))
+        .slice(0, 8);
+
+      return {
+        handled: true,
+        reply: kept.length
+          ? `What I've got on your setup:\n\n${kept.map((t) => `• ${t.slice(0, 120)}`).join("\n")}\n\nAnything wrong or missing, just tell me.`
+          : "I don't know your setup yet. Tell me once — language, runtime, package manager, editor — and I'll stop asking.",
+        actions: kept.length ? ["memory", "mode-coding"] : ["mode-coding"],
+      };
+    }
+
+    /**
+     * What the support desk answers from.
+     *
+     * The knowledge base is shared and it is the one body of text in here
+     * nobody wrote about themselves, so being able to search it directly is
+     * the difference between a desk that cites something and one that just
+     * sounds confident.
+     */
+    case "/kb": {
+      if (!arg) {
+        return {
+          handled: true,
+          reply: "Give me something to look up — `/kb refund policy`. I'll answer from the handbook rather than from memory.",
+          actions: ["mode-support", "help"],
+        };
+      }
+      const hits = await recall(KB_NS, arg, { limit: 4, maxTokens: 700 }).catch(() => []);
+      if (!hits.length) {
+        return { handled: true, reply: `Nothing in the handbook about "${arg}".`, actions: ["help"] };
+      }
+      return {
+        handled: true,
+        reply:
+          `From the handbook, on "${arg}":\n\n` +
+          hits.map((h) => `• ${String(h.text).replace(/\s+/g, " ").trim().slice(0, 230)}`).join("\n\n"),
+        actions: ["mode-support"],
       };
     }
 

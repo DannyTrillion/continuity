@@ -51,7 +51,7 @@ export function firstTurnToday(personId, now = new Date()) {
 
 /* Memories that describe a plan rather than a fact about the past. A date on
    its own is not enough: "born 3 March 1994" has one too. */
-const PLAN = /\b(interview|appointment|meeting|call|exam|test|trip|flight|travel|visit|deadline|due|launch|demo|presentation|wedding|birthday|party|dinner|date|match|game|concert|gig|conference|surgery|dentist|doctor|move|moving|start(?:s|ing)?|deliver|submit|submission|pitch|review|viewing|holiday|vacation)\b/i;
+export const PLAN = /\b(interview|appointment|meeting|call|exam|test|trip|flight|travel|visit|deadline|due|launch|demo|presentation|wedding|birthday|party|dinner|date|match|game|concert|gig|conference|surgery|dentist|doctor|move|moving|start(?:s|ing)?|deliver|submit|submission|pitch|review|viewing|holiday|vacation)\b/i;
 
 /**
  * From memories already in hand, pick what to follow up on.

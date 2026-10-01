@@ -115,6 +115,15 @@ const bodyFor = (reply, data, components) => {
 
 export const COMMANDS = [
   { name: "study", description: "The notes and PDFs I'm teaching you from" },
+  { name: "plans", description: "What you have coming up, and what just passed" },
+  { name: "stack", description: "What I know about your setup" },
+  {
+    name: "kb",
+    description: "Look something up in the support handbook",
+    options: [
+      { name: "query", description: "What to look up", type: 3, required: true },
+    ],
+  },
   { name: "quiz", description: "Test you on them, and remember what you missed" },
   {
     name: "link",
