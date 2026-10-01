@@ -130,6 +130,30 @@ don't.`;
  * to for days — greeted them as a stranger. What it knew ten minutes ago is
  * still true, so that is what it is given, marked as such.
  */
+/**
+ * The same assistant, in the room it is actually standing in.
+ *
+ * Every reply used to be written as though it would land in a browser column:
+ * paragraphs, lists, room to breathe. On a phone, in a DM, that is three
+ * screens of scrolling for an answer worth one. The surface was passed into
+ * this function all along and never reached the prompt, so the model had no
+ * way to know where its words were going.
+ *
+ * This changes the shape of an answer, never its substance. Nothing here
+ * relaxes a rule, grants knowledge, or touches the trust boundary.
+ */
+const VOICE = {
+  telegram:
+    "YOU ARE IN A TELEGRAM CHAT, on a phone. Answer in the fewest words that actually answer it — " +
+    "usually one or two short paragraphs, and often a single line. Lead with the answer; explain " +
+    "only if asked. Never use headings, and use a list only when the thing genuinely is a list of " +
+    "three or more items. Break lines where a person would pause for breath. If a full answer really " +
+    "needs length, give the short one and offer the rest.",
+  discord:
+    "YOU ARE IN A DISCORD CHAT. Keep it tight — a few short paragraphs at most. Code goes in fenced " +
+    "blocks with the language named. No headings.",
+};
+
 const lastGood = new Map(); // personId -> { hits, at }
 const STALE_OK_MS = 6 * 60 * 60 * 1000;
 
@@ -448,7 +472,8 @@ export async function handleTurn({
       // A mode is appended to the rules, never in place of them: it changes
       // the manner and nothing about the trust boundary or the memory.
       content: `${identity(answerModel)}\n\n${persona ? `${persona.system}\n\n${SHARED_RULES}` : SYSTEM}` +
-        (mode ? `\n\n${MODES[mode].system}` : ""),
+        (mode ? `\n\n${MODES[mode].system}` : "") +
+        (VOICE[surface] ? `\n\n${VOICE[surface]}` : ""),
     },
     {
       role: "system",

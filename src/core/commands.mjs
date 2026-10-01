@@ -150,15 +150,29 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
       if (/^[A-Z0-9]{6}$/i.test(arg)) {
         return handleCommand({ text: `/link ${arg}`, surface, surfaceUserId, person });
       }
-      // Arriving cold from the website, with nothing to carry over.
+      /* Arriving cold. This is the one message everybody reads and most
+         people decide on, so it shows what the bot can do rather than
+         describing it — and on Telegram the things worth showing are the
+         ones you cannot do anywhere else. Short lines, because this lands
+         on a phone. */
+      const handle = process.env.TELEGRAM_BOT_USERNAME?.replace(/^@/, "");
+      const tips =
+        surface === "telegram"
+          ? [
+              "• Forward me anything — I'll keep it, and remember who said it",
+              "• Send a photo or a file and I'll read it",
+              handle && `• Type @${handle} in any chat to pull up what I know, without leaving it`,
+            ].filter(Boolean)
+          : ["• Send me a photo or a file and I'll read it", "• Ask me what I know about you any time"];
+
       return {
         handled: true,
         reply:
-          "Hey. I'm Continuity — I remember the people I talk to, here and on Discord and the web chat.\n\n" +
-          "Just talk to me normally. Anything worth keeping, I'll keep.\n\n" +
-          "Already been chatting on the website? Send `/link` there, then send me `/link` and the code, " +
-          "and everything you told it comes with you.",
-        actions: ["whatyouknow", "link", "help"],
+          "Hey — I'm Continuity. Tell me something once and I'll still know it tomorrow, " +
+          "here or on Discord or the web chat.\n\n" +
+          `${tips.join("\n")}\n\n` +
+          "Or just talk to me normally. Anything worth keeping, I'll keep.",
+        actions: ["whatyouknow", "modes", "memory", "link", "help"],
       };
     }
 

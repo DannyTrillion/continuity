@@ -57,7 +57,7 @@ section("the commands that should offer buttons, do");
 for (const [text, want] of [
   ["/help", ["whatyouknow", "link", "memory"]],
   ["/menu", ["whatyouknow", "modes", "link", "memory", "help"]],
-  ["/start", ["whatyouknow", "link", "help"]],
+  ["/start", ["whatyouknow", "modes", "memory", "link", "help"]],
   ["/forgetme", ["forgetconfirm"]],
   ["/link", ["web"]],
   ["/whatyouknow", ["help"]],
@@ -200,6 +200,33 @@ const warn = await run("/forgetme");
 check("/forgetme asks before acting", /confirm/i.test(warn.reply));
 check("and its button is marked dangerous", ACTIONS.forgetconfirm.danger === true);
 check("/forgetme confirm is what the button says", ACTIONS.forgetconfirm.say === "/forgetme confirm");
+
+
+/* ── the first message anybody reads ──
+   /start is where most people decide whether this is interesting, and the
+   Telegram-native things are the ones worth showing because they cannot be
+   done anywhere else. Prose describing them is not the same as naming them. */
+console.log("\n── what /start offers on Telegram");
+process.env.TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || "walrusmemory_bot";
+const start = await handleCommand({ text: "/start", surface: "telegram", surfaceUserId: "1", person });
+
+check("it answers at all", start.handled && start.reply.length > 40);
+check("it says forwarding works", /forward/i.test(start.reply), start.reply.split("\n").find((l) => /forward/i.test(l)));
+check("it says it reads files", /file/i.test(start.reply));
+check("it points at inline mode by the bot's real handle",
+  new RegExp(`@${process.env.TELEGRAM_BOT_USERNAME.replace(/^@/, "")}\\b`).test(start.reply),
+  start.reply.split("\n").find((l) => l.includes("@")));
+check("it stays short enough to read on a phone", start.reply.split(/\s+/).length <= 90,
+  `${start.reply.split(/\s+/).length} words`);
+check("and offers a way into every main thing",
+  ["whatyouknow", "memory", "help"].every((a) => start.actions.includes(a)), start.actions);
+
+/* A deep link still has to win over the greeting: t.me/bot?start=CODE is how
+   the web console links an account with no typing, and answering it with the
+   welcome message instead would quietly break linking. */
+const deep = await handleCommand({ text: "/start AB12CD", surface: "telegram", surfaceUserId: "1", person });
+check("a /start carrying a link code links instead of greeting",
+  !/I'm Continuity/.test(deep.reply ?? ""), (deep.reply ?? "").slice(0, 70));
 
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);
 process.exit(failed ? 1 : 0);
