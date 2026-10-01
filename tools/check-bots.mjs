@@ -228,5 +228,33 @@ const deep = await handleCommand({ text: "/start AB12CD", surface: "telegram", s
 check("a /start carrying a link code links instead of greeting",
   !/I'm Continuity/.test(deep.reply ?? ""), (deep.reply ?? "").slice(0, 70));
 
+
+/* ── Discord dispatch ──
+   Registering a command and answering it are two different things, and the
+   gap between them is silent: /study, /quiz, /plans, /stack and /kb were all
+   registered, all tappable, and all fell through a hand-written chain to the
+   help text. This checks the mapping the adapter actually uses. */
+console.log("\n── every Discord command reaches its handler");
+const ARG_OF = { shot: "url", search: "query", link: "code", mode: "which", kb: "query" };
+const CALLED = { remember: "whatyouknow", forget: "forgetme" };
+const slash = DISCORD_COMMANDS.filter((c) => !c.type);
+
+for (const c of slash) {
+  const name = CALLED[c.name] ?? c.name;
+  const r = await handleCommand({
+    text: `/${name}${ARG_OF[c.name] ? " x" : ""}`,
+    surface: "discord", surfaceUserId: "1", person,
+  });
+  check(`/${c.name} is answered, not swallowed`, r.handled === true, r.handled ? "" : "fell through");
+}
+
+/* A context-menu entry is how someone hands the bot a message somebody else
+   wrote. Its name is shown verbatim in Discord's menu, so it is not a slash
+   command and must not be checked as one. */
+const ctx = DISCORD_COMMANDS.filter((c) => c.type === 3);
+check("there's a right-click way to keep a message", ctx.length === 1, ctx.map((c) => c.name));
+check("and it reads as a menu item rather than a command",
+  ctx.every((c) => /^[A-Z]/.test(c.name) && !c.name.startsWith("/")), ctx.map((c) => c.name));
+
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);
 process.exit(failed ? 1 : 0);

@@ -15,11 +15,12 @@
 
 import {
   Client, GatewayIntentBits, Partials, Events, MessageFlags, ActivityType,
-  ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, ApplicationCommandType,
 } from "discord.js";
 import { readFile } from "node:fs/promises";
 import { respond } from "../core/session.mjs";
 import { storeAttachment } from "../core/images.mjs";
+import { canRead } from "../core/documents.mjs";
 import { ACTIONS, MENU_COMMANDS } from "../core/commands.mjs";
 import { MODES } from "../core/modes.mjs";
 
@@ -114,6 +115,19 @@ const bodyFor = (reply, data, components) => {
 };
 
 export const COMMANDS = [
+  /**
+   * Right-click any message → Apps → Remember this.
+   *
+   * Discord's own gesture for "keep this", and the counterpart to forwarding
+   * a message into the bot on Telegram. It is the only way to hand the
+   * assistant something somebody else said without retyping it, and the
+   * attribution — who wrote it, in which channel — is the half that makes it
+   * worth keeping at all.
+   *
+   * A context-menu command takes no options and its name is shown verbatim,
+   * so it is capitalised like a menu item rather than a slash command.
+   */
+  { name: "Remember this", type: ApplicationCommandType.Message },
   { name: "study", description: "The notes and PDFs I'm teaching you from" },
   { name: "plans", description: "What you have coming up, and what just passed" },
   { name: "stack", description: "What I know about your setup" },
@@ -242,17 +256,38 @@ function chunk(text) {
 }
 
 /** Discord hosts the file and hands us a URL; fetch it and treat it like any other. */
-async function fetchPicture(att, said) {
+/* Discord will hand a bot files up to 25MB on a free server, and more on a
+   boosted one. Checked before the download rather than after, so a refusal
+   costs nothing and can say what happened. */
+const DISCORD_FILE_LIMIT = 25 * 1024 * 1024;
+
+/**
+ * Pull an attachment off Discord and put it through the same pipeline as a web
+ * upload — `storeAttachment` decides whether it gets looked at or read.
+ *
+ * This used to take only pictures, so the assistant could read your notes on
+ * the web and on Telegram but not here. Same product, same person, same
+ * memory: the asymmetry was the bug.
+ */
+async function fetchAttachment(att, said) {
+  if ((att.size ?? 0) > DISCORD_FILE_LIMIT) throw new Error("over Discord's file limit");
   const res = await fetch(att.url);
   if (!res.ok) throw new Error(`download failed (${res.status})`);
   const bytes = Buffer.from(await res.arrayBuffer());
   return storeAttachment({
     bytes,
-    name: att.name ?? "discord-image.png",
-    type: att.contentType ?? "image/png",
+    name: att.name ?? "discord-file",
+    type: att.contentType ?? undefined,
     hint: said || undefined,
   });
 }
+
+/* Anything the shared pipeline can do something with: a picture to look at,
+   or a document to read. Everything else is left alone rather than stored as
+   a sentence describing a file nobody can open. */
+const USABLE = (a) =>
+  /^image\/(png|jpe?g|gif|webp)$/i.test(a.contentType ?? "") ||
+  canRead(a.contentType, String(a.name ?? "").split(".").pop());
 
 export async function startDiscord({ token }) {
   const client = new Client({
@@ -307,6 +342,35 @@ export async function startDiscord({ token }) {
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {
+    /* The right-click menu. Answered privately: the person asked the bot to
+       remember something, which is between them and the bot — announcing it
+       to the channel would be both noise and a small betrayal. */
+    if (interaction.isMessageContextMenuCommand?.() && interaction.commandName === "Remember this") {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+      const target = interaction.targetMessage;
+      const body = (target?.content ?? "").trim();
+      if (!body) {
+        return interaction.editReply("There's no text in that message for me to keep.").catch(() => {});
+      }
+      const who = target.author?.username ?? "someone";
+      const where = target.channel?.name ? ` in #${target.channel.name}` : "";
+      const said =
+        `I'm keeping something ${who} said${where}. Keep it, and say briefly what you've kept.` +
+        `\n\n"""\n${body.slice(0, 1500)}\n"""`;
+      try {
+        const { reply } = await respond({
+          surface: "discord",
+          surfaceUserId: interaction.user.id,
+          displayName: interaction.user.username,
+          text: said,
+        });
+        return interaction.editReply(reply.slice(0, 1900)).catch(() => {});
+      } catch (err) {
+        console.error("[discord] remember-this failed:", err.message);
+        return interaction.editReply("I couldn't keep that just now. Try again in a moment.").catch(() => {});
+      }
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     // Our turns take seconds; Discord wants an acknowledgement within three.
@@ -329,16 +393,20 @@ export async function startDiscord({ token }) {
       }).catch(() => {});
     }
 
-    const code = interaction.options.getString("code");
-    const text =
-      interaction.commandName === "shot" ? `/shot ${interaction.options.getString("url")}`
-      : interaction.commandName === "search" ? `/search ${interaction.options.getString("query")}`
-      : interaction.commandName === "link" ? (code ? `/link ${code}` : "/link")
-      : interaction.commandName === "remember" ? "/whatyouknow"
-      : interaction.commandName === "menu" ? "/menu"
-      : interaction.commandName === "mode" ? `/mode ${interaction.options.getString("which") ?? ""}`.trim()
-      : interaction.commandName === "forget" ? "/forgetme"
-      : "/help";
+    /* Built from the command's own name rather than matched one by one.
+       The chain this replaces listed seven commands explicitly and fell
+       through to /help for anything else, so /study, /quiz, /plans, /stack
+       and /kb were all registered, all tappable, and all silently answered
+       with the help text. A command added to the menu now dispatches on its
+       own; only the ones taking an argument or wearing a different name here
+       need saying. */
+    const ARG_OF = { shot: "url", search: "query", link: "code", mode: "which", kb: "query" };
+    const CALLED = { remember: "whatyouknow", forget: "forgetme" };
+
+    const name = CALLED[interaction.commandName] ?? interaction.commandName;
+    const argName = ARG_OF[interaction.commandName];
+    const arg = argName ? interaction.options.getString(argName) : null;
+    const text = `/${name}${arg ? ` ${arg}` : ""}`;
 
     try {
       const stream = streamer((t) => interaction.editReply(t));
@@ -418,11 +486,10 @@ export async function startDiscord({ token }) {
 
     let text = msg.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
 
-    // A picture posted on its own has no content at all. Returning early on
-    // empty text meant every image sent to this bot was thrown away.
-    const picture = [...msg.attachments.values()].find((a) =>
-      /^image\/(png|jpe?g|gif|webp)$/i.test(a.contentType ?? ""));
-    if (!text && !picture) return;
+    // A file posted on its own has no content at all. Returning early on empty
+    // text meant every attachment sent to this bot was thrown away.
+    const file = [...msg.attachments.values()].find(USABLE);
+    if (!text && !file) return;
 
     /**
      * People type "/link ABC123" as plain text in a channel — Discord's command
@@ -471,8 +538,8 @@ export async function startDiscord({ token }) {
       // Same pipeline as a web upload or a Telegram photo: described once,
       // kept once, and findable later by what is in it.
       let attachment = null;
-      if (picture) {
-        attachment = await fetchPicture(picture, text)
+      if (file) {
+        attachment = await fetchAttachment(file, text)
           .catch((err) => { console.error("[discord] could not read attachment:", err.message); return null; });
       }
 
