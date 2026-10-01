@@ -134,6 +134,23 @@ const lastGood = new Map(); // personId -> { hits, at }
 const STALE_OK_MS = 6 * 60 * 60 * 1000;
 
 /**
+ * Hand the agent memories somebody else already read successfully.
+ *
+ * The memory dashboard reads the same namespaces this does, and the two calls
+ * fail independently. Under a rate limit that produced the worst screen in the
+ * product: the sidebar saying "I remember 9 things about you" beside a reply
+ * saying it could not pull up anything about anyone. Both were true of their
+ * own request and the pair was indefensible.
+ *
+ * So a successful read anywhere becomes the fallback everywhere. If the page
+ * can show it, the assistant can use it.
+ */
+export function rememberLastGood(personId, hits) {
+  if (!personId || !hits?.length) return;
+  lastGood.set(personId, { hits, at: Date.now() });
+}
+
+/**
  * The rules a persona cannot opt out of: the trust boundary, how to use memory,
  * and how to speak. A persona replaces the role, not the safeguards.
  */

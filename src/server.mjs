@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 import { respond } from "./core/session.mjs";
+import { rememberLastGood } from "./core/agent.mjs";
 import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, findConflicts, NS_INDEX } from "./core/memory.mjs";
 import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
 import { startOutbox, onSettled, outboxStats, pendingFor, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
@@ -320,9 +321,19 @@ const server = createServer(async (req, res) => {
       // checked individually on Walruscan. "Trust me, it's on Walrus" is a
       // claim; a blob id per sentence is evidence.
       const suppressed = await suppressionsFor(who.personId).catch(() => new Set());
-      const landed = dedupe(withoutSuppressed(sets.flat(), suppressed))
-        .sort((a, b) => a.distance - b.distance)
-        .map((h) => ({ text: h.text, at: h.created_at, blobId: h.blob_id ?? null }));
+      const read = dedupe(withoutSuppressed(sets.flat(), suppressed)).sort(
+        (a, b) => a.distance - b.distance,
+      );
+      // This read succeeded; a chat turn seconds later might not, and the two
+      // fail independently. Lend it what we just saw rather than let the page
+      // contradict the assistant beside it.
+      rememberLastGood(who.personId, read);
+
+      const landed = read.map((h) => ({
+        text: h.text,
+        at: h.created_at,
+        blobId: h.blob_id ?? null,
+      }));
 
       /* Writes take seconds, so a memory made a moment ago is in the outbox
          rather than on Walrus, and a page that showed only what had landed
