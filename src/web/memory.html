@@ -167,6 +167,13 @@
     border:1px solid var(--edge);background:rgba(0,0,0,.26)}
   .pill.cross{border-color:rgba(127,227,212,.32);color:var(--wal)}
   .pill.cold{border-color:rgba(255,255,255,.08);color:var(--faint);opacity:.75}
+  /* A memory the relayer has not confirmed yet. It has no blob id to show,
+     and inventing one would defeat the point of showing blob ids at all. */
+  .pill.saving{border-color:rgba(127,227,212,.22);color:var(--wal);opacity:.8}
+  .pill.saving::before{content:"";width:5px;height:5px;border-radius:50%;
+    background:var(--wal);animation:breathe 1.6s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:.35}50%{opacity:1}}
+  @media(prefers-reduced-motion:reduce){.pill.saving::before{animation:none;opacity:.7}}
   .verify{color:var(--faint);border-bottom:1px solid transparent;font-family:var(--mono);font-size:10.5px}
   .verify:hover{color:var(--wal);border-bottom-color:rgba(127,227,212,.4)}
   .wrong{margin-left:auto;background:none;border:0;color:var(--faint);font-size:11px;cursor:pointer;
@@ -473,8 +480,9 @@ function memoHtml(f, i) {
       ${p.crossed ? `<span class="pill cross">read on ${p.surfaces.map((x) => SURFACE[x] ?? x).join(" + ")}</span>`
         : cold ? '<span class="pill cold">never used again</span>' : ""}
       ${f.blobId ? `<a class="verify" target="_blank" rel="noopener"
-        href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}">${esc(f.blobId.slice(0, 18))}… ↗</a>` : ""}
-      <button class="wrong" type="button">Not right</button>
+        href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}">${esc(f.blobId.slice(0, 18))}… ↗</a>`
+        : f.saving ? `<span class="pill saving">saving to Walrus…</span>` : ""}
+      ${f.saving ? "" : `<button class="wrong" type="button">Not right</button>`}
     </div>
   </div>`;
 }

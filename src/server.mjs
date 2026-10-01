@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 import { respond } from "./core/session.mjs";
 import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, findConflicts, NS_INDEX } from "./core/memory.mjs";
 import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
-import { startOutbox, onSettled, outboxStats, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
+import { startOutbox, onSettled, outboxStats, pendingFor, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
 import { list as listConversations, get as getConversation, flushAll } from "./core/conversations.mjs";
 import { resume, hasHistory } from "./core/session.mjs";
 import { issueMemoryKey, redeemMemoryKey, issueChallenge, takeChallenge, attachWallet } from "./core/recovery.mjs";
@@ -276,24 +276,46 @@ const server = createServer(async (req, res) => {
     const userId = url.searchParams.get("userId");
     if (!userId) return json(res, 400, { error: "userId is required" });
     try {
+      // Only identity is allowed to fail the request: without a person there
+      // is nothing to show. Everything after it degrades instead, because a
+      // relayer wobble blanking the whole dashboard is a worse answer than a
+      // partial one — and this page is the evidence that the memory is real.
       const who = await resolvePerson("web", userId);
       const sets = await Promise.all(
-        who.namespaces.map((ns) => recall(ns, "anything about this person", { limit: 12, maxTokens: 900 })),
+        who.namespaces.map((ns) =>
+          recall(ns, "anything about this person", { limit: 12, maxTokens: 900 }).catch((err) => {
+            console.warn(`[memory] dashboard recall failed for ${ns}:`, err.message);
+            return [];
+          }),
+        ),
       );
       // Every recalled memory knows which blob holds it, so each fact can be
       // checked individually on Walruscan. "Trust me, it's on Walrus" is a
       // claim; a blob id per sentence is evidence.
       const suppressed = await suppressionsFor(who.personId).catch(() => new Set());
-      const facts = dedupe(withoutSuppressed(sets.flat(), suppressed))
+      const landed = dedupe(withoutSuppressed(sets.flat(), suppressed))
         .sort((a, b) => a.distance - b.distance)
         .map((h) => ({ text: h.text, at: h.created_at, blobId: h.blob_id ?? null }));
-      const connected = await surfacesFor(who.personId);
+
+      /* Writes take seconds, so a memory made a moment ago is in the outbox
+         rather than on Walrus, and a page that showed only what had landed
+         told a new person it knew nothing about them. Queued memories are
+         shown too, marked as still saving and without a blob id — there is
+         no receipt to show yet, and inventing one would defeat the point. */
+      const queued = withoutSuppressed(
+        who.namespaces.flatMap((ns) => pendingFor(ns)).map((j) => ({ text: j.text, at: j.createdAt })),
+        suppressed,
+      ).map((h) => ({ ...h, blobId: null, saving: true }));
+
+      const facts = [...landed, ...queued];
+      const connected = await surfacesFor(who.personId).catch(() => ["web"]);
       return json(res, 200, {
         personId: who.personId,
         linked: connected.length > 1,
         connected,
         name: nameFrom(facts),
         facts,
+        saving: queued.length,
       });
     } catch (err) {
       return json(res, 503, { error: err.message });

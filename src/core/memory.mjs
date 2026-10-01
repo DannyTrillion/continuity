@@ -430,9 +430,17 @@ export async function recall(namespace, query, { limit = 8, maxTokens = 700, ret
     // Nothing came back. Retry only if we know this namespace has content —
     // otherwise an empty answer is simply the truth, and retrying it is pure
     // wasted load.
-    // A namespace we have never seen hold data still gets one retry: it may
-    // simply be the first read since a deploy. Known ones get the full budget.
-    const allowed = knownNonEmpty.has(namespace) ? retries : 1;
+    //
+    // `dropped_count` is how many matches the relayer found and then could not
+    // download or decrypt, and it separates "the search ran and there is
+    // nothing here" from "the search gave up". An empty answer carrying
+    // dropped matches is known-unreliable and worth a retry; an empty one
+    // carrying none is probably the truth. Believing that saves a brand-new
+    // person a round trip on every namespace of their first message, and it
+    // leaves the dangerous case — a false empty where data exists — exactly as
+    // patient as it was. (MystenLabs/MemWal#1036.)
+    const dropped = Number(res?.dropped_count ?? 0) || 0;
+    const allowed = knownNonEmpty.has(namespace) ? retries : dropped > 0 ? 1 : 0;
     if (attempt >= allowed) {
       observe("recallMs", Date.now() - started);
       if (!knownNonEmpty.has(namespace)) knownEmpty.set(namespace, Date.now() + EMPTY_TTL_MS);
@@ -475,7 +483,6 @@ export async function syncNamespace(namespace, limit = 100) {
  * covered: duplicate identity records heal themselves on a later read.
  */
 export async function readRecords(namespace, { patience } = {}) {
-  const tries = patience ?? (knownNonEmpty.has(namespace) ? 6 : 2);
   for (let attempt = 0; ; attempt++) {
     const res = await withRetry(
       "readRecords",
@@ -489,6 +496,15 @@ export async function readRecords(namespace, { patience } = {}) {
         (a, b) => Date.parse(b.created_at ?? 0) - Date.parse(a.created_at ?? 0),
       );
     }
+    /* An empty answer that dropped nothing is a search that ran and found
+       nothing, which for an identity namespace means a genuinely new account.
+       Confirming that three times over cost five and a half seconds before a
+       first-time visitor saw a single word. An empty answer that DID drop
+       matches is the relayer failing, and that is the one worth sitting
+       through — so the patience now follows the evidence rather than a
+       constant. (MystenLabs/MemWal#1036.) */
+    const dropped = Number(res?.dropped_count ?? 0) || 0;
+    const tries = patience ?? (knownNonEmpty.has(namespace) ? 6 : dropped > 0 ? 3 : 1);
     if (attempt >= tries) return [];
     await new Promise((r) => setTimeout(r, 250 * 2 ** Math.min(attempt, 4) * (0.7 + Math.random() * 0.6)));
   }
