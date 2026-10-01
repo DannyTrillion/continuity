@@ -6,7 +6,7 @@
  * stale when the deploy URL changes.
  */
 
-import { respond } from "../core/session.mjs";
+import { respond, lookup } from "../core/session.mjs";
 import { storeAttachment } from "../core/images.mjs";
 import { ACTIONS, MENU_COMMANDS, GROUP_SAFE } from "../core/commands.mjs";
 
@@ -247,6 +247,31 @@ const fetchPhoto = (token, photo, caption) => {
 const TELEGRAM_FILE_LIMIT = 20 * 1024 * 1024;
 
 /**
+ * One memory, as a pickable inline result.
+ *
+ * The title is what someone scans in a dropdown over somebody else's chat, so
+ * it gets the first line and nothing else; the rest goes to the description,
+ * which Telegram renders smaller and greys out. Picking a result sends the
+ * memory's own words, because the point is to drop what you know into the
+ * conversation you are already having — not a note about having known it.
+ */
+export function inlineResult(hit, i) {
+  const text = String(hit.text ?? "").replace(/\s+/g, " ").trim();
+  const cut = text.length > 64 ? text.slice(0, 63).replace(/\s\S*$/, "") + "…" : text;
+  const when = hit.at ? new Date(hit.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : null;
+  return {
+    type: "article",
+    // Unique per result and short: Telegram caps this at 64 bytes and drops
+    // the whole answer if two results collide.
+    id: String(hit.blobId ?? `m${i}`).slice(0, 64),
+    title: cut || "a memory",
+    description: [text.length > cut.length ? text.slice(cut.length - 1).trim() : "", when]
+      .filter(Boolean).join(" · ").slice(0, 120) || "stored on Walrus",
+    input_message_content: { message_text: text },
+  };
+}
+
+/**
  * Who said the thing that was forwarded here, and when.
  *
  * Forwarding is the most Telegram-native way there is to say "keep this", and
@@ -362,10 +387,51 @@ export async function startTelegram({ token }) {
     while (!stopped) {
       try {
         const updates = await call(token, "getUpdates", {
-          offset, timeout: 30, allowed_updates: ["message", "callback_query"],
+          offset, timeout: 30, allowed_updates: ["message", "callback_query", "inline_query"],
         });
         for (const u of updates) {
           offset = u.update_id + 1;
+
+          /* Someone typing `@thebot pnpm` in a chat this bot has never been
+             added to. Nobody is being answered: they are searching their own
+             memory from inside someone else's conversation, which is the
+             clearest form the idea takes — the memory goes where the person
+             goes, not where the bot was installed.
+             `is_personal` matters here. These results are one person's
+             memories, and Telegram would otherwise cache them against the
+             query alone and serve them to the next person who typed it. */
+          const inline = u.inline_query;
+          if (inline) {
+            try {
+              const { hits } = await lookup({
+                surface: "telegram",
+                surfaceUserId: String(inline.from.id),
+                query: inline.query,
+              });
+              await call(token, "answerInlineQuery", {
+                inline_query_id: inline.id,
+                is_personal: true,
+                cache_time: 10,
+                results: hits.map((h, i) => inlineResult(h, i)),
+                ...(hits.length ? {} : {
+                  button: {
+                    text: inline.query.trim()
+                      ? `Nothing about "${inline.query.trim().slice(0, 30)}" yet — open the chat`
+                      : "Nothing stored yet — say hello first",
+                    start_parameter: "inline",
+                  },
+                }),
+              });
+            } catch (err) {
+              console.error("[telegram] inline query failed:", err.message);
+              // An unanswered inline query just spins. Saying so beats that.
+              await call(token, "answerInlineQuery", {
+                inline_query_id: inline.id, is_personal: true, cache_time: 0, results: [],
+                button: { text: "Couldn't reach my memory — tap to open the chat", start_parameter: "inline" },
+              }).catch(() => {});
+            }
+            continue;
+          }
 
           /* A tapped button. The tap has to be acknowledged within a few
              seconds or Telegram leaves it spinning; the answer itself may

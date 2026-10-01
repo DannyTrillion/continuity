@@ -83,8 +83,14 @@ const cmds = sent.find((c) => c.method === "setMyCommands")?.body.commands ?? []
 check("it registers its commands", cmds.length >= 7, cmds.map((c) => "/" + c.command).join(" "));
 check("the menu command is among them", cmds.some((c) => c.command === "menu"));
 check("every registered command has a description", cmds.every((c) => c.description?.length > 3));
+/* Telegram sends only the update types you ask for, so this list is the
+   difference between a feature working and silently never firing. Asking for
+   more than the loop handles is just as wrong: it wakes the poller for things
+   it will drop. */
 check("it only asks for what it handles",
-  (sent.find((c) => c.method === "getUpdates")?.body.allowed_updates ?? []).join() === "message,callback_query");
+  (sent.find((c) => c.method === "getUpdates")?.body.allowed_updates ?? []).join() ===
+    "message,callback_query,inline_query",
+  sent.find((c) => c.method === "getUpdates")?.body.allowed_updates);
 
 console.log("\n── it fills in its own profile");
 const setupCalls = sent.filter((c) => ["setMyDescription", "setMyShortDescription", "setChatMenuButton"].includes(c.method));
@@ -191,6 +197,39 @@ const tooBig = messagesSince(mark);
 check("one over Telegram's own limit is refused in words, not swallowed",
   tooBig.length === 1 && /20MB/.test(tooBig[0]?.body?.text ?? ""),
   tooBig[0]?.body?.text);
+
+/* ── inline mode ──
+   `@thebot pnpm` typed inside a chat the bot was never added to. This is the
+   only path where one person's memories are rendered by Telegram's own UI, so
+   `is_personal` is not a nicety: without it Telegram caches results against
+   the query text and serves one person's memory to the next person who types
+   the same word. */
+console.log("\n── searching from inside someone else's chat");
+const { inlineResult } = await import("../src/adapters/telegram.mjs");
+
+mark = sent.length;
+queued.push({ update_id: 6, inline_query: { id: "iq-1", from: FROM, query: "pnpm", offset: "" } });
+await waitFor(() => sent.slice(mark).some((c) => c.method === "answerInlineQuery"), 60000);
+const inlineAnswer = sent.slice(mark).find((c) => c.method === "answerInlineQuery")?.body ?? {};
+
+check("an inline query gets answered", Boolean(inlineAnswer.inline_query_id), inlineAnswer.inline_query_id);
+check("the answer is marked personal, so Telegram cannot serve it to someone else",
+  inlineAnswer.is_personal === true);
+check("results carry ids unique within the answer", (() => {
+  const ids = (inlineAnswer.results ?? []).map((r) => r.id);
+  return new Set(ids).size === ids.length;
+})());
+check("every id fits Telegram's 64-byte cap",
+  (inlineAnswer.results ?? []).every((r) => Buffer.byteLength(String(r.id)) <= 64));
+check("nothing found still offers a way in, rather than spinning",
+  (inlineAnswer.results ?? []).length > 0 || Boolean(inlineAnswer.button?.text),
+  inlineAnswer.button?.text);
+
+const long = inlineResult({ text: "A ".padEnd(300, "very long memory "), blobId: "x", at: null }, 0);
+check("a long memory is trimmed into a title Telegram will accept",
+  long.title.length <= 64 && !/\s$/.test(long.title), `${long.title.length} chars`);
+check("picking a result sends the memory itself, not a note about it",
+  long.input_message_content.message_text.startsWith("A very long memory"));
 
 bot.stop();
 globalThis.fetch = realFetch;

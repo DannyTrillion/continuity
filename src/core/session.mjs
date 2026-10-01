@@ -7,6 +7,7 @@
  */
 
 import { resolvePerson } from "./identity.mjs";
+import { recall, dedupe, withoutSuppressed, suppressionsFor } from "./memory.mjs";
 import { handleCommand, actionsFor } from "./commands.mjs";
 import { handleTurn } from "./agent.mjs";
 import { record as recordTurn } from "./conversations.mjs";
@@ -242,4 +243,64 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
       meta: { error: err.message, personId: who.personId, rateLimited },
     };
   }
+}
+
+/**
+ * Search someone's memory, without answering them.
+ *
+ * Telegram's inline mode lets a person type `@thebot pnpm` inside ANY chat —
+ * including ones this bot has never been added to — and pick from what comes
+ * back. That is the clearest expression of the whole idea: the memory follows
+ * the person rather than living in one app. But it is a different shape of
+ * request from a conversation. Nobody is being answered, so there is no model
+ * call, no history, and nothing is written. It is a read.
+ *
+ * It is also the only path here that fires at typing speed. Telegram debounces
+ * keystrokes, not enough: one person composing a word can produce several
+ * queries, each of which would otherwise be a relayer round trip against a
+ * budget of sixty a minute shared with every other surface. So answers are
+ * cached per person and query, and a prefix of a query already answered is
+ * served from the same entry rather than asking again.
+ */
+const lookups = new Map(); // `${personId}\n${query}` -> { hits, at }
+const LOOKUP_TTL_MS = 60_000;
+
+export async function lookup({ surface, surfaceUserId, query, limit = 8 }) {
+  const who = await resolvePerson(surface, String(surfaceUserId));
+  const q = String(query ?? "").trim().toLowerCase().slice(0, 120);
+
+  const fresh = (entry) => entry && Date.now() - entry.at < LOOKUP_TTL_MS;
+  const key = `${who.personId}\n${q}`;
+  if (fresh(lookups.get(key))) return { personId: who.personId, hits: lookups.get(key).hits };
+
+  // Someone typing "pnp" then "pnpm" asks two questions a second apart whose
+  // answers are the same. If a longer query that starts with this one was
+  // just answered, reuse it rather than spending another read.
+  for (const [k, entry] of lookups) {
+    if (!fresh(entry)) { lookups.delete(k); continue; }
+    const [pid, asked] = k.split("\n");
+    if (pid === who.personId && q.length >= 2 && asked.startsWith(q)) {
+      return { personId: who.personId, hits: entry.hits };
+    }
+  }
+
+  /* An empty query is not a failed search — it is someone who has just typed
+     the bot's name and is waiting to see what it has. Give them the profile. */
+  const question = q || "who this person is: their name, work, setup and preferences";
+  const [sets, suppressed] = await Promise.all([
+    Promise.all(
+      who.namespaces.map((ns) =>
+        recall(ns, question, { limit, maxTokens: 600 }).catch(() => []),
+      ),
+    ),
+    suppressionsFor(who.personId).catch(() => new Set()),
+  ]);
+
+  const hits = dedupe(withoutSuppressed(sets.flat(), suppressed))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, limit)
+    .map((h) => ({ text: h.text, blobId: h.blob_id ?? null, at: h.created_at ?? null }));
+
+  lookups.set(key, { hits, at: Date.now() });
+  return { personId: who.personId, hits };
 }
