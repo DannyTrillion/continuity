@@ -282,6 +282,29 @@ async function fetchAttachment(att, said) {
   });
 }
 
+/**
+ * The message this one is answering, if it is answering one.
+ *
+ * Discord carries a reply as a reference rather than as the message itself, so
+ * it has to be fetched — and the fetch can fail on something old or deleted,
+ * which is not worth failing a turn over. `mine` separates the bot's own words,
+ * which can be handed back plainly, from anyone else's, which are quoted
+ * material that must not be able to give it orders.
+ */
+async function replyNote(msg, selfId) {
+  const ref = msg.reference?.messageId;
+  if (!ref) return null;
+  try {
+    const target = msg.channel.messages.cache.get(ref) ?? (await msg.channel.messages.fetch(ref));
+    const text = (target?.content ?? "").trim();
+    if (!text) return null;
+    const mine = target.author?.id === selfId;
+    return { text, who: mine ? null : (target.author?.username ?? null), mine };
+  } catch {
+    return null; // deleted, too old, or no permission — answer without it
+  }
+}
+
 /* Anything the shared pipeline can do something with: a picture to look at,
    or a document to read. Everything else is left alone rather than stored as
    a sentence describing a file nobody can open. */
@@ -549,6 +572,7 @@ export async function startDiscord({ token }) {
         displayName: msg.author.username,
         text: text || "What do you make of this?",
         attachment,
+        quoted: await replyNote(msg, client.user.id),
         onDelta: (c) => stream.onDelta(c),
       });
       await stream.finish(reply);

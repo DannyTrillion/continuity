@@ -282,6 +282,26 @@ export function inlineResult(hit, i) {
  *
  * Returns null for anything not forwarded, which is the common case.
  */
+/**
+ * The message this one is answering, if it is answering one.
+ *
+ * Telegram lets someone reply to any message, not just the latest, and without
+ * reading it the bot gets "what did you mean by that?" with no idea which
+ * "that". `mine` matters: its own words can be handed back plainly, while
+ * anyone else's are quoted material that must not be able to give it orders.
+ */
+export function replyNote(msg, botId) {
+  const r = msg?.reply_to_message;
+  const text = r?.text ?? r?.caption ?? null;
+  if (!text) return null;
+  const mine = Boolean(botId && r.from?.id === botId) || Boolean(r.from?.is_bot && !msg.from?.is_bot && r.from?.id === botId);
+  return {
+    text,
+    who: mine ? null : (r.from?.first_name ?? r.from?.username ?? null),
+    mine,
+  };
+}
+
 export function forwardNote(msg) {
   const o = msg?.forward_origin;
   const when = (unix) => (unix ? new Date(unix * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null);
@@ -353,7 +373,7 @@ export async function startTelegram({ token }) {
    * path as typing it would: same memory, same writes, same streaming. The
    * button is a shortcut for the person, never a shortcut in the code.
    */
-  async function turn({ chatId, from, text, attachment = null }) {
+  async function turn({ chatId, from, text, attachment = null, quoted = null }) {
     await call(token, "sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => {});
     // Walrus writes can outrun Telegram's ~5s typing indicator, so keep it
     // alive rather than letting the chat look dead mid-answer.
@@ -370,6 +390,7 @@ export async function startTelegram({ token }) {
         displayName: from.username ?? from.first_name,
         text,
         attachment,
+        quoted,
         onDelta: (chunk) => stream.onDelta(chunk),
       }));
     } finally {
@@ -499,6 +520,7 @@ export async function startTelegram({ token }) {
               from: msg.from,
               text: said || "What do you make of this?",
               attachment,
+              quoted: replyNote(msg, me.id),
             });
           } catch (err) {
             console.error(`[telegram] update ${u.update_id} failed:`, err.message);

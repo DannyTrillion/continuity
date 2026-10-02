@@ -206,6 +206,31 @@ check("a hidden sender is still named, not dropped",
   forwardNote({ forward_origin: { type: "hidden_user", date: DAY } })?.who === "someone");
 check("and the date comes with it", /\d{4}$/.test(forwardNote({ forward_from: { first_name: "Ada" }, forward_date: DAY })?.at ?? ""));
 
+/* ── replying to a message ──
+   Telegram lets someone answer any message, not just the latest, and without
+   reading it the bot gets "what did you mean by that?" with no idea which
+   "that". Whose words they are decides how they are treated: its own can be
+   handed back plainly, anyone else's are quoted material. */
+console.log("\n── a reply to an earlier message");
+const { replyNote } = await import("../src/adapters/telegram.mjs");
+const BOT = 1;
+
+check("an ordinary message is not a reply", replyNote({ text: "hi" }, BOT) === null);
+check("a reply with no text in it is not worth quoting",
+  replyNote({ reply_to_message: { from: { id: 9 }, photo: [{}] } }, BOT) === null);
+
+const toSelf = replyNote({ reply_to_message: { from: { id: BOT, is_bot: true }, text: "Tail recursion is optimised into a loop." } }, BOT);
+check("replying to the bot is marked as its own words", toSelf?.mine === true, toSelf?.text);
+check("and carries no attribution, because it needs none", toSelf?.who === null);
+
+const toOther = replyNote({ reply_to_message: { from: { id: 77, first_name: "Marcus" }, text: "pnpm is just npm with a different lockfile" } }, BOT);
+check("replying to someone else is not", toOther?.mine === false);
+check("and names who said it", toOther?.who === "Marcus", toOther?.who);
+
+const caption = replyNote({ reply_to_message: { from: { id: 77, username: "marcus" }, caption: "the deploy log" } }, BOT);
+check("a photo's caption counts as what was said", caption?.text === "the deploy log", caption?.text);
+check("and a username stands in when there is no first name", caption?.who === "marcus");
+
 console.log("\n── a file, not a photo");
 mark = sent.length;
 queued.push({
