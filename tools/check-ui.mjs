@@ -511,6 +511,35 @@ try {
       await plain.page.evaluate(() => document.getElementById("walletchip")?.hidden !== false));
     await plain.page.close();
 
+    /* On a phone the three ways in are docked to the bottom as one glass bar.
+       In the flow they fell below the fold on a short screen, so the single
+       thing this page asks you to do needed a scroll to reach. What breaks it
+       is collision: the footer reading through the glass, or the docs button
+       sharing the corner. Both happened. */
+    const bar = await open("/", { width: 390, height: 740, store: null });
+    await sleep(1600);
+    await bar.page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+    await sleep(500);
+    const docked = await bar.page.evaluate(() => {
+      const a = document.querySelector(".actions");
+      const r = a.getBoundingClientRect();
+      const foot = document.querySelector(".foot")?.getBoundingClientRect();
+      const fab = document.querySelector(".docs-fab");
+      const hit = (x, y) => x && y && !(x.bottom < y.top || x.top > y.bottom || x.right < y.left || x.left > y.right);
+      return {
+        fixed: getComputedStyle(a).position === "fixed",
+        onScreen: r.bottom <= innerHeight + 1 && r.top >= 0,
+        oneRow: new Set([...a.children].map((e) => Math.round(e.getBoundingClientRect().top))).size === 1,
+        clearOfFooter: !hit(r, foot),
+        fabHidden: !fab || getComputedStyle(fab).display === "none",
+      };
+    });
+    check("on a phone the ways in are docked to the bottom", docked.fixed && docked.onScreen, docked);
+    check("as one row, not a stack", docked.oneRow);
+    check("with the small print clear of the glass, not reading through it", docked.clearOfFooter);
+    check("and nothing else sharing that corner", docked.fabHidden);
+    await bar.page.close();
+
     await hero.page.close();
     check("no errors", errors.length === 0, errors.slice(0, 2));
     await page.close(); }
