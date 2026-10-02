@@ -336,48 +336,40 @@ await fresh.close();
  */
 console.log("\n── the landing page\n");
 
+/* The mascot took over what the old "carry" line did, and does it better: a
+   face saying one thing it remembers about you beats a sentence asserting
+   that it remembers. What matters is the same, though — it must never claim
+   to know someone it has never met. */
 const back = await browser.newPage();
 await back.setViewport({ width: 1440, height: 950 });
 await back.evaluateOnNewDocument((id) => localStorage.setItem("ws8-user", id), USER);
 await back.goto(BASE + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
-await settle(300);
-
-const waiting = await back.evaluate(() => {
-  const c = document.getElementById("carry");
-  return { shown: !c.hidden, sk: c.querySelectorAll(".sk").length,
-    sweeping: [...c.querySelectorAll(".sk")].some((e) => getComputedStyle(e).animationName === "sk-sweep"),
-    silent: c.textContent.trim() === "" };
-});
-check("a returning visitor gets a placeholder immediately", waiting.shown && waiting.sk > 0, `${waiting.sk} lines`);
-check("it shimmers", waiting.sweeping);
-check("and says nothing it cannot back up yet", waiting.silent);
 
 await back.waitForFunction(() => {
-  const c = document.getElementById("carry");
-  return c.hidden || (!c.querySelector(".sk") && c.textContent.trim().length > 0);
+  const b = document.getElementById("bubble");
+  return b && !b.hidden && b.textContent.trim().length > 0;
 }, { timeout: 45000 }).catch(() => {});
-await settle(800);
 
-const done = await back.evaluate(() => {
-  const c = document.getElementById("carry");
-  return { hidden: c.hidden, sk: c.querySelectorAll(".sk").length,
-    revealed: c.classList.contains("revealing"), text: c.textContent.trim().slice(0, 50) };
+const spoke = await back.evaluate(() => {
+  const b = document.getElementById("bubble");
+  return { said: (b?.textContent ?? "").replace(/\s+/g, " ").trim(), hasOrb: !!document.getElementById("orb") };
 });
-if (done.hidden) {
-  pass("nothing to carry over, so the placeholder withdrew");
-} else {
-  check("the skeleton gives way to the real line", done.sk === 0, `${done.sk} left`);
-  check("which is revealed rather than snapped in", done.revealed, done.text);
-}
-await back.close();
+check("the mascot is there", spoke.hasOrb);
+check("and it speaks to a browser it has met", spoke.said.length > 0, spoke.said.slice(0, 80));
+/* Third person is how a fact is stored and wrong for a face talking to you.
+   "User uses pnpm" reaching the page unchanged is the failure to catch. */
+check("in the second person, not the third",
+  !/\b(the )?user\b/i.test(spoke.said), spoke.said.slice(0, 80));
+check("and without the name said twice", !/welcome back, (\w+)\..*your name is \1/i.test(spoke.said), spoke.said.slice(0, 80));
 
-/* Someone arriving for the first time should never see a placeholder for a
-   line that is not coming. A separate profile, because tabs share storage. */
 const stranger = await (await browser.createBrowserContext()).newPage();
-await stranger.goto(BASE + "/", { waitUntil: "networkidle2", timeout: 60000 });
-await settle(2000);
-check("a first-time visitor is promised nothing", await stranger.evaluate(() =>
-  document.getElementById("carry").hidden && !document.querySelector("#carry .sk")));
+await stranger.goto(BASE + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+await settle(3200);
+check("a first-time visitor is told what it does, never what it knows",
+  await stranger.evaluate(() => {
+    const t = (document.getElementById("bubble")?.textContent ?? "").toLowerCase();
+    return !/welcome back|you use|you are on|you have/.test(t);
+  }));
 await stranger.close();
 
 /* ── attachments actually reach the model ────────────────────────────── */
