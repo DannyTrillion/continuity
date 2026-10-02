@@ -112,20 +112,7 @@ addEventListener("click", (e) => {
      glow by another name; it grows a little and its text goes white. */
   .alt:hover{color:#fff;background:var(--glass-2);transform:scale(1.04)}
 
-  .carry{margin:20px auto 0;font-size:12.5px;color:var(--dim);max-width:46ch;line-height:1.6}
-  .carry[hidden]{display:none}
-  .carry .sk{display:block;height:10px;margin:0 auto 7px;border-radius:6px}
-  .carry .sk.w80{width:80%}.carry .sk.w55{width:55%}
-  .carry.revealing{animation:enter-rise .55s var(--ease) both}
-  .carry.leaving{opacity:0;transition:opacity .3s ease}
-  .carry b{color:var(--ink);font:500 13px var(--mono);letter-spacing:.08em}
 
-  .proof{margin:22px auto 0;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 12px;font-size:11.5px;color:var(--faint)}
-  .proof[hidden]{display:none}
-  .proof-ids{display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
-  .proof-ids a{font:500 11px var(--mono);color:var(--dim);padding:3px 9px;border:1px solid var(--edge);border-radius:999px;transition:.2s var(--ease)}
-  .proof-ids a:hover{color:var(--ink);border-color:var(--edge-2)}
-  .proof-ids .sk{display:inline-block;width:92px;height:22px;border-radius:999px}
 
   /* ── the signpost to /use-cases ──────────────────────────────────────── */
 
@@ -182,8 +169,6 @@ addEventListener("click", (e) => {
     .cue{position:static;transform:none;animation:none;width:min(360px,100%);margin:26px auto 0;display:block}
   }
   @media (prefers-reduced-motion:reduce){.cue{animation:none;transition:border-color .3s}}
-  .aside-link{margin:12px 0 0;font-size:12px;color:var(--faint)}
-  .aside-link a:hover{color:var(--dim)}
   .foot{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:auto;padding-top:18px;border-top:1px solid var(--edge)}
 
   @media (max-width:860px){
@@ -230,12 +215,6 @@ addEventListener("click", (e) => {
       <a class="alt" id="tg" href="https://t.me/walrusmemory_bot" target="_blank" rel="noopener"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>Telegram</a>
       <a class="alt" id="dc" href="#" target="_blank" rel="noopener" data-plain=""><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.79.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.058a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.873-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .078-.01c3.928 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .79.009c.12.099.246.198.373.292a.077.077 0 0 1-.7.128 12.3 12.3 0 0 1-1.873.891.077.077 0 0 0-.4.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .84.029 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.055c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.029zM8.02 15.331c-1.182 0-2.157-1.086-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.211 0 2.176 1.095 2.157 2.42 0 1.332-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.332-.946 2.418-2.157 2.418z"/></svg>Discord</a>
     </div>
-    <p class="carry" id="carry" hidden></p>
-    <div class="proof" id="proof" hidden>
-      <span class="proof-label" id="prooflabel">Written to Walrus just now</span>
-      <span class="proof-ids" id="proofids"></span>
-    </div>
-    <p class="aside-link"><a id="dcinstall" href="#" target="_blank" rel="noopener">Or add the bot to your own Discord server &rarr;</a></p>
     <span class="eyebrow" hidden></span>
   <!-- The way to /use-cases: an object on the page rather than a line of text.
          Made of the same glass as the chat panels, and it previews what is
@@ -306,14 +285,7 @@ addEventListener("click", (e) => {
     const dc = document.getElementById("dc");
     if (s.discordInvite) dc.href = s.discordInvite;
     else dc.style.display = "none";
-
-    const install = document.getElementById("dcinstall");
-    if (s.discordInstall) install.href = s.discordInstall;
-    else install.parentElement.style.display = "none";
-
-    carryMemoryOver();
-  }).catch(carryMemoryOver);
-  showProof();
+  }).catch(() => {});
 
   /**
    * If this visitor has already been chatting here, their Telegram link should
@@ -341,130 +313,6 @@ addEventListener("click", (e) => {
     setTimeout(() => { el.innerHTML = html; el.style.opacity = "1"; }, 180);
   }
 
-  /**
-   * Show the blobs it has actually written, as links anyone can follow.
-   *
-   * The headline claims every memory is a blob you can open. Asserting that
-   * and leaving it there is what every project does; printing the ids and
-   * letting someone click one is the difference between a claim and a
-   * demonstration — and it costs one in-memory read, not a Walrus round trip.
-   */
-  async function showProof() {
-    const box = document.getElementById("proof");
-    const ids = document.getElementById("proofids");
-    if (!box || !ids) return;
-
-    // Hold the space while it loads, same as the line above it.
-    box.hidden = false;
-    ids.innerHTML = '<span class="sk"></span><span class="sk"></span><span class="sk"></span>';
-
-    try {
-      const r = await fetch("/api/ledger").then((x) => x.json());
-      // One blob can be recorded more than once — the same write landing under
-      // a couple of namespaces, say. Printing the same id twice on the page
-      // that asks you to go and check them is not a good look.
-      const seen = new Set();
-      const writes = (r.writes ?? [])
-        .filter((w) => w.blobId && !seen.has(w.blobId) && seen.add(w.blobId))
-        .slice(0, 3);
-      if (!writes.length) { box.hidden = true; return; }
-
-      ids.innerHTML = writes.map((w) =>
-        `<a href="https://walruscan.com/mainnet/blob/${encodeURIComponent(w.blobId)}"
-            target="_blank" rel="noopener" title="Open this blob on Walruscan"
-            >${w.blobId.slice(0, 10)}…</a>`).join("");
-      // The screen is a terminal; it should sound like one.
-      document.getElementById("prooflabel").textContent =
-        writes.length > 1 ? "LAST WRITES" : "LAST WRITE";
-      box.classList.add("revealing");
-    } catch {
-      box.hidden = true; // never leave a placeholder standing for nothing
-    }
-  }
-
-  const carryEl = () => document.getElementById("carry");
-
-  /** Hold the space, and show that something is on its way. */
-  function carryWaiting() {
-    const c = carryEl();
-    c.hidden = false;
-    c.innerHTML = '<span class="sk sk-line w80"></span><span class="sk sk-line w55"></span>';
-  }
-
-  /** Reveal it, rather than let it appear. */
-  function carrySay(html) {
-    const c = carryEl();
-    c.innerHTML = html;
-    c.classList.remove("revealing");
-    void c.offsetWidth; // restart rather than resume
-    c.classList.add("revealing");
-  }
-
-  /** Nothing to say after all — fade the placeholder out instead of stranding it. */
-  function carryNothing() {
-    const c = carryEl();
-    if (c.hidden) return;
-    c.classList.add("leaving");
-    setTimeout(() => { c.hidden = true; c.className = "carry"; c.innerHTML = ""; }, 320);
-  }
-
-  async function carryMemoryOver() {
-    let userId = null;
-    try { userId = localStorage.getItem("ws8-user"); } catch {}
-    if (!userId) return;
-
-    // Only a returning browser gets the placeholder. Showing one to a
-    // first-time visitor would promise a line that is never coming.
-    carryWaiting();
-
-    // Who they are and what they've connected, before anything is written —
-    // the greeting below needs the name, and fetching it in parallel meant the
-    // line was composed before the name arrived and never included it.
-    const me = await fetch("/api/memory?userId=" + encodeURIComponent(userId))
-      .then((r) => r.json())
-      .catch(() => null);
-
-    const name = me?.name ?? null;
-    const connected = me?.connected ?? [];
-    const missing = ["telegram", "discord"].filter((c) => !connected.includes(c));
-
-    if (name) softSwap(document.querySelector(".eyebrow"), `Welcome back, ${name}`);
-    if (connected.length > 1 && !missing.length) {
-      softSwap(document.querySelector(".sub"),
-        "You're connected everywhere — <b>web</b>, <b>Telegram</b> and <b>Discord</b> all reach the same memory, " +
-        "pictures included. Every bit of it is on Walrus, and yours to check.");
-    }
-
-    let data;
-    try {
-      const res = await fetch("/api/link/code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
-      });
-      if (res.status !== 200) return carryNothing(); // 204: nothing stored yet
-      data = await res.json();
-    } catch { return carryNothing(); }
-    if (!data?.code) return carryNothing();
-
-    document.getElementById("tg").href = `https://t.me/${botUser}?start=${data.code}`;
-    const dc = document.getElementById("dc");
-    dc.dataset.code = data.code;
-
-    // Say who we think they are, and only offer what they haven't connected.
-    const who = name ? `Welcome back, ${name}.` : "We've talked before.";
-    if (!missing.length) {
-      carrySay(`${who} Every app below reaches the same memory — no code needed.`);
-    } else if (missing.includes("telegram") && missing.includes("discord")) {
-      carrySay(
-        `${who} Telegram will pick up where we left off automatically. ` +
-        `On Discord, send <b>/link ${data.code}</b> (good for 10 minutes).`);
-    } else if (missing.includes("telegram")) {
-      carrySay(`${who} Telegram will pick up where we left off automatically.`);
-    } else {
-      carrySay(`${who} On Discord, send <b>/link ${data.code}</b> (good for 10 minutes).`);
-    }
-  }
 
   // Copy the code on the way to Discord, since it has to be pasted by hand.
   document.getElementById("dc").addEventListener("click", () => {

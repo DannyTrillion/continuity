@@ -1705,7 +1705,11 @@ $("quick").addEventListener("click", (e) => {
   const b = e.target.closest(".qc");
   if (!b || b.id === "newchat-q") return;
   if (b.dataset.ask) return ask(b.dataset.ask);
-  if (b.dataset.link) return $("linkbtn").click();
+  /* `data-link` is written without a value, the way a boolean attribute is,
+     so `dataset.link` is the empty string — falsy. The button was wired
+     correctly and silently did nothing on every click. Ask whether the
+     attribute is there rather than whether it is truthy. */
+  if ("link" in b.dataset) return $("linkbtn").click();
   if (b.dataset.prefill) {
     const inp = $("input");
     inp.value = b.dataset.prefill;

@@ -44,6 +44,16 @@ const SSE = [
     actions: [{ id: "switch-tutor", label: "Switch to Tutor", say: "/mode tutor" }] },
 ].map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
 
+/* `/link` is answered through the same stream as ordinary conversation, so a
+   fixture that always replies about pnpm meant the linking panel could never
+   receive a code and the whole control looked broken under test while working
+   in the browser. The reply carries a code the way the real one does. */
+const SSE_LINK = [
+  { s: { stage: "thinking", recalled: 0, pictures: 0, ms: 120 } },
+  { done: true, reply: "Your code is HTQ8PB — it expires in 10 minutes. Send /link HTQ8PB from another surface and I'll know it's the same you.",
+    meta: { recalled: { personal: 0, kb: 0 }, trace: [] }, actions: [] },
+].map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
+
 let receipts = [];
 let lastSaid = null;                 // what the page last sent to be answered
 function answer(url, method, body) {
@@ -56,10 +66,14 @@ function answer(url, method, body) {
   if (p === "/api/conversations/open") return json({ conversation: { id: "c0", title: "Teach me recursion", turns: [{ you: "Teach me recursion", bot: "Start with a **base case**." }] }, restored: 2 });
   if (p === "/api/ledger") return json({ writes: [{ at: "2026-09-27T10:00:00Z", blobId: BLOB, namespace: "ws8::person::p1", kind: "analyze" }], total: 1 });
   if (p === "/api/stats") return json({ model: "moonshotai/kimi-k2.5", metrics: {}, outbox: { pending: 0 }, blobsLedger: 50, surfaces: { web: true, telegram: true, discord: true }, botUsername: "walrusmemory_bot", discordInvite: "https://discord.gg/example" });
-  if (p === "/api/chat/stream") { lastSaid = body?.text ?? null; return { status: 200, contentType: "text/event-stream", body: SSE }; }
+  if (p === "/api/chat/stream") { lastSaid = body?.text ?? null;
+    return { status: 200, contentType: "text/event-stream", body: /^\/link\b/.test(body?.text ?? "") ? SSE_LINK : SSE }; }
   if (p === "/api/chat") return json({ reply: "You use **pnpm**, never npm.", meta: { recalled: { personal: 3, kb: 0 }, trace: [] } });
   if (p === "/api/session/restore") return json({ restored: 0, kept: true });
-  if (p === "/api/link/code") return json({ code: "HTQ8PB", expiresInSeconds: 600, personId: "p1" });
+  /* Shape copied from the live endpoint, not invented: it answers
+     expiresInMinutes, and a fixture saying expiresInSeconds quietly tested a
+     response the server has never sent. */
+  if (p === "/api/link/code") return json({ code: "HTQ8PB", expiresInMinutes: 10, personId: "p1" });
   if (p === "/api/attach") return json({ id: "a1", file: "a1.jpg", url: "/assets/shots/picture.jpg", name: "beach.jpg", type: "image/jpeg", description: "A man in a white cap by the water.", sawIt: true });
   if (p === "/api/onboard/step") {
     const step = body?.step ?? "name";
@@ -437,6 +451,41 @@ try {
       borrowed === (dest === "/welcome" ? "welcome-main" : "app-main"), `${dest} → ${borrowed || "(none)"}`);
     check("and the page it opens knows to morph rather than fade", landed.stamped === "hero", landed);
     check("and the note is cleared so the next arrival is ordinary", landed.cleared === true);
+
+    /* Every quick control under the composer has to actually do something.
+       `data-link` was written valueless, the way a boolean attribute is, so
+       `dataset.link` was the empty string and the handler's truthiness test
+       never fired: the button was wired, and silently did nothing on every
+       click for as long as it existed. Checked by pressing each one. */
+    const qc = await open("/chat", { store: { "ws8-user": "qc-check" } });
+    await sleep(1400);
+    const controls = await qc.page.$$eval(".qc", (bs) =>
+      bs.filter((b) => b.id !== "newchat-q").map((b) => ({
+        label: b.textContent.trim().slice(0, 28),
+        wired: "ask" in b.dataset || "prefill" in b.dataset || "link" in b.dataset,
+      })));
+    check("every quick control is wired to something", controls.every((c) => c.wired),
+      controls.filter((c) => !c.wired).map((c) => c.label));
+
+    /* The control opens the linking panel — a code to type on another app and
+       a QR that carries it — rather than saying anything in the chat. So this
+       asserts the panel, not the log. */
+    const linkBtn = await qc.page.$(".qc[data-link]");
+    if (linkBtn) {
+      await linkBtn.click();
+      let panel = {};
+      for (let i = 0; i < 30; i++) {
+        panel = await qc.page.evaluate(() => ({
+          open: document.getElementById("scrim")?.classList.contains("on") ?? false,
+          code: (document.getElementById("codeval")?.firstChild?.nodeValue ?? "").trim(),
+        }));
+        if (panel.open && /^[A-Z0-9]{6}$/.test(panel.code)) break;
+        await sleep(400);
+      }
+      check("the link control opens the linking panel", panel.open === true, panel);
+      check("and the panel carries a real code", /^[A-Z0-9]{6}$/.test(panel.code), panel.code || "(none)");
+    }
+    await qc.page.close();
     await hero.page.close();
     check("no errors", errors.length === 0, errors.slice(0, 2));
     await page.close(); }
