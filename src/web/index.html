@@ -136,8 +136,11 @@
      Fixed rather than in the flow: it belongs to the screen, not the column,
      and the column is centred so anything in it would be dragged off-left on
      a wide monitor. Above the backdrop, below everything you can click. */
-  .mascot{position:fixed;top:clamp(16px,3.5vh,34px);left:clamp(14px,3vw,38px);
-    z-index:3;display:flex;align-items:center;gap:11px;pointer-events:none}
+  /* Clear of the status line along the top, and clear of the eyebrow below:
+     pinned to the corner it read as part of the furniture rather than as
+     something floating in the page. */
+  .mascot{position:fixed;top:clamp(84px,15vh,150px);left:clamp(16px,4vw,52px);
+    z-index:3;display:flex;align-items:center;gap:12px;pointer-events:none}
   .mascot-orb{display:block;filter:drop-shadow(0 6px 22px rgba(90,169,255,.3));
     animation:float 5.4s ease-in-out infinite;transform-origin:50% 50%;
     will-change:transform}
@@ -149,8 +152,9 @@
   .mascot.blink .eyes{transform:scaleY(.12) translateY(0);transform-origin:30px 29px;
     transition:transform .09s ease}
 
-  .bubble{max-width:min(40ch,46vw);background:var(--glass-2);border:1px solid var(--edge);
-    border-radius:var(--r-sm);padding:9px 13px;font-size:12.5px;line-height:1.5;
+  .bubble{max-width:min(26ch,34vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    background:var(--glass-2);border:1px solid var(--edge);
+    border-radius:999px;padding:7px 15px;font-size:13px;line-height:1.4;
     color:var(--soft);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
     opacity:0;transform:translateX(-8px) scale(.96);
     transition:opacity .5s var(--ease),transform .5s var(--ease)}
@@ -164,16 +168,17 @@
      itself stays and becomes the panel on the other side, so the movement
      carries across the navigation instead of stopping at it. */
   .imploding{pointer-events:none}
-  .imploding .vx{animation:vortex .46s cubic-bezier(.55,0,.85,.3) both}
-  .imploding .vx:nth-child(2){animation-delay:.03s}
-  .imploding .vx:nth-child(3){animation-delay:.06s}
-  .imploding .vx:nth-child(n+4){animation-delay:.09s}
+  .imploding .vx{animation:vortex .9s cubic-bezier(.5,0,.75,.35) both}
+  .imploding .vx:nth-child(2){animation-delay:.06s}
+  .imploding .vx:nth-child(3){animation-delay:.12s}
+  .imploding .vx:nth-child(n+4){animation-delay:.18s}
   @keyframes vortex{
     to{opacity:0;transform:translate(var(--vx-x,0),var(--vx-y,0)) rotate(26deg) scale(.08)}
   }
-  .imploding .mascot-orb{animation:swell .46s cubic-bezier(.3,0,.2,1) both}
+  .imploding .mascot-orb{animation:swell .9s cubic-bezier(.3,0,.2,1) both}
   @keyframes swell{
-    40%{transform:scale(1.14)}
+    30%{transform:scale(1.06)}
+    70%{transform:scale(1.2)}
     to{transform:scale(1)}
   }
 
@@ -183,11 +188,13 @@
     .imploding .vx,.imploding .mascot-orb{animation:none}
     .imploding .vx{opacity:0}
   }
+  /* On a phone there is no free corner. The headline fills the upper half and
+     anything floating over it lands on the eyebrow, which is exactly what it
+     did. A greeting is not worth taking space from the one sentence that has
+     to land, so the mascot is a wider-screen flourish and the vortex falls
+     back to converging on the middle of the screen. */
   @media (max-width:720px){
-    /* On a phone the bubble would sit across the headline. The orb alone still
-       says who is talking; what it says appears underneath instead. */
-    .mascot{top:10px;left:12px}
-    .bubble{max-width:min(28ch,58vw);font-size:11.5px;padding:7px 10px}
+    .mascot{display:none}
   }
   .cue:hover,.cue:focus-visible{
     --tilt:0deg;--lift:-8px;--grow:1.04;
@@ -442,51 +449,16 @@
       return;
     }
 
-    /* Third person on the way in, second person on the way out. "User uses
-       pnpm" is a note; "you told me you use pnpm" is someone talking to you. */
-    const IRREGULAR = { is: "are", was: "were", has: "have", does: "do", goes: "go" };
-    const youify = (t) => String(t)
-      .replace(/^The user'?s\b/i, "Your").replace(/^User'?s\b/i, "Your")
-      .replace(/^The user\b/i, "You").replace(/^User\b/i, "You")
-      .replace(/\bthe user'?s\b/gi, "your").replace(/\bthe user\b/gi, "you")
-      .replace(/\buser'?s\b/gi, "your")
-      /* "User uses pnpm" becomes "You uses pnpm" unless the verb comes along
-         too. An adverb may sit between the subject and the verb — "always
-         skips" — so it is stepped over rather than conjugated, which is how
-         "you alway skips" happens. Nothing past the verb is touched: further
-         in, a trailing -s is far more likely to be a plural noun. */
-      .replace(/^You (always |sometimes |usually |often |never |rarely |still |also |only |just |generally |typically |normally |mostly )?([a-z]+)\b/i,
-        (m, adv = "", v) => {
-          const low = v.toLowerCase();
-          const head = "You " + (adv ?? "");
-          if (IRREGULAR[low]) return head + IRREGULAR[low];
-          if (/(ss|us|is)$/.test(low)) return m;        // "discuss", "focus" — not a conjugation
-          /* "watches" drops two letters, "uses" drops one. What separates them
-             is the stem, not the ending: watch/push/fix/miss take -es, use
-             takes -s. Testing the ending alone turned "uses" into "us". */
-          if (/(ch|sh|x|z|ss)$/.test(low.slice(0, -2))) return head + v.slice(0, -2);
-          if (/[a-z]{2,}s$/.test(low)) return head + v.slice(0, -1);
-          return m;
-        })
-      .replace(/\s+/g, " ").trim();
-
+    /* Just the name. A face saying "welcome back, Danny" has already proved
+       the only thing it needs to prove here; reciting a stored fact on top of
+       it turned a greeting into a paragraph about an ice skate, and put
+       someone's memory on a page anyone walking past can read. What it knows
+       is one click away, where they went to look for it. */
     fetch("/api/memory?userId=" + encodeURIComponent(user))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (!d) return;
-        const name = d.name ? String(d.name).split(/\s+/)[0] : null;
-        /* The name is already in the greeting, so a memory that only says the
-           name reads as a stutter: "Welcome back, Danny. Your name is Danny." */
-        const facts = (d.facts ?? []).map((f) => f.text)
-          .filter((t) => t && t.length < 150 && !/^(the )?user'?s? name is\b/i.test(t.trim()));
-        // Not the first one every time: the same sentence on every visit stops
-        // being evidence that anything was remembered.
-        const pick = facts.length ? youify(facts[Math.floor(Math.random() * facts.length)]) : null;
-
-        if (name && pick) say(`Welcome back, <b>${name}</b>. ${pick[0].toUpperCase()}${pick.slice(1)}`);
-        else if (name) say(`Welcome back, <b>${name}</b>.`);
-        else if (pick) say(`We&rsquo;ve met. ${pick[0].toUpperCase()}${pick.slice(1)}`);
-        else say("We&rsquo;ve talked before &mdash; open the chat and I&rsquo;ll show you what I kept.");
+        const name = d?.name ? String(d.name).split(/\s+/)[0] : null;
+        say(name ? `Welcome back, <b>${name}</b>.` : "Welcome back.");
       })
       .catch(() => {});
   })();
@@ -513,9 +485,14 @@
       const href = new URL(go.href, location.href);
       const name = DEST[href.pathname];
 
+      /* No orb on a phone, so nothing to converge on and nothing to carry the
+         name. The pieces fall toward the middle of the screen instead and the
+         button takes the transition, which is what it did before the mascot
+         existed. */
       const b = orb.getBoundingClientRect();
-      const cx = b.left + b.width / 2;
-      const cy = b.top + b.height / 2;
+      const visible = b.width > 0 && b.height > 0;
+      const cx = visible ? b.left + b.width / 2 : innerWidth / 2;
+      const cy = visible ? b.top + b.height / 2 : innerHeight / 2;
 
       // Each piece is told how far it has to travel to reach the orb, so they
       // converge on one point rather than all sliding the same distance.
@@ -527,11 +504,12 @@
         el.classList.add("vx");
       }
       document.body.classList.add("imploding");
-      try { if (name) orb.style.viewTransitionName = name; } catch {}
+      try { if (name) (visible ? orb : go).style.viewTransitionName = name; } catch {}
       try { sessionStorage.setItem("vt.hero", "1"); } catch {}
 
-      // Long enough for the implosion to read, short enough that nobody waits.
-      setTimeout(() => { location.href = href.href; }, 420);
+      /* The implosion has to finish being watched, not merely started. At
+         420ms it read as a glitch rather than as the page being drawn in. */
+      setTimeout(() => { location.href = href.href; }, 860);
     });
   })();
 
