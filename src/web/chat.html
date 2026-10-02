@@ -407,11 +407,25 @@
   .keyinput::placeholder{color:var(--faint);font-family:var(--sans)}
   .orline{display:flex;align-items:center;gap:12px;margin:18px 0 14px;color:var(--faint);font-size:11.5px}
   .orline::before,.orline::after{content:"";flex:1;height:1px;background:var(--edge)}
+  /* The header's proof that a wallet is holding this memory. Quiet by
+     default — it is a state, not an action — and it only exists at all once
+     somebody has signed in. */
+  .walletchip{display:inline-flex;align-items:center;gap:6px;background:var(--live-ghost);
+    border:1px solid rgba(90,169,255,.3);color:var(--live);border-radius:999px;
+    padding:4px 11px;font:500 11.5px/1 var(--mono);letter-spacing:.02em;cursor:pointer;
+    white-space:nowrap;transition:background .25s var(--ease),border-color .25s var(--ease)}
+  .walletchip:hover{background:rgba(90,169,255,.2);border-color:rgba(90,169,255,.5)}
+  .walletchip[hidden]{display:none}
+  @media (max-width:860px){ .walletchip #walletchiptext{display:none} .walletchip{padding:5px 8px} }
+
   .walletbtn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:13px;
     border-radius:999px;border:1px solid var(--edge-2);background:var(--glass);color:var(--soft);
     cursor:pointer;font:500 13.5px var(--sans);transition:.22s}
   .walletbtn:hover:not(:disabled){background:var(--glass-2);color:#fff;border-color:var(--live)}
   .walletbtn:disabled{opacity:.5;cursor:default}
+  /* `display:flex` above outranks the attribute, so the retry button would
+     have sat there permanently offering to retry nothing. */
+  .walletbtn[hidden]{display:none}
   .nudge{display:block;margin:12px 0 0;padding:11px 13px;border-radius:var(--r-md);cursor:pointer;
     border:1px solid rgba(90,169,255,.3);background:var(--live-ghost);color:var(--live);
     font:400 12.5px/1.5 var(--sans);text-align:left;transition:.22s}
@@ -538,6 +552,16 @@
       <span id="tagline">remembers you everywhere</span>
     </a>
     <span class="status"><span class="ping" id="ping"></span><span id="pingtext">Connecting…</span></span>
+    <!-- Only drawn once a wallet has signed in. Signing in and then seeing
+         nothing change is indistinguishable from it not having worked. -->
+    <button class="walletchip" id="walletchip" hidden title="This memory is held by your wallet">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <rect x="2" y="4" width="12" height="9" rx="2.2" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M2 7h12" stroke="currentColor" stroke-width="1.4"/>
+        <circle cx="11.2" cy="10" r="1" fill="currentColor"/>
+      </svg>
+      <span id="walletchiptext">wallet</span>
+    </button>
     <button class="white" id="linkbtn">Connect another app</button>
     <nav class="nav">
       <span class="glide" id="glide" aria-hidden="true"></span>
@@ -704,6 +728,7 @@
       <span id="walletlabel">Use a Sui wallet instead</span>
     </button>
     <p class="note" id="walleterr"></p>
+    <button class="walletbtn" id="walletretry" hidden>Try that again</button>
 
     <button class="close" id="keyclose">Done</button>
   </div>
@@ -1317,6 +1342,31 @@ function secondPerson(text) {
   }));
 }
 
+/* ── the wallet, once it is signed in ──────────────────────────────────────
+
+   Signing in with a wallet and then seeing the page look exactly as it did
+   before is indistinguishable from it having failed, which is most of why the
+   whole flow felt broken. The header says so now, with the address shortened
+   the way every wallet shortens it, and clicking it opens the panel it came
+   from so there is a way back to the key. */
+(function showWallet() {
+  const chip = document.getElementById("walletchip");
+  if (!chip) return;
+  let address = null;
+  try { address = localStorage.getItem("ws8-wallet"); } catch {}
+  // A userId of the form sui-0x… is a wallet-held memory even on a browser
+  // that never did the signing — restored on a second machine, say.
+  if (!address && /^sui-0x[0-9a-f]+$/i.test(userId ?? "")) address = userId.slice(4);
+  if (!address) return;
+
+  const short = `${address.slice(0, 6)}…${address.slice(-4)}`;
+  document.getElementById("walletchiptext").textContent = short;
+  chip.hidden = false;
+  chip.addEventListener("click", () => {
+    document.getElementById("savekey")?.click();
+  });
+})();
+
 /* ── keeping your memory: a phrase you can write down, or a wallet ── */
 
 const keyScrim = $("keyscrim");
@@ -1394,8 +1444,13 @@ $("phrase").addEventListener("click", () => {
 });
 
 /** Adopt a different identity: store it and reload so every panel refetches. */
-function becomeUser(newId) {
-  try { localStorage.setItem("ws8-user", newId); localStorage.setItem("ws8-keyed", "1"); } catch {}
+function becomeUser(newId, address) {
+  try {
+    localStorage.setItem("ws8-user", newId);
+    localStorage.setItem("ws8-keyed", "1");
+    // Kept so the header can say whose wallet this is without a round trip.
+    if (address) localStorage.setItem("ws8-wallet", address);
+  } catch {}
   location.reload();
 }
 
@@ -1430,10 +1485,38 @@ function suiWallets() {
   return found.filter((w) => w.features?.["standard:connect"] && w.features?.["sui:signPersonalMessage"]);
 }
 
+/* Held so a retry after a busy minute costs one request, not another trip to
+   the wallet. The challenge is still valid: the server only spends it when a
+   sign-in actually succeeds or the signature is genuinely wrong. */
+let lastChallenge = null;
+const retryBtn = $("walletretry");
+
+retryBtn?.addEventListener("click", async () => {
+  if (!lastChallenge) return;
+  const err = $("walleterr");
+  retryBtn.disabled = true;
+  err.textContent = "Trying again…";
+  try {
+    const res = await fetch("/api/wallet/verify", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(lastChallenge),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (out.userId) return becomeUser(out.userId, out.address);
+    err.textContent = out.error ?? "Still not through. Give it another minute.";
+  } catch (e) {
+    err.textContent = `Still not through: ${String(e?.message ?? "").slice(0, 100)}`;
+  } finally {
+    retryBtn.disabled = false;
+  }
+});
+
 $("walletbtn").addEventListener("click", async () => {
   const btn = $("walletbtn");
   const err = $("walleterr");
   err.textContent = "";
+  retryBtn.hidden = true;
+  lastChallenge = null;
   const wallets = suiWallets();
   if (!wallets.length) {
     err.innerHTML = 'No Sui wallet found in this browser. <a href="https://slush.app" target="_blank" rel="noopener" style="color:var(--live)">Get Slush</a>, then try again.';
@@ -1458,15 +1541,32 @@ $("walletbtn").addEventListener("click", async () => {
       account,
     });
 
-    const out = await fetch("/api/wallet/verify", {
+    const res = await fetch("/api/wallet/verify", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nonce, message, signature: signed.signature }),
-    }).then((r) => r.json());
+    });
+    const out = await res.json().catch(() => ({}));
 
-    if (out.userId) becomeUser(out.userId);
-    else err.textContent = out.error ?? "Couldn't verify that signature.";
+    if (out.userId) return becomeUser(out.userId, out.address);
+
+    /* A signature that checked out and a memory that was briefly unreachable
+       is not a failed sign-in, and the challenge is still good — so the only
+       thing to do is press the button again. Saying "couldn't verify that
+       signature" there sent people back to their wallet to re-sign something
+       that was never wrong. */
+    err.textContent = out.error ?? "Couldn't verify that signature.";
+    if (out.retryable) {
+      lastChallenge = { nonce, message, signature: signed.signature };
+      retryBtn.hidden = false;
+    }
   } catch (e) {
-    err.textContent = e?.message === "no account" ? "That wallet has no account to sign with." : "Wallet sign-in was cancelled.";
+    /* Everything used to land here as "cancelled", including a network drop
+       and a wallet that threw. Only an actual rejection says so. */
+    const m = String(e?.message ?? "");
+    err.textContent =
+      m === "no account" ? "That wallet has no account to sign with."
+      : /reject|denied|cancel|user refused/i.test(m) ? "Wallet sign-in was cancelled."
+      : `Wallet sign-in didn't finish: ${m.slice(0, 120)}`;
   } finally {
     btn.disabled = false;
     $("walletlabel").textContent = $("keysave").hidden ? "Sign in with a Sui wallet" : "Use a Sui wallet instead";

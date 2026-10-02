@@ -18,7 +18,7 @@ import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core
 import { startOutbox, onSettled, outboxStats, pendingFor, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
 import { list as listConversations, get as getConversation, flushAll } from "./core/conversations.mjs";
 import { resume, hasHistory } from "./core/session.mjs";
-import { issueMemoryKey, redeemMemoryKey, issueChallenge, takeChallenge, attachWallet } from "./core/recovery.mjs";
+import { issueMemoryKey, redeemMemoryKey, issueChallenge, peekChallenge, spendChallenge, attachWallet } from "./core/recovery.mjs";
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { snapshot } from "./core/metrics.mjs";
 import { storeAttachment, listImages, UPLOADS } from "./core/images.mjs";
@@ -809,22 +809,49 @@ const server = createServer(async (req, res) => {
   if (url.pathname === "/api/wallet/verify" && req.method === "POST") {
     try {
       const { nonce, signature, message } = await readBody(req);
-      const challenge = takeChallenge(String(nonce));
+      const challenge = peekChallenge(String(nonce));
       if (!challenge) return json(res, 400, { error: "That sign-in request expired. Try again." });
       if (message !== `Continuity — prove this wallet is yours so your memory follows it.\n\nNonce: ${nonce}`) {
-        return json(res, 400, { error: "signed the wrong message" });
+        return json(res, 400, { error: "That isn't the message I asked you to sign." });
       }
 
       // The signature proves the address; we never take an address on trust.
-      const publicKey = await verifyPersonalMessageSignature(
-        new TextEncoder().encode(message),
-        signature,
-      );
-      const address = publicKey.toSuiAddress();
+      let address;
+      try {
+        const publicKey = await verifyPersonalMessageSignature(
+          new TextEncoder().encode(message),
+          signature,
+        );
+        address = publicKey.toSuiAddress();
+      } catch (err) {
+        // A bad signature is the one failure that is genuinely the caller's,
+        // and the only one worth spending the challenge on.
+        spendChallenge(String(nonce));
+        return json(res, 400, { error: "That signature didn't check out.", detail: err.message });
+      }
 
-      return json(res, 200, { ...(await attachWallet(address, challenge.userId)), address });
+      /* Everything past this point is our side failing, not theirs. Attaching
+         the wallet reads and writes memory, and memory can be rate limited or
+         briefly unreachable — which has nothing to do with the signature they
+         just gave us. Say so, keep the challenge, and let them press the
+         button again rather than sending them back to a wallet prompt. */
+      try {
+        const attached = await attachWallet(address, challenge.userId);
+        spendChallenge(String(nonce));
+        return json(res, 200, { ...attached, address });
+      } catch (err) {
+        const busy = err?.status === 429 || /rate limit|too many requests/i.test(String(err?.message ?? ""));
+        return json(res, 503, {
+          error: busy
+            ? "Your signature was fine — my memory is busy right now. Press the button again in a minute."
+            : "Your signature was fine, but I couldn't reach my memory just then. Try again in a moment.",
+          signatureOk: true,
+          retryable: true,
+          detail: err.message,
+        });
+      }
     } catch (err) {
-      return json(res, 400, { error: "Couldn't verify that signature." , detail: err.message });
+      return json(res, 400, { error: "Couldn't read that sign-in request.", detail: err.message });
     }
   }
 

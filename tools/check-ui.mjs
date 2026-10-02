@@ -488,6 +488,29 @@ try {
       check("and the panel carries a real code", /^[A-Z0-9]{6}$/.test(panel.code), panel.code || "(none)");
     }
     await qc.page.close();
+
+    /* Signing in with a wallet and seeing the page look exactly as it did
+       before is indistinguishable from it having failed, which was most of why
+       the flow felt broken even on the turns that worked. */
+    const w = await open("/chat", { store: {
+      "ws8-user": "sui-0xa3ca1333e08cf101f4bb2c9d77ee5510aa91c8f2dd41b6e7c3a55d9988776655",
+      "ws8-wallet": "0xa3ca1333e08cf101f4bb2c9d77ee5510aa91c8f2dd41b6e7c3a55d9988776655",
+    } });
+    await sleep(900);
+    const chip = await w.page.evaluate(() => {
+      const el = document.getElementById("walletchip");
+      return { shown: !!(el && !el.hidden), text: document.getElementById("walletchiptext")?.textContent ?? "" };
+    });
+    check("a signed-in wallet shows in the header", chip.shown, chip.text);
+    check("shortened the way a wallet shortens it", /^0x\w{4}…\w{4}$/.test(chip.text), chip.text);
+    await w.page.close();
+
+    const plain = await open("/chat", { store: { "ws8-user": "no-wallet-here" } });
+    await sleep(700);
+    check("and stays out of the way when there is no wallet",
+      await plain.page.evaluate(() => document.getElementById("walletchip")?.hidden !== false));
+    await plain.page.close();
+
     await hero.page.close();
     check("no errors", errors.length === 0, errors.slice(0, 2));
     await page.close(); }

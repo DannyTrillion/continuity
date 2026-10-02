@@ -14,7 +14,8 @@
     "check:bots": "node tools/check-bots.mjs",
     "check:telegram": "node --env-file=.env tools/check-telegram.mjs",
     "check:files": "node --env-file=.env tools/check-files.mjs",
-    "check:fresh": "node --env-file=.env tools/check-fresh.mjs"
+    "check:fresh": "node --env-file=.env tools/check-fresh.mjs",
+    "check:wallet": "node --env-file=.env tools/check-wallet.mjs"
   },
   "dependencies": {
     "@mysten-incubation/memwal": "^0.1.7",

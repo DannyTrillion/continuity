@@ -73,11 +73,29 @@ export function issueChallenge(currentUserId) {
   };
 }
 
-export function takeChallenge(nonce) {
+/**
+ * Look at a challenge without spending it.
+ *
+ * Spending it up front is what made a busy relayer look like a bad signature:
+ * the nonce was consumed, the memory read behind it failed, the person was
+ * told their signature could not be verified — which was untrue — and the
+ * retry they were invited to make answered "that sign-in request expired",
+ * because the only nonce they had was already gone. A challenge is spent when
+ * the sign-in succeeds, not when it is attempted.
+ */
+export function peekChallenge(nonce) {
   const entry = challenges.get(nonce);
   if (!entry) return null;
-  challenges.delete(nonce); // single use
-  if (entry.expiresAt < Date.now()) return null;
+  if (entry.expiresAt < Date.now()) { challenges.delete(nonce); return null; }
+  return entry;
+}
+
+/** Spend it. Called once a sign-in has actually worked. */
+export const spendChallenge = (nonce) => challenges.delete(nonce);
+
+export function takeChallenge(nonce) {
+  const entry = peekChallenge(nonce);
+  if (entry) spendChallenge(nonce);
   return entry;
 }
 
