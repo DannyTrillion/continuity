@@ -21,27 +21,10 @@
 <link rel="stylesheet" href="/assets/motion.css">
 <script>addEventListener("pagereveal",(e)=>{if(e.viewTransition)document.documentElement.classList.add("vt-in")});</script>
 <script>
-/* The button you press becomes the panel it opens: it borrows the
-   destination's view-transition-name for the length of the navigation, which
-   is what makes the browser morph one into the other instead of cross-fading
-   two unrelated rectangles. Set synchronously on click, because the snapshot
-   is taken before the navigation commits. The arriving document cannot know
-   what was pressed, so it is told. */
-addEventListener("click", (e) => {
-  const go = e.target.closest?.("#open");
-  if (!go || !document.startViewTransition) return;
-  /* Where this button points depends on whether the browser has been here
-     before — a first visit opens the introduction, a return opens the chat —
-     and the morph only happens if the button borrows the name its destination
-     actually uses. Getting this wrong is not a crash, just a cross-fade. */
-  const DEST = { "/welcome": "welcome-main", "/chat": "app-main" };
-  const name = DEST[new URL(go.href, location.href).pathname];
-  if (!name) return;
-  try {
-    go.style.viewTransitionName = name;
-    sessionStorage.setItem("vt.hero", "1");
-  } catch { /* a blocked store just means an ordinary cross-fade */ }
-}, true);
+/* The vortex below owns this now: the orb takes the destination's name and
+   everything else is pulled into it, so the button must not also claim the
+   name — two elements with the same view-transition-name is an error and the
+   browser drops the transition entirely. */
 </script>
 <link rel="expect" href="#page-ready" blocking="render">
 <style>
@@ -148,6 +131,64 @@ addEventListener("click", (e) => {
     will-change:transform;backface-visibility:hidden;
   }
   @keyframes bob{0%,100%{--bob:0px}50%{--bob:-10px}}
+
+  /* ── the mascot ──────────────────────────────────────────────────────────
+     Fixed rather than in the flow: it belongs to the screen, not the column,
+     and the column is centred so anything in it would be dragged off-left on
+     a wide monitor. Above the backdrop, below everything you can click. */
+  .mascot{position:fixed;top:clamp(16px,3.5vh,34px);left:clamp(14px,3vw,38px);
+    z-index:3;display:flex;align-items:center;gap:11px;pointer-events:none}
+  .mascot-orb{display:block;filter:drop-shadow(0 6px 22px rgba(90,169,255,.3));
+    animation:float 5.4s ease-in-out infinite;transform-origin:50% 50%;
+    will-change:transform}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+
+  /* The eyes move as one group, a couple of pixels, so it reads as looking
+     rather than as a pair of dots sliding about. */
+  .eyes{transition:transform .34s var(--ease)}
+  .mascot.blink .eyes{transform:scaleY(.12) translateY(0);transform-origin:30px 29px;
+    transition:transform .09s ease}
+
+  .bubble{max-width:min(40ch,46vw);background:var(--glass-2);border:1px solid var(--edge);
+    border-radius:var(--r-sm);padding:9px 13px;font-size:12.5px;line-height:1.5;
+    color:var(--soft);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    opacity:0;transform:translateX(-8px) scale(.96);
+    transition:opacity .5s var(--ease),transform .5s var(--ease)}
+  .bubble.on{opacity:1;transform:none}
+  .bubble[hidden]{display:none}
+  .bubble b{color:var(--ink);font-weight:500}
+
+  /* ── the vortex ──────────────────────────────────────────────────────────
+     Pressing Open the chat pulls the page into the orb: each piece spins a
+     little, shrinks to nothing and slides toward it, nearest first. The orb
+     itself stays and becomes the panel on the other side, so the movement
+     carries across the navigation instead of stopping at it. */
+  .imploding{pointer-events:none}
+  .imploding .vx{animation:vortex .46s cubic-bezier(.55,0,.85,.3) both}
+  .imploding .vx:nth-child(2){animation-delay:.03s}
+  .imploding .vx:nth-child(3){animation-delay:.06s}
+  .imploding .vx:nth-child(n+4){animation-delay:.09s}
+  @keyframes vortex{
+    to{opacity:0;transform:translate(var(--vx-x,0),var(--vx-y,0)) rotate(26deg) scale(.08)}
+  }
+  .imploding .mascot-orb{animation:swell .46s cubic-bezier(.3,0,.2,1) both}
+  @keyframes swell{
+    40%{transform:scale(1.14)}
+    to{transform:scale(1)}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .mascot-orb{animation:none}
+    .bubble{transition:none}
+    .imploding .vx,.imploding .mascot-orb{animation:none}
+    .imploding .vx{opacity:0}
+  }
+  @media (max-width:720px){
+    /* On a phone the bubble would sit across the headline. The orb alone still
+       says who is talking; what it says appears underneath instead. */
+    .mascot{top:10px;left:12px}
+    .bubble{max-width:min(28ch,58vw);font-size:11.5px;padding:7px 10px}
+  }
   .cue:hover,.cue:focus-visible{
     --tilt:0deg;--lift:-8px;--grow:1.04;
     border-color:rgba(255,255,255,.34);outline:none;
@@ -183,6 +224,32 @@ addEventListener("click", (e) => {
 <body>
 <div class="ground"></div><div class="bloom"></div><div class="grain"></div>
 
+<!-- The face the bots already wear, given eyes. It is the one thing on this
+     page that claims to remember you, so it is the one thing that says so —
+     and when you open the chat, everything else is drawn into it. -->
+<div class="mascot" id="mascot" aria-hidden="true">
+  <svg class="mascot-orb" id="orb" width="60" height="60" viewBox="0 0 60 60" fill="none">
+    <defs>
+      <radialGradient id="mcore" cx="36%" cy="30%" r="72%">
+        <stop offset="0" stop-color="#fff"/><stop offset="42%" stop-color="#9BD0FF"/>
+        <stop offset="100%" stop-color="#2E7ACB"/>
+      </radialGradient>
+      <linearGradient id="marc" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#fff"/><stop offset="100%" stop-color="#5AA9FF"/>
+      </linearGradient>
+    </defs>
+    <circle cx="30" cy="30" r="21" fill="none" stroke="#5AA9FF" stroke-width="1.4" opacity=".2"/>
+    <path d="M30 9a21 21 0 0 1 21 21" fill="none" stroke="url(#marc)" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M30 51A21 21 0 0 1 9 30" fill="none" stroke="url(#marc)" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="30" cy="30" r="15" fill="url(#mcore)"/>
+    <g class="eyes" id="eyes">
+      <ellipse cx="25.4" cy="29" rx="1.9" ry="2.5" fill="#06121F"/>
+      <ellipse cx="34.6" cy="29" rx="1.9" ry="2.5" fill="#06121F"/>
+    </g>
+  </svg>
+  <div class="bubble" id="bubble" hidden></div>
+</div>
+
 <div class="wrap">
   <header class="top">
     <a class="brand" href="/" aria-label="Continuity">
@@ -201,11 +268,11 @@ addEventListener("click", (e) => {
 
   <main>
     <p class="eyebrow tiny">One memory · every app</p>
-    <h1>Every memory it has<br>is a <em>blob you can open.</em></h1>
+    <h1>Most chatbots forget you.<br>This one <em>can&rsquo;t.</em></h1>
     <p class="sub">
       It knows you across the web, <b>Telegram</b> and <b>Discord</b> &mdash; pictures included.
-      Everything it keeps is stored on <b>Walrus mainnet</b>, so you can read the lot,
-      check any of it yourself, and tell it when it&rsquo;s wrong.
+      Everything it keeps is a blob on <b>Walrus mainnet</b> you can open and check
+      yourself, and tell it when it&rsquo;s wrong.
     </p>
 
 
@@ -319,6 +386,154 @@ addEventListener("click", (e) => {
     const code = document.getElementById("dc").dataset.code;
     if (code) navigator.clipboard?.writeText(`/link ${code}`).catch(() => {});
   });
+
+  /* ── the mascot ───────────────────────────────────────────────────────────
+
+     It is the only thing on this page that claims to remember you, so it is
+     the one that says so — and it says it in its own voice, about you, rather
+     than printing a stored sentence. The facts are kept in the third person
+     ("User uses pnpm"), which is right for a model reading them back and wrong
+     for a face talking to you, so they are turned around on the way out.
+
+     Nothing is shown to a browser it has never met. A stranger gets what it
+     does, not what it knows. */
+  (function mascot() {
+    const el = document.getElementById("mascot");
+    const orb = document.getElementById("orb");
+    const bubble = document.getElementById("bubble");
+    if (!el || !orb || !bubble) return;
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const say = (html) => {
+      bubble.innerHTML = html;
+      bubble.hidden = false;
+      requestAnimationFrame(() => bubble.classList.add("on"));
+    };
+
+    /* Blinking is what separates a face from a logo. Irregular on purpose —
+       a blink on a metronome reads as a loading spinner. */
+    if (!calm) {
+      const blink = () => {
+        el.classList.add("blink");
+        setTimeout(() => el.classList.remove("blink"), 130);
+        setTimeout(blink, 2600 + Math.random() * 4200);
+      };
+      setTimeout(blink, 1800);
+
+      /* Following the pointer, by a couple of pixels. Any more and the eyes
+         leave the face. There is no pointer on a touch screen, so this simply
+         never fires there and the float carries it. */
+      addEventListener("pointermove", (e) => {
+        const b = orb.getBoundingClientRect();
+        const dx = e.clientX - (b.left + b.width / 2);
+        const dy = e.clientY - (b.top + b.height / 2);
+        const d = Math.hypot(dx, dy) || 1;
+        const reach = Math.min(d / 90, 1) * 2.1;
+        const eyes = document.getElementById("eyes");
+        if (eyes) eyes.style.transform = `translate(${(dx / d) * reach}px, ${(dy / d) * reach}px)`;
+      }, { passive: true });
+    }
+
+    /* What it knows about whoever is on this browser. One read, and only if
+       this browser has been here before. */
+    const user = (() => { try { return localStorage.getItem("ws8-user"); } catch { return null; } })();
+    if (!user) {
+      setTimeout(() => say("I remember the people I talk to &mdash; here, on Telegram and on Discord."), 2400);
+      return;
+    }
+
+    /* Third person on the way in, second person on the way out. "User uses
+       pnpm" is a note; "you told me you use pnpm" is someone talking to you. */
+    const IRREGULAR = { is: "are", was: "were", has: "have", does: "do", goes: "go" };
+    const youify = (t) => String(t)
+      .replace(/^The user'?s\b/i, "Your").replace(/^User'?s\b/i, "Your")
+      .replace(/^The user\b/i, "You").replace(/^User\b/i, "You")
+      .replace(/\bthe user'?s\b/gi, "your").replace(/\bthe user\b/gi, "you")
+      .replace(/\buser'?s\b/gi, "your")
+      /* "User uses pnpm" becomes "You uses pnpm" unless the verb comes along
+         too. An adverb may sit between the subject and the verb — "always
+         skips" — so it is stepped over rather than conjugated, which is how
+         "you alway skips" happens. Nothing past the verb is touched: further
+         in, a trailing -s is far more likely to be a plural noun. */
+      .replace(/^You (always |sometimes |usually |often |never |rarely |still |also |only |just |generally |typically |normally |mostly )?([a-z]+)\b/i,
+        (m, adv = "", v) => {
+          const low = v.toLowerCase();
+          const head = "You " + (adv ?? "");
+          if (IRREGULAR[low]) return head + IRREGULAR[low];
+          if (/(ss|us|is)$/.test(low)) return m;        // "discuss", "focus" — not a conjugation
+          /* "watches" drops two letters, "uses" drops one. What separates them
+             is the stem, not the ending: watch/push/fix/miss take -es, use
+             takes -s. Testing the ending alone turned "uses" into "us". */
+          if (/(ch|sh|x|z|ss)$/.test(low.slice(0, -2))) return head + v.slice(0, -2);
+          if (/[a-z]{2,}s$/.test(low)) return head + v.slice(0, -1);
+          return m;
+        })
+      .replace(/\s+/g, " ").trim();
+
+    fetch("/api/memory?userId=" + encodeURIComponent(user))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const name = d.name ? String(d.name).split(/\s+/)[0] : null;
+        /* The name is already in the greeting, so a memory that only says the
+           name reads as a stutter: "Welcome back, Danny. Your name is Danny." */
+        const facts = (d.facts ?? []).map((f) => f.text)
+          .filter((t) => t && t.length < 150 && !/^(the )?user'?s? name is\b/i.test(t.trim()));
+        // Not the first one every time: the same sentence on every visit stops
+        // being evidence that anything was remembered.
+        const pick = facts.length ? youify(facts[Math.floor(Math.random() * facts.length)]) : null;
+
+        if (name && pick) say(`Welcome back, <b>${name}</b>. ${pick[0].toUpperCase()}${pick.slice(1)}`);
+        else if (name) say(`Welcome back, <b>${name}</b>.`);
+        else if (pick) say(`We&rsquo;ve met. ${pick[0].toUpperCase()}${pick.slice(1)}`);
+        else say("We&rsquo;ve talked before &mdash; open the chat and I&rsquo;ll show you what I kept.");
+      })
+      .catch(() => {});
+  })();
+
+  /* ── the vortex ───────────────────────────────────────────────────────────
+
+     Everything on the page is pulled into the orb, which then carries through
+     the navigation and becomes the panel on the other side. The implosion runs
+     here, in the page being left, because a cross-document transition can only
+     animate its snapshot — the pieces have to be moving before the snapshot is
+     taken. The orb takes the destination's view-transition-name so the browser
+     has something to morph into the chat. */
+  (function vortex() {
+    const orb = document.getElementById("orb");
+    const go = document.getElementById("open");
+    if (!orb || !go) return;
+
+    go.addEventListener("click", (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      if (!document.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      e.preventDefault();
+
+      const DEST = { "/welcome": "welcome-main", "/chat": "app-main" };
+      const href = new URL(go.href, location.href);
+      const name = DEST[href.pathname];
+
+      const b = orb.getBoundingClientRect();
+      const cx = b.left + b.width / 2;
+      const cy = b.top + b.height / 2;
+
+      // Each piece is told how far it has to travel to reach the orb, so they
+      // converge on one point rather than all sliding the same distance.
+      const pieces = [...document.querySelectorAll("main > *, .foot")];
+      for (const el of pieces) {
+        const r = el.getBoundingClientRect();
+        el.style.setProperty("--vx-x", `${Math.round(cx - (r.left + r.width / 2))}px`);
+        el.style.setProperty("--vx-y", `${Math.round(cy - (r.top + r.height / 2))}px`);
+        el.classList.add("vx");
+      }
+      document.body.classList.add("imploding");
+      try { if (name) orb.style.viewTransitionName = name; } catch {}
+      try { sessionStorage.setItem("vt.hero", "1"); } catch {}
+
+      // Long enough for the implosion to read, short enough that nobody waits.
+      setTimeout(() => { location.href = href.href; }, 420);
+    });
+  })();
 
   // Warm the chat page so the transition lands on something already fetched.
   addEventListener("load", () => {

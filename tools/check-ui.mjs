@@ -436,10 +436,12 @@ try {
     const hero = await open("/chat", { store: { "ws8-user": "vt-hero-check" } });
     await hero.page.goto(BASE + "/", { waitUntil: "networkidle0" }); await sleep(600);
     const dest = await hero.page.$eval("#open", (a) => new URL(a.href).pathname);
+    /* The orb carries the name now: everything on the page is pulled into it
+       and it is the thing that becomes the panel, so the morph source is the
+       mascot rather than the button that was pressed. */
     const borrowed = await hero.page.evaluate(() => {
-      const go = document.querySelector("#open");
-      go.click();
-      return go.style.viewTransitionName || "";
+      document.querySelector("#open").click();
+      return document.getElementById("orb")?.style.viewTransitionName || "";
     });
     await sleep(1600);
     const landed = await hero.page.evaluate(() => ({
@@ -447,7 +449,7 @@ try {
       stamped: document.documentElement.dataset.vt ?? null,
       cleared: !sessionStorage.getItem("vt.hero"),
     }));
-    check("the button borrows the name of where it actually goes",
+    check("the orb borrows the name of where it actually goes",
       borrowed === (dest === "/welcome" ? "welcome-main" : "app-main"), `${dest} → ${borrowed || "(none)"}`);
     check("and the page it opens knows to morph rather than fade", landed.stamped === "hero", landed);
     check("and the note is cleared so the next arrival is ordinary", landed.cleared === true);
