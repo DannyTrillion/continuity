@@ -292,9 +292,19 @@
     /* The two alternatives shrink to their marks: at this width the words
        "Telegram" and "Discord" would squeeze the primary action to nothing,
        and both logos are recognised without them. */
-    .actions .alt{flex:0 0 auto; padding:13px; gap:0}
-    .actions .alt svg{margin:0}
+    /* Stripped to their marks, these two have to carry on recognition alone,
+       and at `--soft` on `--glass` they read as decoration beside a white
+       pill — Danny could not find Discord on the page at all. So on a phone
+       each takes its own colour: the shapes are famous, the colours are what
+       make them findable in the corner of an eye, and nothing else on this
+       page is coloured enough for two small discs to look loud. */
+    .actions .alt{flex:0 0 auto; padding:12px; gap:0;
+      width:46px; height:46px; justify-content:center;
+      background:rgba(255,255,255,.085); border-color:rgba(255,255,255,.17)}
+    .actions .alt svg{margin:0; width:20px; height:20px}
     .actions .alt .lbl{display:none}
+    .actions #tg{color:#2AABEE}
+    .actions #dc{color:#5865F2}
     /* `.wrap` is the flex column that holds the whole page and gives `.foot`
        its `margin-top:auto`, so padding the footer does not move it — the
        column has to end higher up. Without this the small print sat behind

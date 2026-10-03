@@ -536,6 +536,36 @@ try {
     });
     check("on a phone the ways in are docked to the bottom", docked.fixed && docked.onScreen, docked);
     check("as one row, not a stack", docked.oneRow);
+
+    /* All three ways in have to be findable, and on a phone two of them lose
+       their labels — which is how Danny came to say he could not see the
+       Discord one at all. Stripped to a mark, a disc at `--soft` on `--glass`
+       reads as decoration next to a white pill, so each takes its own colour.
+       Checked as: on screen, big enough to hit, and not the same colour as
+       its neighbour. */
+    const ways = await bar.page.evaluate(() => {
+      const one = (id) => {
+        const e = document.getElementById(id);
+        if (!e) return null;
+        const r = e.getBoundingClientRect(), c = getComputedStyle(e);
+        return {
+          shown: c.display !== "none" && c.visibility !== "hidden" && r.width > 0,
+          tappable: Math.min(r.width, r.height) >= 40,
+          onScreen: r.right <= innerWidth + 1 && r.left >= 0 && r.bottom <= innerHeight + 1,
+          colour: c.color,
+          href: e.getAttribute("href"),
+        };
+      };
+      return { tg: one("tg"), dc: one("dc") };
+    });
+    check("Telegram and Discord are both on the bar, not just the chat",
+      ways.tg?.shown && ways.dc?.shown, ways);
+    check("both are big enough to hit and fully on screen",
+      ways.tg?.tappable && ways.tg?.onScreen && ways.dc?.tappable && ways.dc?.onScreen, ways);
+    check("and the two marks are told apart by colour, not by shape alone",
+      ways.tg?.colour !== ways.dc?.colour, ways);
+    check("Discord points at a real invite",
+      /^https:\/\/discord\.(gg|com)\//.test(ways.dc?.href ?? ""), ways.dc?.href);
     check("with the small print clear of the glass, not reading through it", docked.clearOfFooter);
     check("and nothing else sharing that corner", docked.fabHidden);
 
