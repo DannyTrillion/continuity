@@ -3,6 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Added to a home screen this should behave like an app, not a tab: its own
+     colour behind the status bar, no browser chrome, no white rubber-band at
+     the edges. The manifest is shared, so every page installs as one thing. -->
+<meta name="theme-color" content="#05070A">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Continuity">
+<link rel="manifest" href="/assets/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/assets/avatar.png">
 <title>Your memory — Continuity</title>
 <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -86,20 +97,6 @@
   .filter.on{background:#fff;color:#0A0D12;border-color:transparent;font-weight:600}
   .filters[hidden]{display:none}
   .filters{display:flex;gap:9px}
-
-  .conflicts{border:1px solid rgba(240,168,104,.34);border-radius:var(--r);background:rgba(240,168,104,.07);
-    padding:17px 19px;margin-bottom:20px}
-  .conflicts h2{margin:0 0 4px;font:500 14px var(--display);color:var(--warn)}
-  .conflicts p.note{margin:0 0 13px;color:var(--dim);font-size:12.5px;line-height:1.6}
-  .conflict{border-top:1px solid rgba(240,168,104,.2);padding:12px 0 2px}
-  .conflict:first-of-type{border-top:0}
-  .side{display:flex;gap:10px;align-items:baseline;padding:4px 0;font-size:13.5px}
-  .side .tag{flex:none;font:500 9.5px var(--sans);letter-spacing:.1em;text-transform:uppercase;
-    padding:3px 8px;border-radius:999px;min-width:74px;text-align:center}
-  .side.now .tag{background:rgba(127,227,212,.16);color:var(--wal)}
-  .side.was .tag{background:rgba(255,255,255,.07);color:var(--faint)}
-  .side.was span{color:var(--faint);text-decoration:line-through;text-decoration-color:rgba(255,255,255,.25)}
-  .differs{margin-top:8px;font:400 11px var(--mono);color:var(--faint)}
 
   /* ── the shelf: one cover per collection ── */
   .shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:14px}
@@ -249,7 +246,6 @@
     Walrus mainnet, and tell it when one is wrong.</p>
 
   <div class="stats" id="stats"><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div><div class="sk-row"><div class="sk sk-line w60"></div><div class="sk sk-line w40"></div></div></div>
-  <div id="conflicts"></div>
 
   <div class="bar">
     <label class="search">
@@ -551,18 +547,6 @@ function render() {
     statCard("Apps connected", (data.connected ?? []).length) +
     statCard("Never used again", s.neverRead);
   countUp();
-
-  $("conflicts").innerHTML = data.conflicts?.length ? `
-    <div class="conflicts">
-      <h2>${data.conflicts.length} thing${data.conflicts.length === 1 ? "" : "s"} it has heard two ways</h2>
-      <p class="note">It uses the newer one. Normally that happens silently — here is what it decided.</p>
-      ${data.conflicts.map((c) => `
-        <div class="conflict">
-          <div class="side now"><span class="tag">Using</span><span>${esc(secondPerson(c.current.text))}</span></div>
-          <div class="side was"><span class="tag">Older</span><span>${esc(secondPerson(c.superseded.text))}</span></div>
-          <div class="differs">differs on: ${c.differsOn.map(esc).join(" · ")}</div>
-        </div>`).join("")}
-    </div>` : "";
 
   const all = buckets(data.facts);
 

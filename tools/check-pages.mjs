@@ -49,4 +49,63 @@ for (const page of pages) {
   }
 }
 
+/**
+ * One logo, one app shell, on every page.
+ *
+ * The docs page wore a flat CSS dot instead of the mark and the modes page had
+ * no mark at all, which nobody notices on the page they are editing and
+ * everybody notices clicking between two. Both are a function of the markup,
+ * so both are checkable without a browser: the mark is the two arcs, and the
+ * app shell is the manifest plus the metas that make an installed copy stop
+ * looking like a tab.
+ */
+const ALL = [...pages, "modes.html"];
+const ARCS = /M16 5a11 11 0 0 1 11 11/;       // the opening arc of the mark
+const SHELL = [
+  'name="theme-color"',
+  'name="apple-mobile-web-app-capable"',
+  'name="apple-mobile-web-app-status-bar-style"',
+  'rel="manifest"',
+  'rel="apple-touch-icon"',
+  "viewport-fit=cover",
+];
+
+for (const page of ALL) {
+  const html = readFileSync(join(here, "..", "src", "web", page), "utf8");
+
+  // app.html fuses four pages and keeps one nav, so one mark is correct there.
+  const brand = html.match(/<a class="brand"[\s\S]*?<\/a>/);
+  if (!brand) {
+    failed++;
+    console.error(`FAIL  ${page}: no brand link`);
+  } else if (!ARCS.test(brand[0])) {
+    failed++;
+    console.error(`FAIL  ${page}: the brand is not the Continuity mark — missing the arcs`);
+  } else if (!/<b>Continuity<\/b>/.test(brand[0])) {
+    failed++;
+    console.error(`FAIL  ${page}: the mark is there but the wordmark is not`);
+  } else {
+    console.log(`PASS  ${page} wears the mark and the wordmark`);
+  }
+
+  const missing = SHELL.filter((tag) => !html.includes(tag));
+  if (missing.length) {
+    failed++;
+    console.error(`FAIL  ${page}: not installable as an app — missing ${missing.join(", ")}`);
+  } else {
+    console.log(`PASS  ${page} installs as an app, not a tab`);
+  }
+
+  // A plain `100vh` is 100px too tall on a phone with browser chrome: the
+  // bottom of the page sits under it and the layout looks cut off.
+  for (const m of html.matchAll(/min-height:\s*100vh|height:\s*100vh/g)) {
+    // Allowed only as the line before a dvh fallback on the same declaration.
+    const near = html.slice(m.index, m.index + 60);
+    if (!near.includes("dvh")) {
+      failed++;
+      console.error(`FAIL  ${page}: ${m[0]} with no 100dvh fallback beside it`);
+    }
+  }
+}
+
 process.exit(failed ? 1 : 0);

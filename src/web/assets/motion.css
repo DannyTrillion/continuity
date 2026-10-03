@@ -27,6 +27,22 @@
    frame, which read as a blink on every navigation that was not a transition. */
 html { background: #05070A; }
 
+/* ── and the rest of behaving like an app rather than a tab ────────────────
+   Three things gave the browser away on a phone, none of them layout.
+
+   Dragging past the end of a page bounced it and showed the agent's own
+   backdrop behind, a pale strip that no amount of dark styling on `body`
+   reaches; `overscroll-behavior` refuses the bounce at the document level.
+   Tapping anything flashed a grey box over it for 300ms, which is the mobile
+   browser's default and reads as a web page every time. And a long word in a
+   memory could push the document wider than the screen, leaving a sideways
+   scroll an app would never have. */
+html, body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body { overflow-x: hidden; }
+
 /* ── the furniture that never moves ───────────────────────────────────── */
 
 /* The texture, glow and grain are identical on every page. Naming them pulls

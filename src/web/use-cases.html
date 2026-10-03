@@ -3,6 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Added to a home screen this should behave like an app, not a tab: its own
+     colour behind the status bar, no browser chrome, no white rubber-band at
+     the edges. The manifest is shared, so every page installs as one thing. -->
+<meta name="theme-color" content="#05070A">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Continuity">
+<link rel="manifest" href="/assets/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/assets/avatar.png">
 <title>What Continuity does</title>
 <meta name="description" content="What Continuity can do, shown with real screenshots: one memory across the web, Telegram and Discord; a picture bank; a memory page you can check blob by blob; conversations you can pick back up.">
 <meta property="og:title" content="What Continuity does">

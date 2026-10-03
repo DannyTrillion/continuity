@@ -60,7 +60,7 @@ function answer(url, method, body) {
   const p = url.pathname;
   const json = (o, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(o) });
   if (p === "/api/memory") return json({ personId: "p1", linked: true, connected: ["web", "telegram", "discord"], name: "Danny", facts: FACTS.map(({ text, at, blobId }) => ({ text, at, blobId })) });
-  if (p === "/api/memory/full") return json({ personId: "p1", name: "Danny", connected: ["web", "telegram", "discord"], facts: FACTS, pictures: PICTURES, conflicts: [],
+  if (p === "/api/memory/full") return json({ personId: "p1", name: "Danny", connected: ["web", "telegram", "discord"], facts: FACTS, pictures: PICTURES,
     stats: { total: FACTS.length, collapsed: 1, suppressed: 0, namespaces: 3, crossSurface: 3, neverRead: 1 } });
   if (p === "/api/conversations") return json({ conversations: CONVOS });
   if (p === "/api/conversations/open") return json({ conversation: { id: "c0", title: "Teach me recursion", turns: [{ you: "Teach me recursion", bot: "Start with a **base case**." }] }, restored: 2 });
@@ -538,6 +538,37 @@ try {
     check("as one row, not a stack", docked.oneRow);
     check("with the small print clear of the glass, not reading through it", docked.clearOfFooter);
     check("and nothing else sharing that corner", docked.fabHidden);
+
+    /* The check above only ever looked at the bottom of the scroll, where the
+       padding holds the footer clear — and it passed happily while the footer
+       was legible through the bar on the way down. A blur does not hide text;
+       only the backdrop's own alpha does. So measure the alpha, and measure
+       the scrim that covers the gap either side of the panel, because the
+       panel is inset 12px and the page runs the full width underneath it. */
+    const solid = await bar.page.evaluate(() => {
+      const a = document.querySelector(".actions");
+      const alpha = (c) => {
+        const m = c.match(/rgba?\(([^)]+)\)/);
+        if (!m) return 0;
+        const p = m[1].split(",").map((n) => parseFloat(n));
+        return p.length > 3 ? p[3] : 1;
+      };
+      /* Not `.actions::after`: a backdrop-filter makes the bar the containing
+         block for its own fixed children, so a scrim declared there is only
+         ever as wide as the bar. It hangs off body for that reason. */
+      const scrim = getComputedStyle(document.body, "::after");
+      const r = a.getBoundingClientRect();
+      return {
+        alpha: alpha(getComputedStyle(a).backgroundColor),
+        scrimFullWidth: scrim.content !== "none" && Math.round(parseFloat(scrim.width)) >= innerWidth - 1,
+        scrimTallerThanBar: scrim.content !== "none" && parseFloat(scrim.height) >= r.height,
+        insetSides: Math.round(r.left) > 0 && Math.round(r.right) < innerWidth,
+      };
+    });
+    check("the glass is opaque enough that nothing scrolls through it",
+      solid.alpha >= 0.85, solid);
+    check("and a scrim covers the full width, not just the panel",
+      !solid.insetSides || (solid.scrimFullWidth && solid.scrimTallerThanBar), solid);
     await bar.page.close();
 
     await hero.page.close();

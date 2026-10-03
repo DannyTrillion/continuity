@@ -13,7 +13,7 @@ import { respond } from "./core/session.mjs";
 import { rememberLastGood } from "./core/agent.mjs";
 import { studyShelf } from "./core/study.mjs";
 import { modeFor, stackItems, planItems, awayInWords } from "./core/modes.mjs";
-import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, findConflicts, NS_INDEX } from "./core/memory.mjs";
+import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, NS_INDEX } from "./core/memory.mjs";
 import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
 import { startOutbox, onSettled, outboxStats, pendingFor, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
 import { list as listConversations, get as getConversation, flushAll } from "./core/conversations.mjs";
@@ -460,9 +460,6 @@ const server = createServer(async (req, res) => {
       ]);
 
       const live = withoutSuppressed(sets.flat(), suppressed);
-      // Conflicts come from the UNcollapsed set: dedupe's whole job is to hide
-      // these, and hiding them is what the dashboard exists to stop.
-      const conflicts = findConflicts(live);
       const collapsed = dedupe(live);
 
       const facts = collapsed
@@ -481,7 +478,6 @@ const server = createServer(async (req, res) => {
         connected,
         facts,
         pictures,
-        conflicts,
         stats: {
           total: facts.length,
           collapsed: live.length - collapsed.length,
@@ -981,7 +977,10 @@ const server = createServer(async (req, res) => {
       const ext = asset[1].split(".").pop().toLowerCase();
       const type = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", svg: "image/svg+xml",
         css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8",
-        json: "application/json; charset=utf-8" }[ext];
+        json: "application/json; charset=utf-8",
+        // Served as anything else, Chrome rejects it and the install prompt
+        // never appears — the page just stays a page.
+        webmanifest: "application/manifest+json; charset=utf-8" }[ext];
       /**
        * Cache hard in production, never locally.
        *

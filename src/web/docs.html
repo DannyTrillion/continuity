@@ -3,6 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Added to a home screen this should behave like an app, not a tab: its own
+     colour behind the status bar, no browser chrome, no white rubber-band at
+     the edges. The manifest is shared, so every page installs as one thing. -->
+<meta name="theme-color" content="#05070A">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Continuity">
+<link rel="manifest" href="/assets/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/assets/avatar.png">
 <title>Docs — Continuity</title>
 <meta name="description" content="How Continuity works: one memory across the web, Telegram and Discord on Walrus mainnet — identity, recall, pictures, reliability, the MemWal findings, and the v2 plan.">
 <link rel="icon" href="/assets/icon.svg">
@@ -26,7 +37,7 @@
   *{box-sizing:border-box}
   html,body{height:100%}
   body{margin:0;background:var(--void);color:var(--soft);font:400 15.5px/1.7 var(--sans);-webkit-font-smoothing:antialiased;
-    display:flex;flex-direction:column;min-height:100vh;overflow-x:hidden}
+    display:flex;flex-direction:column;min-height:100dvh;overflow-x:hidden}
   a{color:var(--live);text-decoration:none}
   a:hover{text-decoration:underline;text-underline-offset:3px}
   button{font:inherit;color:inherit}
@@ -39,7 +50,8 @@
   .top{position:relative;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 22px}
   .brand{display:flex;align-items:center;gap:9px;font:500 17px var(--display);color:var(--ink)}
   .brand:hover{text-decoration:none;opacity:.8}
-  .brand i{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#9BD0FF 45%,#2E7ACB)}
+  .brand b{font:inherit}
+  .brand svg{flex:none}
   .tiny{font:500 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
   .go{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:#fff;color:#0A0D12;
     font:600 13px var(--sans);transition:transform .25s var(--ease)}
@@ -191,7 +203,23 @@
 <div class="ground"></div><div class="bloom"></div><div class="grain"></div>
 
 <header class="top">
-  <a class="brand" href="/"><i></i>Continuity <span class="tiny" style="margin-left:8px">docs</span></a>
+  <a class="brand" href="/">
+    <svg width="26" height="26" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="dkcore" cx="35%" cy="30%" r="74%">
+            <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#9BD0FF"/>
+            <stop offset="100%" stop-color="#2E7ACB"/></radialGradient>
+          <linearGradient id="dkarc" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff"/><stop offset="100%" stop-color="#5AA9FF"/></linearGradient>
+        </defs>
+        <circle cx="16" cy="16" r="11" fill="none" stroke="#5AA9FF" stroke-width="1.5" opacity=".22"/>
+        <path d="M16 5a11 11 0 0 1 11 11" fill="none" stroke="url(#dkarc)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 27A11 11 0 0 1 5 16" fill="none" stroke="url(#dkarc)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4.1" fill="url(#dkcore)"/>
+      </svg>
+    <b>Continuity</b>
+    <span class="tiny">docs</span>
+  </a>
   <a class="go" href="/chat">Open the chat &rarr;</a>
 </header>
 

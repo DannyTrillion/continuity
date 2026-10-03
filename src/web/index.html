@@ -3,6 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Added to a home screen this should behave like an app, not a tab: its own
+     colour behind the status bar, no browser chrome, no white rubber-band at
+     the edges. The manifest is shared, so every page installs as one thing. -->
+<meta name="theme-color" content="#05070A">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Continuity">
+<link rel="manifest" href="/assets/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/assets/avatar.png">
 <title>Continuity — memory you can open and check</title>
 <meta name="description" content="An assistant that remembers you across the web, Telegram and Discord — pictures included. Every memory is a real blob on Walrus mainnet you can open, check and correct.">
 <meta property="og:title" content="Continuity — one memory, three apps">
@@ -51,7 +62,7 @@
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;min-height:100vh;background:var(--void);color:var(--ink);
+  body{margin:0;min-height:100dvh;background:var(--void);color:var(--ink);
     font:400 15px/1.6 var(--sans);-webkit-font-smoothing:antialiased;
     opacity:1;transition:opacity .32s ease}
   body.leaving{opacity:0}
@@ -234,13 +245,36 @@
       position:fixed; left:12px; right:12px; bottom:12px; z-index:4;
       margin:0; gap:8px; flex-wrap:nowrap;
       padding:9px; border-radius:20px;
-      background:rgba(10,13,18,.62);
+      /* Opaque enough to be a surface. At .62 the footer slid under it and
+         read straight through the blur while you scrolled — legible, upside
+         down behind the buttons. Blur alone will not hide text; only the
+         backdrop's own alpha will, so this is the page's colour at .9 with a
+         heavier blur to keep the glow behind it soft. */
+      background:rgba(8,11,16,.9);
       border:1px solid var(--edge-2);
-      backdrop-filter:blur(22px) saturate(1.3);
-      -webkit-backdrop-filter:blur(22px) saturate(1.3);
+      backdrop-filter:blur(30px) saturate(1.3);
+      -webkit-backdrop-filter:blur(30px) saturate(1.3);
       box-shadow:0 10px 34px -12px rgba(0,0,0,.75);
       /* Clear of the home indicator rather than under it. */
       padding-bottom:calc(9px + env(safe-area-inset-bottom, 0px));
+    }
+    /* And a scrim under the whole strip, so content dissolves on its way down
+       instead of being cut off by a floating edge. It has to reach wider than
+       the bar: the panel is inset 12px either side and the page runs the full
+       width underneath, so the footer could still show through the gutters.
+
+       It hangs off `body`, not off `.actions`, and that is the whole trick.
+       A `backdrop-filter` makes an element the containing block for its own
+       fixed-position descendants, so a scrim inside the bar resolved `left:0;
+       right:0` against the bar and came out exactly as wide as the thing it
+       was supposed to extend past. `body` is never transformed or filtered,
+       so fixed means the viewport there, and z-index 2 lands it above the
+       page column (1) and below the bar (4). */
+    body::after{
+      content:""; position:fixed; z-index:2; pointer-events:none;
+      left:0; right:0; bottom:0;
+      height:calc(104px + env(safe-area-inset-bottom, 0px));
+      background:linear-gradient(to bottom, rgba(5,7,10,0) 0%, rgba(5,7,10,.72) 42%, var(--void) 78%);
     }
     .actions .go{flex:1 1 auto; justify-content:center; padding:13px 14px}
     /* The two alternatives shrink to their marks: at this width the words
@@ -252,8 +286,9 @@
     /* `.wrap` is the flex column that holds the whole page and gives `.foot`
        its `margin-top:auto`, so padding the footer does not move it — the
        column has to end higher up. Without this the small print sat behind
-       the glass and read straight through it. */
-    .wrap{padding-bottom:calc(92px + env(safe-area-inset-bottom, 0px))}
+       the glass and read straight through it. Clear of the scrim too, not
+       just the bar, or the footer comes to rest half-faded. */
+    .wrap{padding-bottom:calc(118px + env(safe-area-inset-bottom, 0px))}
     /* The docs button lives in the same corner the bar now occupies, and the
        two overlapped. It is in the footer line on a phone. */
     .docs-fab{display:none}

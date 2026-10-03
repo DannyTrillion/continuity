@@ -3,6 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Added to a home screen this should behave like an app, not a tab: its own
+     colour behind the status bar, no browser chrome, no white rubber-band at
+     the edges. The manifest is shared, so every page installs as one thing. -->
+<meta name="theme-color" content="#05070A">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Continuity">
+<link rel="manifest" href="/assets/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/assets/avatar.png">
 <title>Continuity — how it works</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,7 +40,9 @@
 
   header{margin-bottom:38px}
   .top{display:flex;align-items:center;margin-bottom:18px}
-  .top .brand{font-family:var(--display);font-weight:400;text-decoration:none;font-size:17px}
+  .top .brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:400;text-decoration:none;font-size:17px}
+  .top .brand b{font:inherit}
+  .top .brand svg{flex:none}
   .back{display:inline-flex;align-items:center;gap:7px;color:var(--dim);text-decoration:none;
     font-size:13px;margin-bottom:22px}
   .back:hover{color:var(--ink)}
@@ -100,7 +113,22 @@
   <!-- The shell strips this and draws one nav for every panel; it is here so
        /modes.html still stands on its own when something breaks. -->
   <nav class="top">
-    <a class="brand" href="/">Continuity</a>
+    <a class="brand" href="/">
+      <svg width="26" height="26" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id="mkcore" cx="35%" cy="30%" r="74%">
+            <stop offset="0" stop-color="#fff"/><stop offset="44%" stop-color="#9BD0FF"/>
+            <stop offset="100%" stop-color="#2E7ACB"/></radialGradient>
+          <linearGradient id="mkarc" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff"/><stop offset="100%" stop-color="#5AA9FF"/></linearGradient>
+        </defs>
+        <circle cx="16" cy="16" r="11" fill="none" stroke="#5AA9FF" stroke-width="1.5" opacity=".22"/>
+        <path d="M16 5a11 11 0 0 1 11 11" fill="none" stroke="url(#mkarc)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 27A11 11 0 0 1 5 16" fill="none" stroke="url(#mkarc)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4.1" fill="url(#mkcore)"/>
+      </svg>
+      <b>Continuity</b>
+    </a>
   </nav>
   <header>
     <a class="back" href="/chat">← Back to the chat</a>

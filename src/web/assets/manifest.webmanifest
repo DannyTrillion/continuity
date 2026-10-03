@@ -1,0 +1,22 @@
+{
+  "name": "Continuity — memory you can open",
+  "short_name": "Continuity",
+  "description": "An assistant that remembers you across the web, Telegram and Discord. Every memory is a real blob on Walrus mainnet you can open and check.",
+  "start_url": "/chat",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#05070A",
+  "theme_color": "#05070A",
+  "icons": [
+    { "src": "/assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/assets/avatar.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/avatar.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Open the chat", "url": "/chat" },
+    { "name": "What it knows about me", "url": "/memory" },
+    { "name": "Modes", "url": "/modes" }
+  ]
+}
