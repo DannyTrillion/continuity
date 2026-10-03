@@ -540,35 +540,67 @@ try {
     check("and nothing else sharing that corner", docked.fabHidden);
 
     /* The check above only ever looked at the bottom of the scroll, where the
-       padding holds the footer clear — and it passed happily while the footer
-       was legible through the bar on the way down. A blur does not hide text;
-       only the backdrop's own alpha does. So measure the alpha, and measure
-       the scrim that covers the gap either side of the panel, because the
-       panel is inset 12px and the page runs the full width underneath it. */
-    const solid = await bar.page.evaluate(() => {
+       padding holds the footer clear, and it passed happily while the small
+       print rode over the bar on the way down. Two separate things were wrong
+       and only the second was visible.
+
+       The bar was translucent at .62. Blur does not hide text — only the
+       backdrop's own alpha does, and the blur is the first thing a browser
+       drops without GPU compositing, so the alpha has to carry it alone.
+
+       And the bar was not on top at all. It sits inside <main>, which carries
+       a `view-transition-name` for the landing→chat morph; that makes <main> a
+       stacking context, sealing the bar's z-index inside it, and <main> paints
+       before its sibling <footer>. So the footer went over the bar at any
+       alpha. Hit-testing is the only honest way to ask: scroll until the two
+       overlap and see which one the browser puts on top. */
+    const over = await bar.page.evaluate(async () => {
       const a = document.querySelector(".actions");
+      const f = document.querySelector(".foot");
       const alpha = (c) => {
         const m = c.match(/rgba?\(([^)]+)\)/);
         if (!m) return 0;
         const p = m[1].split(",").map((n) => parseFloat(n));
         return p.length > 3 ? p[3] : 1;
       };
-      /* Not `.actions::after`: a backdrop-filter makes the bar the containing
-         block for its own fixed children, so a scrim declared there is only
-         ever as wide as the bar. It hangs off body for that reason. */
-      const scrim = getComputedStyle(document.body, "::after");
-      const r = a.getBoundingClientRect();
+      // Walk the scroll until the footer actually reaches the bar; on a tall
+      // phone the page may not scroll at all, and then there is nothing to ask.
+      // The probe has to land inside BOTH boxes — the bar is inset 12px from
+      // the screen edge and the footer starts at the column's 20px padding, so
+      // a point taken from the bar's own left edge misses the footer entirely
+      // and the stack comes back without it, passing for the wrong reason.
+      const max = document.documentElement.scrollHeight - innerHeight;
+      let overlap = null;
+      for (let i = 0; i <= 10 && !overlap; i++) {
+        scrollTo(0, (max * i) / 10);
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const ra = a.getBoundingClientRect(), rf = f.getBoundingClientRect();
+        const top = Math.max(ra.top, rf.top), bottom = Math.min(ra.bottom, rf.bottom);
+        const left = Math.max(ra.left, rf.left), right = Math.min(ra.right, rf.right);
+        if (bottom - top > 6 && right - left > 6) {
+          overlap = { y: Math.round(top + 3), x: Math.round(left + 3) };
+        }
+      }
+      const stack = overlap
+        ? document.elementsFromPoint(overlap.x, overlap.y).map((e) => e.className || e.tagName)
+        : [];
+      const barAt = stack.findIndex((c) => String(c).includes("actions") || String(c) === "go");
+      const footAt = stack.findIndex((c) => String(c).includes("foot") || String(c).includes("tiny"));
       return {
         alpha: alpha(getComputedStyle(a).backgroundColor),
-        scrimFullWidth: scrim.content !== "none" && Math.round(parseFloat(scrim.width)) >= innerWidth - 1,
-        scrimTallerThanBar: scrim.content !== "none" && parseFloat(scrim.height) >= r.height,
-        insetSides: Math.round(r.left) > 0 && Math.round(r.right) < innerWidth,
+        scrolls: max > 20,
+        tested: !!overlap,
+        stack: stack.slice(0, 4),
+        barOnTop: !overlap || (barAt !== -1 && (footAt === -1 || barAt < footAt)),
       };
     });
     check("the glass is opaque enough that nothing scrolls through it",
-      solid.alpha >= 0.85, solid);
-    check("and a scrim covers the full width, not just the panel",
-      !solid.insetSides || (solid.scrimFullWidth && solid.scrimTallerThanBar), solid);
+      over.alpha >= 0.9, over);
+    /* Shipped once, and it is the bug Danny actually saw: the small print rode
+       over the white Open-the-chat pill, and every scrim added to hide it
+       landed on top of the bar for the same stacking reason. */
+    check("and the bar stays on top of the page scrolling past it",
+      over.barOnTop, over);
     await bar.page.close();
 
     await hero.page.close();

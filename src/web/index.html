@@ -241,41 +241,53 @@
      glass panel rather than three loose pills, because three floating objects
      over a dark page read as clutter and one reads as a bar. */
   @media (max-width:720px){
+    /* The bar lives inside <main>, and <main> carries a `view-transition-name`
+       for the landing→chat morph. A view-transition-name makes an element a
+       stacking context, which seals the bar's `z-index:4` inside <main> — and
+       <main> is a static in-flow block that paints BEFORE its sibling <footer>.
+       So the small print painted over the bar rather than under it, at any
+       alpha and any z-index, and every scrim added to fix that landed on top of
+       the bar for exactly the same reason. Give <main> a paint order of its own
+       and the bar is above the footer again, with the transition name intact. */
+    main{position:relative; z-index:5}
     .actions{
       position:fixed; left:12px; right:12px; bottom:12px; z-index:4;
       margin:0; gap:8px; flex-wrap:nowrap;
       padding:9px; border-radius:20px;
-      /* Opaque enough to be a surface. At .62 the footer slid under it and
-         read straight through the blur while you scrolled — legible, upside
-         down behind the buttons. Blur alone will not hide text; only the
-         backdrop's own alpha will, so this is the page's colour at .9 with a
-         heavier blur to keep the glow behind it soft. */
-      background:rgba(8,11,16,.9);
+      /* Opaque enough to be a surface, on its own, without help.
+         At .62 the footer slid under it and read straight through while you
+         scrolled. Blur does not hide text — only the backdrop's own alpha
+         does — and the blur cannot be relied on anyway: it is the first thing
+         a browser drops without GPU compositing, and it is absent in the
+         headless Chrome these checks run in. So the alpha carries it and the
+         blur is the flourish on top, which is the right way round. */
+      background:rgba(8,11,16,.97);
       border:1px solid var(--edge-2);
       backdrop-filter:blur(30px) saturate(1.3);
       -webkit-backdrop-filter:blur(30px) saturate(1.3);
-      box-shadow:0 10px 34px -12px rgba(0,0,0,.75);
+      box-shadow:0 8px 26px -14px rgba(0,0,0,.7);
       /* Clear of the home indicator rather than under it. */
       padding-bottom:calc(9px + env(safe-area-inset-bottom, 0px));
     }
-    /* And a scrim under the whole strip, so content dissolves on its way down
-       instead of being cut off by a floating edge. It has to reach wider than
-       the bar: the panel is inset 12px either side and the page runs the full
-       width underneath, so the footer could still show through the gutters.
+    /* There is deliberately no scrim behind this bar, and that took three
+       tries to arrive at.
 
-       It hangs off `body`, not off `.actions`, and that is the whole trick.
-       A `backdrop-filter` makes an element the containing block for its own
-       fixed-position descendants, so a scrim inside the bar resolved `left:0;
-       right:0` against the bar and came out exactly as wide as the thing it
-       was supposed to extend past. `body` is never transformed or filtered,
-       so fixed means the viewport there, and z-index 2 lands it above the
-       page column (1) and below the bar (4). */
-    body::after{
-      content:""; position:fixed; z-index:2; pointer-events:none;
-      left:0; right:0; bottom:0;
-      height:calc(104px + env(safe-area-inset-bottom, 0px));
-      background:linear-gradient(to bottom, rgba(5,7,10,0) 0%, rgba(5,7,10,.72) 42%, var(--void) 78%);
-    }
+       The idea was a gradient fading the page out as it reached the bar, to
+       cover the 12px gutters either side of the floating panel. Every version
+       of it painted OVER the bar instead of under, whatever it was attached to
+       and whatever its z-index: on `.actions` a backdrop-filter makes the bar
+       the containing block for its own fixed children, so it came out exactly
+       as wide as the thing it was extending past; moved to `body` or to
+       `.wrap` at a lower z-index it still composited on top and greyed out the
+       one white button this page exists for. Chrome will not order a
+       backdrop-filtered element against an overlapping fixed layer the way the
+       z-indexes say.
+
+       It was also never worth it. The ground is a photographic texture, so a
+       wedge of flat `--void` over it reads as a patch where the texture
+       stopped — a dark smudge in the corner. And the gutters cover nothing:
+       `.wrap` already keeps 20px of padding, so no text comes within 20px of
+       the screen edge. An opaque bar does the whole job by itself. */
     .actions .go{flex:1 1 auto; justify-content:center; padding:13px 14px}
     /* The two alternatives shrink to their marks: at this width the words
        "Telegram" and "Discord" would squeeze the primary action to nothing,
@@ -286,9 +298,8 @@
     /* `.wrap` is the flex column that holds the whole page and gives `.foot`
        its `margin-top:auto`, so padding the footer does not move it — the
        column has to end higher up. Without this the small print sat behind
-       the glass and read straight through it. Clear of the scrim too, not
-       just the bar, or the footer comes to rest half-faded. */
-    .wrap{padding-bottom:calc(118px + env(safe-area-inset-bottom, 0px))}
+       the glass and read straight through it. */
+    .wrap{padding-bottom:calc(104px + env(safe-area-inset-bottom, 0px))}
     /* The docs button lives in the same corner the bar now occupies, and the
        two overlapped. It is in the footer line on a phone. */
     .docs-fab{display:none}
