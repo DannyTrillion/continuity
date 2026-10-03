@@ -42,6 +42,8 @@ const LEDGER = process.env.LEDGER_PATH ?? join(here, "..", "blob-ledger.jsonl");
  * and not just in a log line claiming success.
  */
 const recentWrites = [];
+/** Every write ever confirmed, not just the tail held in memory. */
+let ledgerTotal = 0;
 
 /**
  * Reload the tail of the ledger at boot.
@@ -58,7 +60,11 @@ try {
     for (const line of lines.slice(-50).reverse()) {
       try { recentWrites.push(JSON.parse(line)); } catch { /* skip a torn line */ }
     }
-    if (recentWrites.length) console.log(`[ledger] restored ${recentWrites.length} write(s) from disk`);
+    // The tail is what the page shows; the whole file is what the project has
+    // actually written. A rolling fifty cannot answer "how much of this is
+    // real", and that is the one question anybody checking will ask.
+    ledgerTotal = lines.length;
+    if (recentWrites.length) console.log(`[ledger] restored ${recentWrites.length} of ${ledgerTotal} write(s) from disk`);
   }
 } catch (err) {
   console.warn("[ledger] could not restore:", err.message);
@@ -73,6 +79,7 @@ onSettled(async ({ job, ok, stored = [], error }) => {
     const row = { at: new Date().toISOString(), blobId: s.blobId, namespace: s.namespace, kind: job.kind };
     recentWrites.unshift(row);
     recentWrites.length = Math.min(recentWrites.length, 50);
+    ledgerTotal += 1;
     console.log(`mem+ ${s.namespace} [${s.blobId}]`);
     await appendFile(LEDGER, JSON.stringify(row) + "\n").catch(() => {});
   }
@@ -296,7 +303,7 @@ const server = createServer(async (req, res) => {
   // The ledger is public on purpose: anyone can take a blob id to Walruscan
   // and confirm this bot's memory is really on Walrus.
   if (url.pathname === "/api/ledger") {
-    return json(res, 200, { writes: recentWrites });
+    return json(res, 200, { writes: recentWrites, total: ledgerTotal });
   }
 
   // What the bot currently knows about one person, for the sidebar. Kept out
@@ -418,6 +425,9 @@ const server = createServer(async (req, res) => {
       metrics: m,
       outbox: outboxStats(),
       blobsLedger: recentWrites.length,
+      // Everything ever written, not the tail: the rolling fifty cannot answer
+      // "how much of this is real", which is the question anybody checking asks.
+      blobsTotal: ledgerTotal,
       surfaces: {
         web: true,
         telegram: Boolean(process.env.TELEGRAM_BOT_TOKEN),
