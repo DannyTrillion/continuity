@@ -1969,9 +1969,42 @@ function refreshRecents() {
 }
 
 const refreshAll = () => { refreshMemory(); refreshLedger(); refreshRecents(); };
+
+/**
+ * How often an idle page is allowed to cost anything.
+ *
+ * This was every 20 seconds, and `refreshMemory` forces a fresh read rather
+ * than taking the cache, so one open tab doing nothing spent 180 memory reads
+ * an hour. Each of those is a relayer recall PER LINKED NAMESPACE, so for
+ * somebody who has connected Telegram and Discord it is three. Against an
+ * account budget of a thousand weighted requests an hour, a single forgotten
+ * tab was eating most of it, and the symptom arrived somewhere else entirely:
+ * the bot telling a real person on Telegram that it could not read its memory.
+ *
+ * Two changes. Slower, because nothing on this page changes in twenty seconds
+ * that cannot wait two minutes. And nothing at all while the tab is hidden,
+ * which is where tabs spend most of their lives: a background tab that costs
+ * the live bot its memory is indefensible. Coming back to the tab refreshes
+ * once, so returning to it still shows the truth.
+ */
+const IDLE_POLL_MS = 120_000;
+let lastPoll = Date.now();
+
+const pollIfVisible = () => {
+  if (document.hidden) return;
+  lastPoll = Date.now();
+  refreshAll();
+};
+
 refreshHealth(); refreshAll();
-setInterval(refreshHealth, 25000);
-setInterval(refreshAll, 20000);
+setInterval(() => { if (!document.hidden) refreshHealth(); }, 60_000);
+setInterval(pollIfVisible, IDLE_POLL_MS);
+
+document.addEventListener("visibilitychange", () => {
+  // Back on this tab. Refresh only if what is on screen has had time to go
+  // stale, so flicking between tabs costs nothing.
+  if (!document.hidden && Date.now() - lastPoll > IDLE_POLL_MS) pollIfVisible();
+});
 fetch("/api/stats").then((r) => r.json()).then((s) => { botUser = s.botUsername ?? botUser; }).catch(() => {});
 
 /* Nav state, counts and the shared request cache live in /assets/app.js. */
