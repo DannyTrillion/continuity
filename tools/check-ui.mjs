@@ -612,6 +612,52 @@ try {
       await all.page.close();
     }
 
+    /* Attaching something used to be a line of text that said "Looking at
+       it…" and nothing else, for as long as it took. On a phone photo over a
+       bad connection that is indistinguishable from a page that has died. */
+    {
+      const up = await open("/chat");
+      await sleep(900);
+      const states = await up.page.evaluate(async () => {
+        const read = () => {
+          const box = document.getElementById("attached");
+          const bar = box.querySelector(".bar");
+          return {
+            line: box.querySelector(".what span")?.textContent.trim() ?? "",
+            bar: !!bar,
+            waiting: !!bar?.classList.contains("waiting"),
+            width: bar?.querySelector("i")?.style.width ?? null,
+            tick: !!box.querySelector(".ok"),
+          };
+        };
+        const out = {};
+        window.showAttached({ name: "notes.pdf", pending: true, sent: 0.42 });
+        out.sending = read();
+        window.showAttached({ name: "notes.pdf", pending: true, sent: 1 });
+        out.reading = read();
+        window.showAttached({ name: "notes.pdf", sawIt: true });
+        out.ready = read();
+        window.showAttached({ name: "huge.mov", error: "Over 8MB — try a smaller one." });
+        out.failed = read();
+        return out;
+      });
+
+      check("while the bytes move it shows how far they have got",
+        /42%/.test(states.sending.line) && states.sending.width === "42%", states.sending);
+      check("the bar is a real fraction then, not a decoration",
+        states.sending.bar && !states.sending.waiting);
+      /* The reading phase has no denominator — a model takes as long as it
+         takes — so it must not claim a percentage it does not have. */
+      check("once they land it says it is reading, with no invented percentage",
+        states.reading.line === "Reading it…" && !/%/.test(states.reading.line), states.reading.line);
+      check("and the bar admits it is waiting rather than filling",
+        states.reading.waiting === true);
+      check("done is marked done", states.ready.tick && !states.ready.bar, states.ready);
+      check("and a refusal says why, with no bar left spinning",
+        /8MB/.test(states.failed.line) && !states.failed.bar, states.failed.line);
+      await up.page.close();
+    }
+
     check("a signed-in wallet shows in the header", chip.shown, chip.text);
     check("shortened the way a wallet shortens it", /^0x\w{4}…\w{4}$/.test(chip.text), chip.text);
     await w.page.close();
