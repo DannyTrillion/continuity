@@ -923,6 +923,45 @@ function offer(el, actions) {
   scroll(true);
 }
 
+/**
+ * A command that asks the page to do something, not only to say something.
+ *
+ * The bots answer /clear by deleting their own messages; the web owns its
+ * transcript outright, so it can do the thing properly. Anything it does not
+ * recognise is ignored rather than guessed at, so an older page talking to a
+ * newer server degrades to just reading the reply.
+ */
+function act(instruction, reply) {
+  if (!instruction) return;
+
+  if (instruction.do === "clear") {
+    /* Wipe, then put the confirmation back as the only thing on screen.
+       Clearing after the reply has rendered would take the reply with it and
+       leave an empty window that looks like the command failed — the one
+       moment a person most needs to be told what just happened. */
+    log.innerHTML = "";
+    const t = turn("bot");
+    bubble(t, fmt(reply));
+    offer(t, [
+      { label: "What do you know about me?", say: "/whatyouknow" },
+      { label: "Past conversations", say: "/open history" },
+    ]);
+    scroll(true);
+    return;
+  }
+
+  if (instruction.do === "open" && instruction.panel) {
+    /* Router exists in the fused app shell and not in standalone chat.html,
+       so the fallback is an ordinary navigation to the same place. */
+    const path = { chat: "/chat", memory: "/memory", history: "/history", modes: "/modes" }[instruction.panel];
+    if (!path) return;
+    setTimeout(() => {
+      if (typeof Router !== "undefined" && Router?.show) Router.show(instruction.panel);
+      else location.href = path;
+    }, 450); // long enough to read "Opening your files" before the panel moves
+  }
+}
+
 function bubble(el, html) {
   const b = document.createElement("div");
   b.className = "bubble"; b.innerHTML = html;
@@ -1043,6 +1082,7 @@ async function ask(text, { silent = false } = {}) {
     if (final?.image) attachImage(b, final.image, reply);
     if (final?.meta) addRecalled(t, final.meta);
     offer(t, final?.actions);
+    act(final?.client, reply);
     if (reply) recordTurn(text, reply, {
       attached: sending?.file ? { file: sending.file, name: sending.name ?? null } : null,
       picture: final?.image && final?.meta?.picture?.file ? { file: final.meta.picture.file } : null,
@@ -1062,6 +1102,7 @@ async function ask(text, { silent = false } = {}) {
       if (res.image) attachImage(b, res.image, res.reply);
       addRecalled(t, res.meta ?? {});
       offer(t, res.actions);
+      act(res.client, res.reply ?? "");
       if (res.reply) recordTurn(text, res.reply, {
         attached: sending?.file ? { file: sending.file, name: sending.name ?? null } : null,
         picture: res.image && res.meta?.picture?.file ? { file: res.meta.picture.file } : null,

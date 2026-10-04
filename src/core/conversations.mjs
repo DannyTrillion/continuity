@@ -90,6 +90,24 @@ export function record(personId, surface, you, bot, files = {}) {
 export const flushAll = () => Promise.all([...open.keys()].map(flush));
 
 /**
+ * End the conversation in progress, so the next message begins a new one.
+ *
+ * It is saved, not discarded. Everything said is already queued for Walrus and
+ * append-only storage cannot unwrite it, so offering to "delete this
+ * conversation" would be a lie on the second word. What this actually buys is
+ * a boundary: the next thing you say starts its own thread in History instead
+ * of being filed under whatever you were talking about an hour ago.
+ */
+export function closeOpen(personId) {
+  const convo = open.get(personId);
+  if (!convo) return 0;
+  const turns = convo.turns.length;
+  clearTimeout(convo.timer);
+  flush(personId);
+  return turns;
+}
+
+/**
  * Past conversations, newest first. The one still in progress is included so
  * the list is never mysteriously missing what the person just said.
  */

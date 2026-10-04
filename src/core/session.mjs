@@ -8,7 +8,7 @@
 
 import { resolvePerson } from "./identity.mjs";
 import { recall, dedupe, withoutSuppressed, suppressionsFor } from "./memory.mjs";
-import { handleCommand, actionsFor } from "./commands.mjs";
+import { handleCommand, actionsFor, siteIntent } from "./commands.mjs";
 import { handleTurn } from "./agent.mjs";
 import { record as recordTurn } from "./conversations.mjs";
 
@@ -35,6 +35,27 @@ export function resume(personId, turns) {
 
 /** Whether the server still holds recent turns for this person — false after a restart. */
 export const hasHistory = (personId) => (histories.get(personId)?.length ?? 0) > 0;
+
+/**
+ * Forget the thread, not the person.
+ *
+ * This is the whole of what /clear does to the model's view: the next message
+ * arrives with no short-term context, so the assistant stops referring back to
+ * what was just said. It does NOT touch Walrus, and the difference matters
+ * enough that the command says so out loud. Memories are the point of the
+ * product; a conversation is the thing you might reasonably want to walk away
+ * from. Conflating them would mean someone clearing a screen before handing
+ * over a laptop had silently wiped months of memory, or — worse the other way
+ * — thought they had and hadn't.
+ *
+ * Returns how many messages were dropped, so the reply can be specific rather
+ * than claiming to have cleared something that was already empty.
+ */
+export function endSession(personId) {
+  const had = histories.get(personId)?.length ?? 0;
+  histories.delete(personId);
+  return had;
+}
 
 /** Short-term conversational context. Walrus holds the long term; this is just the last few turns. */
 function history(personId) {
@@ -122,15 +143,20 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
     }
   }
 
-  if (trimmed.startsWith("/")) {
+  /* Asked in words rather than with a slash. `siteIntent` only answers for a
+     short imperative it is sure about, so everything else falls through to the
+     model exactly as before. */
+  const asCommand = trimmed.startsWith("/") ? trimmed : siteIntent(trimmed);
+
+  if (asCommand) {
     let cmd;
     try {
-      cmd = await handleCommand({ text: trimmed, surface, surfaceUserId, person: who });
+      cmd = await handleCommand({ text: asCommand, surface, surfaceUserId, person: who });
     } catch (err) {
       // Commands write to Walrus, and Walrus can be slow or briefly unavailable.
       // Failing silently here is the worst outcome: the user sees a typing
       // indicator stop and has no idea whether anything happened.
-      console.error(`[${surface}] command "${trimmed.split(" ")[0]}" failed:`, err.message);
+      console.error(`[${surface}] command "${asCommand.split(" ")[0]}" failed:`, err.message);
       return {
         reply:
           "That didn't go through — the memory layer was unreachable just then. " +
@@ -148,6 +174,9 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
         // and `data` into its own layout — an embed on Discord, a list here.
         actions: actionsFor(cmd.actions),
         data: cmd.data ?? null,
+        // Something for the surface itself to DO, as opposed to say: clear the
+        // transcript, open a section. Surfaces that cannot act on it ignore it.
+        client: cmd.client ?? null,
         meta: { command: true, personId: who.personId },
       };
     }

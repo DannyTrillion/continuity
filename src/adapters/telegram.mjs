@@ -6,6 +6,7 @@
  * stale when the deploy URL changes.
  */
 
+import { noteSent, takeSent } from "../core/sent.mjs";
 import { respond, lookup } from "../core/session.mjs";
 import { storeAttachment } from "../core/images.mjs";
 import { ACTIONS, MENU_COMMANDS, GROUP_SAFE } from "../core/commands.mjs";
@@ -136,6 +137,9 @@ function streamer(token, chatId) {
       if (messageId === null) {
         const msg = await call(token, "sendMessage", { chat_id: chatId, text });
         messageId = msg.message_id;
+        // Most replies arrive through this path, so without this /clear would
+        // sweep away the few that didn't stream and leave the rest on screen.
+        noteSent("telegram", chatId, messageId);
       } else {
         await call(token, "editMessageText", { chat_id: chatId, message_id: messageId, text });
       }
@@ -209,6 +213,27 @@ async function send(token, chatId, text, actions, laidOut) {
   } catch {
     return call(token, "sendMessage", { chat_id: chatId, text, reply_markup });
   }
+}
+
+/**
+ * Take back what this bot has said here.
+ *
+ * Best effort by design: Telegram refuses to delete a bot's own message after
+ * 48 hours and refuses outright to touch one the person wrote, so some of the
+ * conversation stays on screen whatever happens. The reply to `/clear` says
+ * that rather than claiming a clean sweep, and each failure here is ignored
+ * instead of surfaced — a message that would not delete is not an error worth
+ * interrupting someone's clear with.
+ */
+async function wipe(token, chatId) {
+  const ids = takeSent("telegram", chatId);
+  let gone = 0;
+  for (const id of ids.reverse()) {
+    const ok = await call(token, "deleteMessage", { chat_id: chatId, message_id: id })
+      .then(() => true).catch(() => false);
+    if (ok) gone += 1;
+  }
+  return gone;
 }
 
 /**
@@ -382,9 +407,9 @@ export async function startTelegram({ token }) {
       4000,
     );
     const stream = streamer(token, chatId);
-    let reply, image, actions, data;
+    let reply, image, actions, data, client;
     try {
-      ({ reply, image, actions, data } = await respond({
+      ({ reply, image, actions, data, client } = await respond({
         surface: "telegram",
         surfaceUserId: String(from.id),
         displayName: from.username ?? from.first_name,
@@ -396,9 +421,19 @@ export async function startTelegram({ token }) {
     } finally {
       clearInterval(keepTyping);
     }
+    /* A command can ask the surface to do something, not only say something.
+       The only one so far is /clear, and it runs BEFORE the reply is sent so
+       the reply is not the first thing swept away by it. */
+    if (client?.do === "clear") await wipe(token, chatId).catch(() => {});
+
     const streamed = await stream.finish(reply, actions);
-    if (image) await sendPhoto(token, chatId, image, streamed ? "" : reply);
-    else if (!streamed) await send(token, chatId, reply, actions, formatted(data));
+    if (image) {
+      const sent = await sendPhoto(token, chatId, image, streamed ? "" : reply);
+      noteSent("telegram", chatId, sent?.message_id);
+    } else if (!streamed) {
+      const sent = await send(token, chatId, reply, actions, formatted(data));
+      noteSent("telegram", chatId, sent?.message_id);
+    }
   }
 
   let offset = 0;

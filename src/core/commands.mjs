@@ -11,6 +11,8 @@ import { searchWeb, screenshotUrl } from "./web.mjs";
 import { MODES, isMode, modeFor, setMode, planItems, stackItems, awayInWords } from "./modes.mjs";
 import { listMaterials } from "./study.mjs";
 import { startQuiz, answerQuiz, LETTERS } from "./quiz.mjs";
+import { endSession } from "./session.mjs";
+import { closeOpen } from "./conversations.mjs";
 
 /**
  * Where the website is, if it is anywhere.
@@ -51,6 +53,8 @@ export const ACTIONS = {
      no such thing — Discord — see an ordinary link and ignore the flag. */
   memory:        { label: "See everything I remember", url: SITE && `${SITE}/memory`, webApp: true },
   docs:          { label: "How it works", url: SITE && `${SITE}/docs` },
+  history:       { label: "Past conversations", url: SITE && `${SITE}/history`, webApp: true },
+  clear:         { label: "Clear this chat", say: "/clear" },
   modepage:      { label: "See the four modes", url: SITE && `${SITE}/modes`, webApp: true },
 };
 
@@ -114,6 +118,8 @@ const COMMAND_LIST = [
   ["/link", "Get a code to connect this account to another app"],
   ["/link CODE", "Redeem a code from another app"],
   ["/whatyouknow", "Show what I remember about you"],
+  ["/clear", "Start a fresh conversation, keeping every memory"],
+  ["/open WHERE", "Open memory, files, history, modes or docs"],
   ["/search WORDS", "Look something up on the web"],
   ["/shot URL", "Send back a screenshot of a page"],
   ["/forgetme", "Stop recording me"],
@@ -139,6 +145,8 @@ export const MENU_COMMANDS = [
   { name: "plans", description: "What you have coming up, and what just passed" },
   { name: "stack", description: "What I know about your setup" },
   { name: "whatyouknow", description: "What I remember about you" },
+  { name: "clear", description: "Fresh conversation. Memories stay." },
+  { name: "open", description: "Open memory, files, history or modes" },
   { name: "link", description: "Connect Discord or the web chat" },
   { name: "search", description: "Look something up on the web" },
   { name: "shot", description: "Screenshot a web page" },
@@ -148,13 +156,61 @@ export const MENU_COMMANDS = [
 
 /* A room full of people is no place to print one person's memories, so a
    group is offered only what is safe to answer in public. */
-export const GROUP_SAFE = new Set(["search", "shot", "help", "menu"]);
+export const GROUP_SAFE = new Set(["search", "shot", "help", "menu", "clear"]);
 
 const INTRO = "I remember you across Discord, Telegram and the web chat.\n\n" +
   "Just talk to me normally — anything worth keeping, I'll keep. Paste a link and " +
   "I'll read it before I answer.";
 
 const HELP = `${INTRO}\n\n${COMMAND_LIST.map(([c, what]) => `${c} — ${what[0].toLowerCase()}${what.slice(1)}`).join("\n")}`;
+
+/**
+ * "Clear this chat" should clear this chat.
+ *
+ * Nobody types a slash to an assistant. The commands exist and are discoverable,
+ * but asking in words is what people actually do, so a few plain phrasings are
+ * mapped onto the command they obviously mean before the model ever sees them.
+ *
+ * Deliberately narrow, and deliberately biased towards doing nothing. A missed
+ * match costs one unhelpful answer that the model will usually field anyway; a
+ * false match wipes somebody's screen mid-sentence. So it only fires on an
+ * imperative at the START of a short message, and anything shaped like a
+ * question about the feature ("how do I clear the chat?", "what does clear do")
+ * is left alone for the model to answer in words.
+ *
+ * Returns the slash command this means, or null.
+ */
+export function siteIntent(text) {
+  const t = String(text ?? "").trim();
+  // Long messages are conversation, not instruction, whatever words are in them.
+  if (!t || t.length > 90) return null;
+  // A question about the thing is not a request to do the thing.
+  if (/^(how|what|why|when|where|which|does|do i|can i|is there|should i)\b/i.test(t)) return null;
+  if (/\?\s*$/.test(t) && !/^(clear|reset|wipe)\b/i.test(t)) return null;
+
+  const polite = "(?:please\\s+)?(?:can|could|would)?\\s*(?:you\\s+)?(?:please\\s+)?";
+
+  if (new RegExp(`^${polite}(?:clear|wipe|reset|empty)\\s+(?:out\\s+)?(?:this|the|my|our)?\\s*(?:chat|conversation|thread|window|screen|messages?|history)\\b`, "i").test(t)
+      || /^(?:start|begin)\s+(?:a\s+)?(?:new|fresh)\s+(?:chat|conversation)\b/i.test(t)
+      || /^(?:new|fresh)\s+(?:chat|conversation)\s*$/i.test(t)
+      || /^clear\s*$/i.test(t)) {
+    return "/clear";
+  }
+
+  // "show me the files": the `me` belongs to the verb, not to the destination.
+  const open = new RegExp(`^${polite}(?:open|show|go\\s+to|take\\s+me\\s+to|bring\\s+up|jump\\s+to)\\s+(?:me\\s+)?(?:the\\s+|my\\s+)?(\\w+)`, "i").exec(t);
+  if (open) {
+    const where = {
+      memory: "memory", memories: "memory", facts: "memory",
+      files: "files", file: "files", documents: "files", docs: "docs",
+      photos: "photos", pictures: "photos", images: "photos",
+      history: "history", conversations: "history", chats: "history",
+      modes: "modes", mode: "modes", chat: "chat",
+    }[open[1].toLowerCase()];
+    if (where) return `/open ${where}`;
+  }
+  return null;
+}
 
 export async function handleCommand({ text, surface, surfaceUserId, person }) {
   const [cmd, ...rest] = text.trim().split(/\s+/);
@@ -374,6 +430,98 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
           "you would be lying. What I can do is stop recording and stop reading you back. " +
           "Say `/forgetme confirm` and I'll treat you as a stranger from here on.",
         actions: ["forgetconfirm"],
+      };
+    }
+
+    /**
+     * Clear the chat. NOT the memory, and the difference is the whole reply.
+     *
+     * Two things people mean by "clear": start fresh, and make it forget me.
+     * They are wildly different here and only one of them is possible, so this
+     * does the first, says so in plain words, and points at `/forgetme` for
+     * anyone who meant the second. Getting that wrong in either direction is
+     * the worst bug this product could have — someone wiping a screen before
+     * lending out a laptop and silently losing a year of memory, or someone
+     * believing they had erased themselves when they had tidied a window.
+     */
+    case "/clear":
+    case "/clearchat":
+    case "/newchat": {
+      const dropped = endSession(person.personId);
+      const saved = closeOpen(person.personId);
+
+      /* What can actually be removed from the screen differs per surface, so
+         the sentence does too rather than making one promise everywhere and
+         breaking it on two of three. */
+      const screen = surface === "web"
+        ? "I've cleared the window."
+        : "I've dropped the thread, though I can only take my own messages off your screen — " +
+          `${surface === "discord" ? "Discord" : "Telegram"} doesn't let a bot delete what you wrote.`;
+
+      const context = dropped
+        ? "Next thing you say starts fresh, with none of the last few messages behind it."
+        : "There was nothing in the thread to drop, so the next thing you say starts fresh either way.";
+
+      const filed = saved
+        ? ` The ${saved} exchange${saved === 1 ? "" : "s"} we just had ${saved === 1 ? "is" : "are"} filed in History rather than thrown away.`
+        : "";
+
+      return {
+        handled: true,
+        reply:
+          `${screen} ${context}${filed}\n\n` +
+          "Your memories are untouched. This clears a conversation, not what I know about you — " +
+          "if you meant that, say `/forgetme`.",
+        // The surface acts on this: wipe the transcript, drop recent messages.
+        client: { do: "clear" },
+        data: { kind: "clear", dropped, saved },
+        actions: ["whatyouknow", "history"],
+      };
+    }
+
+    /**
+     * Take me to a part of the site.
+     *
+     * The web chat is inside the app it is talking about, so "open my
+     * memories" should move the app rather than print a link the person then
+     * has to find and click. On Telegram and Discord there is nowhere to
+     * navigate to, so the same command answers with the link it would have
+     * opened, which is the honest equivalent rather than silence.
+     */
+    case "/open":
+    case "/go": {
+      const where = arg.toLowerCase().replace(/^(the|my)\s+/, "").trim();
+      const SECTIONS = {
+        memory: { panel: "memory", path: "/memory", said: "what I remember about you" },
+        memories: { panel: "memory", path: "/memory", said: "what I remember about you" },
+        history: { panel: "history", path: "/history", said: "your past conversations" },
+        chats: { panel: "history", path: "/history", said: "your past conversations" },
+        conversations: { panel: "history", path: "/history", said: "your past conversations" },
+        modes: { panel: "modes", path: "/modes", said: "the four modes" },
+        files: { panel: "memory", path: "/memory", said: "your files, on the memory page" },
+        photos: { panel: "memory", path: "/memory", said: "your pictures, on the memory page" },
+        chat: { panel: "chat", path: "/chat", said: "the chat" },
+        docs: { panel: null, path: "/docs", said: "how it works" },
+      };
+      const hit = SECTIONS[where];
+      if (!hit) {
+        return {
+          handled: true,
+          reply: `I can open memory, files, photos, history, modes, chat or docs. "${arg || "nothing"}" isn't one of them.`,
+          actions: ["memory", "history"],
+        };
+      }
+      if (surface === "web" && hit.panel) {
+        return {
+          handled: true,
+          reply: `Opening ${hit.said}.`,
+          client: { do: "open", panel: hit.panel },
+        };
+      }
+      return {
+        handled: true,
+        reply: `${hit.said[0].toUpperCase()}${hit.said.slice(1)}: ${SITE ? SITE + hit.path : hit.path}`,
+        actions: hit.panel === "memory" ? ["memory"] : ["web"],
       };
     }
 

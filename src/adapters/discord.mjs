@@ -18,6 +18,7 @@ import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ApplicationCommandType,
 } from "discord.js";
 import { readFile } from "node:fs/promises";
+import { noteSent, takeSent } from "../core/sent.mjs";
 import { respond } from "../core/session.mjs";
 import { storeAttachment } from "../core/images.mjs";
 import { canRead } from "../core/documents.mjs";
@@ -128,6 +129,26 @@ export const COMMANDS = [
    * so it is capitalised like a menu item rather than a slash command.
    */
   { name: "Remember this", type: ApplicationCommandType.Message },
+  { name: "clear", description: "Fresh conversation. Memories stay." },
+  {
+    name: "open",
+    description: "Open memory, files, history or modes",
+    /* A choice list rather than free text: there are seven places to go and
+       typing one of them wrong gets you a shrug. Discord makes it a picker. */
+    options: [
+      {
+        name: "where", description: "Which part of the site", type: 3, required: true,
+        choices: [
+          { name: "memory", value: "memory" },
+          { name: "files", value: "files" },
+          { name: "photos", value: "photos" },
+          { name: "history", value: "history" },
+          { name: "modes", value: "modes" },
+          { name: "docs", value: "docs" },
+        ],
+      },
+    ],
+  },
   { name: "study", description: "The notes and PDFs I'm teaching you from" },
   { name: "plans", description: "What you have coming up, and what just passed" },
   { name: "stack", description: "What I know about your setup" },
@@ -423,7 +444,7 @@ export async function startDiscord({ token }) {
        with the help text. A command added to the menu now dispatches on its
        own; only the ones taking an argument or wearing a different name here
        need saying. */
-    const ARG_OF = { shot: "url", search: "query", link: "code", mode: "which", kb: "query" };
+    const ARG_OF = { shot: "url", search: "query", link: "code", mode: "which", kb: "query", open: "where" };
     const CALLED = { remember: "whatyouknow", forget: "forgetme" };
 
     const name = CALLED[interaction.commandName] ?? interaction.commandName;
@@ -433,7 +454,7 @@ export async function startDiscord({ token }) {
 
     try {
       const stream = streamer((t) => interaction.editReply(t));
-      const { reply, image, actions, data } = await respond({
+      const { reply, image, actions, data, client: act } = await respond({
         surface: "discord",
         surfaceUserId: interaction.user.id,
         displayName: interaction.user.username,
@@ -441,6 +462,17 @@ export async function startDiscord({ token }) {
         onDelta: (chunk) => stream.onDelta(chunk),
       });
       await stream.finish(reply);
+
+      /* /clear typed as a slash command. `interaction.channel` is null for a
+         command used in a DM the bot cannot see into, which is exactly when
+         there is nothing to sweep, so an absent channel is a no-op and not an
+         error. The deferred reply itself is left alone: deleting the answer
+         to /clear would make the command look like it had failed. */
+      if (act?.do === "clear" && interaction.channel) {
+        for (const id of takeSent("discord", interaction.channel.id).reverse()) {
+          await interaction.channel.messages.fetch(id).then((m) => m.delete()).catch(() => {});
+        }
+      }
       const components = rowsFor(actions);
       await interaction.editReply(
         image
@@ -566,7 +598,7 @@ export async function startDiscord({ token }) {
           .catch((err) => { console.error("[discord] could not read attachment:", err.message); return null; });
       }
 
-      const { reply, image, actions } = await respond({
+      const { reply, image, actions, client: act } = await respond({
         surface: "discord",
         surfaceUserId: msg.author.id,
         displayName: msg.author.username,
@@ -576,6 +608,21 @@ export async function startDiscord({ token }) {
         onDelta: (c) => stream.onDelta(c),
       });
       await stream.finish(reply);
+
+      /* A command can ask the surface to act, not only to speak. /clear is
+         the only one so far, and it runs before the reply goes out so the
+         reply is not the first thing it sweeps away. In a DM the bot may
+         remove its own messages and nothing else — whatever the person wrote
+         stays, which is what the reply tells them. */
+      if (act?.do === "clear") {
+        const ids = takeSent("discord", msg.channel.id);
+        for (const id of ids.reverse()) {
+          await msg.channel.messages.fetch(id)
+            .then((m) => m.delete())
+            .catch(() => {});
+        }
+        if (placeholder) { await placeholder.delete().catch(() => {}); placeholder = null; }
+      }
       // Only a command comes back with these, so ordinary chatter in a
       // channel never sprouts buttons.
       const components = rowsFor(actions);
@@ -587,16 +634,18 @@ export async function startDiscord({ token }) {
       }
 
       const parts = chunk(out);
+      const keep = (m) => { noteSent("discord", msg.channel.id, m?.id); return m; };
       if (image) {
         const body = { content: parts[0], files: [{ attachment: image.png, name: image.name ?? "shot.png" }], components };
         if (placeholder) await placeholder.delete().catch(() => {});
-        await msg.reply(body);
+        keep(await msg.reply(body));
       } else if (placeholder) {
         await placeholder.edit({ content: parts[0], components }).catch(() => {});
-        for (const extra of parts.slice(1)) await msg.reply(extra);
+        keep(placeholder);
+        for (const extra of parts.slice(1)) keep(await msg.reply(extra));
       } else {
-        await msg.reply({ content: parts[0], components });
-        for (const extra of parts.slice(1)) await msg.reply(extra);
+        keep(await msg.reply({ content: parts[0], components }));
+        for (const extra of parts.slice(1)) keep(await msg.reply(extra));
       }
     } catch (err) {
       console.error("[discord] handler error:", err.message);

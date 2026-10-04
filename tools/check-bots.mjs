@@ -11,7 +11,7 @@
  * tokens, no relayer and no network — issuing a link code is in-memory, and a
  * person with no namespaces makes the memory commands answer without a read.
  */
-import { ACTIONS, actionsFor, handleCommand } from "../src/core/commands.mjs";
+import { ACTIONS, actionsFor, handleCommand, siteIntent } from "../src/core/commands.mjs";
 import { keyboard, formatted } from "../src/adapters/telegram.mjs";
 import { rowsFor, embedFor } from "../src/adapters/discord.mjs";
 
@@ -255,6 +255,61 @@ const ctx = DISCORD_COMMANDS.filter((c) => c.type === 3);
 check("there's a right-click way to keep a message", ctx.length === 1, ctx.map((c) => c.name));
 check("and it reads as a menu item rather than a command",
   ctx.every((c) => /^[A-Z]/.test(c.name) && !c.name.startsWith("/")), ctx.map((c) => c.name));
+
+section("clearing a chat is not forgetting a person");
+
+/* The worst bug this product could ship is a /clear that quietly means
+   /forgetme, or a /forgetme that only looks like one. So the reply to /clear
+   has to say, in the reply itself, that memories are untouched — a correct
+   implementation with a reply that implies otherwise is still the bug. */
+{
+  const person = { personId: "p-clear-test" };
+  const out = await handleCommand({ text: "/clear", surface: "web", surfaceUserId: "u1", person });
+  check("/clear is handled", out.handled === true);
+  check("it tells the surface to clear, not to forget", out.client?.do === "clear", out.client);
+  check("and says in words that memories survive",
+    /memories are untouched/i.test(out.reply), out.reply?.slice(0, 70));
+  check("and points at the command that does mean forget",
+    /\/forgetme/.test(out.reply));
+  check("it never claims to delete anything from Walrus",
+    !/\b(deleted?|erased?|wiped)\b[^.]{0,40}\b(memor|walrus|blob)/i.test(out.reply), out.reply);
+
+  const tg = await handleCommand({ text: "/clear", surface: "telegram", surfaceUserId: "u1", person });
+  check("on Telegram it admits it cannot remove what you wrote",
+    /doesn't let a bot delete what you wrote/i.test(tg.reply), tg.reply?.slice(0, 90));
+  check("and the web does not borrow that caveat",
+    /cleared the window/i.test(out.reply));
+
+  /* /forgetme must keep saying the opposite thing just as plainly. */
+  const forget = await handleCommand({ text: "/forgetme", surface: "web", surfaceUserId: "u1", person });
+  check("/forgetme still refuses to promise deletion",
+    /append-only/i.test(forget.reply) && /can't delete/i.test(forget.reply));
+}
+
+section("asked in words, not with a slash");
+
+/* Biased towards doing nothing: a missed match costs one unhelpful answer,
+   a false match wipes somebody's screen mid-sentence. */
+{
+  const yes = [
+    ["clear the chat", "/clear"], ["please clear this conversation", "/clear"],
+    ["wipe this thread", "/clear"], ["new chat", "/clear"], ["clear", "/clear"],
+    ["open my memories", "/open memory"], ["show me the files", "/open files"],
+    ["take me to modes", "/open modes"], ["go to history", "/open history"],
+  ];
+  const no = [
+    "how do I clear the chat?", "does clearing the chat delete my memories?",
+    "can I clear the chat?", "is there a way to clear the chat",
+    "I had to clear the chat on my old laptop because it kept crashing and I lost everything",
+    "clear skies today", "open source is great", "tell me about the history of walrus",
+  ];
+  const missed = yes.filter(([t, want]) => siteIntent(t) !== want);
+  check("plain phrasings reach the command", missed.length === 0, missed.map(([t]) => t));
+  const fired = no.filter((t) => siteIntent(t) !== null);
+  check("questions about it are left for the model to answer", fired.length === 0, fired);
+  check("a long message is conversation, never an instruction",
+    siteIntent("clear the chat " + "x".repeat(120)) === null);
+}
 
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);
 process.exit(failed ? 1 : 0);
