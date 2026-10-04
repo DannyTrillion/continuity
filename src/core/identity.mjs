@@ -172,24 +172,43 @@ export async function redeemLinkCode(surface, surfaceUserId, rawCode) {
     return { ok: true, personId: entry.personId, alreadyLinked: true };
   }
 
-  // Anything this account already said is kept by union, not by migration.
+  linkCodes.delete(code); // single use
+  return { ok: true, ...(await adoptPerson(surface, surfaceUserId, entry.personId, current)) };
+}
+
+/**
+ * This account is that person from now on.
+ *
+ * The merge half of linking, on its own, because two things need it: redeeming
+ * a code, and signing in to the website by approving it in Telegram. Written
+ * once so the two cannot drift, since the way they could drift is by one of
+ * them dropping a `mergedFrom` and orphaning everything an account said before
+ * it was linked. That bug has happened here once already and it is silent.
+ *
+ * Union, not migration. The ids this account used to answer to are kept so
+ * every memory written under them is still reachable; nothing is rewritten and
+ * nothing on Walrus is touched, because nothing on Walrus can be.
+ */
+export async function adoptPerson(surface, surfaceUserId, personId, known = null) {
+  const current = known ?? (await resolvePerson(surface, surfaceUserId));
+  if (current.personId === personId) return { ...toPerson({ personId, mergedFrom: current.mergedFrom }), alreadyLinked: true };
+
   const mergedFrom = [...new Set([current.personId, ...current.mergedFrom])].filter(
-    (id) => id !== entry.personId,
+    (id) => id !== personId,
   );
 
-  const rec = { personId: entry.personId, mergedFrom };
+  const rec = { personId, mergedFrom };
   identities.set(accountKey(surface, surfaceUserId), rec); // live immediately
-  noteSurface(entry.personId, surface).catch(() => {});
-  linkCodes.delete(code); // single use
+  noteSurface(personId, surface).catch(() => {});
 
   persist(
     `link ${surface}`,
     identityNs(surface, surfaceUserId),
-    JSON.stringify({ personId: entry.personId, surface, surfaceUserId, mergedFrom }),
-    { idempotencyKey: `id:${surface}:${surfaceUserId}:${entry.personId}` },
+    JSON.stringify({ personId, surface, surfaceUserId, mergedFrom }),
+    { idempotencyKey: `id:${surface}:${surfaceUserId}:${personId}` },
   );
 
-  return { ok: true, ...toPerson(rec) };
+  return toPerson(rec);
 }
 
 /**

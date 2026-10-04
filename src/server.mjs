@@ -14,7 +14,7 @@ import { rememberLastGood } from "./core/agent.mjs";
 import { studyShelf, listMaterials } from "./core/study.mjs";
 import { modeFor, stackItems, planItems, awayInWords } from "./core/modes.mjs";
 import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, NS_INDEX } from "./core/memory.mjs";
-import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
+import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor, adoptPerson } from "./core/identity.mjs";
 import { startOutbox, onSettled, outboxStats, pendingFor, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
 import { list as listConversations, get as getConversation, flushAll } from "./core/conversations.mjs";
 import { resume, hasHistory } from "./core/session.mjs";
@@ -24,6 +24,7 @@ import { snapshot } from "./core/metrics.mjs";
 import { storeAttachment, listImages, UPLOADS } from "./core/images.mjs";
 import { listFiles } from "./core/files.mjs";
 import { getBlob, config as walrusConfig } from "./core/walrus.mjs";
+import { startSignIn, signInStatus, describeDevice } from "./core/signin.mjs";
 import { saveStep, savePicture, finish as finishOnboarding, receiptsFor, stateFor } from "./core/onboard.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile as writeFileAsync } from "node:fs/promises";
@@ -978,6 +979,50 @@ const server = createServer(async (req, res) => {
       send({ done: true, error: err.message });
     }
     return res.end();
+  }
+
+  /**
+   * Signing in with Telegram, in two halves.
+   *
+   * The browser starts one and is told a number. Telegram shows that number
+   * among two decoys and asks which. Nothing here knows who the person is
+   * until they tap, which is the point: the website is borrowing an identity
+   * the bot already holds rather than minting one of its own and hoping to
+   * reconcile it later. Minting first and reconciling later is exactly how
+   * four of somebody's memories got orphaned, once.
+   */
+  if (url.pathname === "/api/signin/start" && req.method === "POST") {
+    const body = await readBody(req).catch(() => ({}));
+    const out = startSignIn({
+      device: describeDevice(req.headers["user-agent"]),
+      webUserId: body?.userId ? String(body.userId) : null,
+    });
+    const bot = process.env.TELEGRAM_BOT_USERNAME?.replace(/^@/, "");
+    return json(res, 200, {
+      ...out,
+      // Telegram allows A-Z a-z 0-9 _ - in a start payload, so the id is hex.
+      deepLink: bot ? `https://t.me/${bot}?start=si${out.id}` : null,
+      bot: bot ?? null,
+    });
+  }
+
+  if (url.pathname === "/api/signin/status") {
+    const id = url.searchParams.get("id");
+    if (!id) return json(res, 400, { error: "id is required" });
+    const out = signInStatus(id);
+
+    /* Approved: the browser becomes that person. The browser's own id is kept
+       in mergedFrom by adoptPerson, so anything said here before signing in
+       is still reachable rather than stranded under an id nothing points at. */
+    if (out.status === "approved" && out.personId) {
+      const webUserId = url.searchParams.get("userId");
+      if (webUserId) {
+        await adoptPerson("web", String(webUserId), out.personId).catch((err) => {
+          console.error("[signin] could not adopt:", err.message);
+        });
+      }
+    }
+    return json(res, 200, out);
   }
 
   if (url.pathname === "/api/chat" && req.method === "POST") {

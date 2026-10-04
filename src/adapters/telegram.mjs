@@ -7,6 +7,8 @@
  */
 
 import { noteSent, takeSent } from "../core/sent.mjs";
+import { openSignIn, answerSignIn, denySignIn } from "../core/signin.mjs";
+import { resolvePerson } from "../core/identity.mjs";
 import { respond, lookup } from "../core/session.mjs";
 import { storeAttachment } from "../core/images.mjs";
 import { ACTIONS, MENU_COMMANDS, GROUP_SAFE } from "../core/commands.mjs";
@@ -496,6 +498,40 @@ export async function startTelegram({ token }) {
           const tap = u.callback_query;
           if (tap) {
             await call(token, "answerCallbackQuery", { callback_query_id: tap.id }).catch(() => {});
+
+            /* A sign-in answer. One attempt: a wrong number ends the request
+               rather than offering another go, which is what stops three taps
+               beating three options. */
+            const pick = /^si:([0-9a-f]+):(\d+|no)$/i.exec(String(tap.data ?? ""));
+            if (pick) {
+              const chatId = tap.message?.chat?.id;
+              const [, id, choice] = pick;
+              let text;
+              if (choice === "no") {
+                denySignIn(id);
+                text = "Stopped. Nothing was signed in.\n\nIf that wasn't you at all, nobody got access — they only ever saw a number.";
+              } else {
+                const me = await resolvePerson("telegram", String(tap.from.id), {
+                  displayName: tap.from.username ?? tap.from.first_name,
+                }).catch(() => null);
+                const out = answerSignIn(id, choice, {
+                  personId: me?.personId,
+                  surfaceUserId: String(tap.from.id),
+                });
+                text = out.ok
+                  ? "✅ *Confirmed.* Go back to your browser — it signs you in, and everything I know about you comes with it."
+                  : out.reason === "wrong"
+                    ? "That's not the number on the website, so I've stopped this sign-in. If it wasn't you who started it, nothing has happened."
+                    : "That sign-in is no longer open. Start a new one on the website.";
+              }
+              if (chatId) {
+                const sent = await call(token, "sendMessage", { chat_id: chatId, text, parse_mode: "Markdown" })
+                  .catch(() => null);
+                noteSent("telegram", chatId, sent?.message_id);
+              }
+              continue;
+            }
+
             const say = ACTIONS[String(tap.data ?? "").replace(/^do:/, "")]?.say;
             const chatId = tap.message?.chat?.id;
             if (!say || !chatId) continue;
@@ -509,6 +545,46 @@ export async function startTelegram({ token }) {
           }
 
           const msg = u.message;
+
+          /* Signing in to the website. The deep link carries the request id,
+             so this arrives as "/start si<id>" and is answered here rather
+             than going through the model: there is nothing to say yet, only a
+             number to confirm. */
+          const si = /^\/start\s+si([0-9a-f]{16,})$/i.exec(msg?.text ?? "");
+          if (si) {
+            const chatId = msg.chat.id;
+            const who = String(msg.from.id);
+            const opened = openSignIn(si[1], who);
+            if (!opened.ok) {
+              const why = {
+                expired: "That sign-in link has expired. Start again on the website and I'll ask you straight away.",
+                approved: "That one's already done. Go back to your browser.",
+                denied: "That sign-in was turned down, so nothing happened.",
+                wrong: "That sign-in was answered with the wrong number, so I stopped it. Start a new one on the website.",
+                "too-many": "That's a lot of sign-in requests in one hour. I've stopped sending them for a bit. If these weren't you, nothing has been approved.",
+              }[opened.reason] ?? "I can't sign that one in.";
+              const sent = await send(token, chatId, why);
+              noteSent("telegram", chatId, sent?.message_id);
+              continue;
+            }
+            const sent = await call(token, "sendMessage", {
+              chat_id: chatId,
+              text:
+                `🔐 *Sign in to Continuity in a web browser?*\n` +
+                `Browser: ${opened.device}\n\n` +
+                `Tap the number you see on the website.\n` +
+                `Didn't ask for this? Tap *Not me* — nothing happens.`,
+              parse_mode: "Markdown",
+              reply_markup: {
+                inline_keyboard: [
+                  opened.digits.map((d) => ({ text: String(d), callback_data: `si:${si[1]}:${d}` })),
+                  [{ text: "Not me", callback_data: `si:${si[1]}:no` }],
+                ],
+              },
+            }).catch(() => null);
+            noteSent("telegram", chatId, sent?.message_id);
+            continue;
+          }
           // A photo arrives with no `text` at all — its words, if any, are the
           // caption. Skipping anything without `text` meant every picture sent
           // to this bot was silently discarded.

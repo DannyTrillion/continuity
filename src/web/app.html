@@ -449,6 +449,14 @@
   /* `display:flex` above outranks the attribute, so the retry button would
      have sat there permanently offering to retry nothing. */
   .walletbtn[hidden]{display:none}
+  .tgbtn{display:flex;width:100%;align-items:center;justify-content:center;gap:9px;
+    padding:13px 18px;border-radius:999px;border:0;cursor:pointer;
+    background:#2AABEE;color:#fff;font:600 14.5px var(--sans);
+    transition:transform .2s var(--ease),filter .2s var(--ease)}
+  .tgbtn:hover{transform:scale(1.02);filter:brightness(1.07)}
+  .tgbtn:disabled{opacity:.55;cursor:default;transform:none}
+  #sinum{font:500 34px var(--mono);letter-spacing:.1em;text-align:center}
+  #siwait[hidden],#codeway[hidden],#siorline[hidden]{display:none}
   .nudge{display:block;margin:12px 0 0;padding:11px 13px;border-radius:var(--r-md);cursor:pointer;
     border:1px solid rgba(90,169,255,.3);background:var(--live-ghost);color:var(--live);
     font:400 12.5px/1.5 var(--sans);text-align:left;transition:.22s}
@@ -1163,15 +1171,37 @@
 
 <div class="scrim" id="scrim">
   <div class="modal">
-    <h3>Use me somewhere else</h3>
-    <p class="sub" id="linkintro">Enter this code on Telegram or Discord and I'll know it's still you — everything I remember comes with you.</p>
-    <div class="code" id="codeval">······<span class="copied" id="copied">Copied</span></div>
-    <div id="qr"></div>
-    <ol class="steps">
-      <li>Open <b id="botname">the Telegram bot</b> — or scan the code above</li>
-      <li>Send <code>/link</code> followed by the code</li>
-      <li>That's it. Same memory, both places.</li>
-    </ol>
+    <h3 id="linktitle">Use me somewhere else</h3>
+    <p class="sub" id="linkintro">One tap in Telegram and this browser becomes the same person — everything either of us knows comes with it.</p>
+
+    <!-- The one-tap path. The number is shown here and only here: Telegram
+         shows it among two decoys and asks which, so getting it right proves
+         you are holding both ends. Whoever started a sign-in cannot tell you
+         which to press, because they never see the buttons. -->
+    <div id="siwrap">
+      <button class="tgbtn" id="tgsignin">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+        Continue with Telegram
+      </button>
+
+      <div id="siwait" hidden>
+        <p class="sub" style="margin-bottom:10px">Tap this number in Telegram:</p>
+        <div class="code" id="sinum">··</div>
+        <p class="note" id="sistate">Waiting for you to confirm…</p>
+      </div>
+    </div>
+
+    <div class="orline" id="siorline"><span>or use a code</span></div>
+
+    <div id="codeway">
+      <div class="code" id="codeval">······<span class="copied" id="copied">Copied</span></div>
+      <div id="qr"></div>
+      <ol class="steps">
+        <li>Open <b id="botname">the Telegram bot</b> — or scan the code above</li>
+        <li>Send <code>/link</code> followed by the code</li>
+        <li>That's it. Same memory, both places.</li>
+      </ol>
+    </div>
     <button class="close" id="closelink">Done</button>
   </div>
 </div>
@@ -1856,8 +1886,9 @@ $("linkbtn").addEventListener("click", async () => {
   $("scrim").classList.add("on");
   const pending = ["telegram", "discord"].filter((c) => !connectedNow.includes(c));
   $("linkintro").textContent = pending.length
-    ? `Enter this code on ${pending.map((c) => SURFACE_LABEL[c]).join(" or ")} and I'll know it's still you — everything I remember comes with you.`
+    ? "One tap in Telegram and this browser becomes the same person — everything either of us knows comes with it."
     : "You're already connected everywhere. Use this code to add another account if you want.";
+  resetSignIn();
   $("codeval").firstChild.nodeValue = "······";
   $("qr").classList.remove("on");
   const res = await ask("/link", { silent: true });
@@ -1873,7 +1904,83 @@ $("linkbtn").addEventListener("click", async () => {
     $("qr").classList.add("on");
   }
 });
-$("closelink").addEventListener("click", () => $("scrim").classList.remove("on"));
+/**
+ * Signing in by tapping a number in Telegram.
+ *
+ * The number appears HERE and nowhere else. Telegram shows it among two
+ * decoys and asks which one, so a correct tap proves the same person is
+ * holding both ends — and somebody who tricked you into opening the link
+ * cannot tell you which to press, because they never see the buttons.
+ *
+ * Polling rather than a socket: this lasts two minutes at most and a socket
+ * for it would be a connection to maintain for the entire session in order to
+ * carry one message.
+ */
+let siPoll = null;
+
+function resetSignIn() {
+  clearInterval(siPoll); siPoll = null;
+  $("siwait").hidden = true;
+  $("tgsignin").hidden = false;
+  $("tgsignin").disabled = false;
+  $("sinum").textContent = "··";
+  $("sistate").textContent = "Waiting for you to confirm…";
+}
+
+$("tgsignin").addEventListener("click", async () => {
+  $("tgsignin").disabled = true;
+  let out;
+  try {
+    out = await fetch("/api/signin/start", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    }).then((r) => r.json());
+  } catch {
+    $("tgsignin").disabled = false;
+    return;
+  }
+  if (!out?.deepLink) { $("tgsignin").disabled = false; return; }
+
+  $("sinum").textContent = String(out.number);
+  $("siwait").hidden = false;
+  $("tgsignin").hidden = true;
+  // A new tab, so the number stays on screen behind it. Opening in place
+  // would hide the one thing they need to read.
+  window.open(out.deepLink, "_blank", "noopener");
+
+  const started = Date.now();
+  siPoll = setInterval(async () => {
+    if (Date.now() - started > (out.expiresInSeconds + 15) * 1000) {
+      clearInterval(siPoll); siPoll = null;
+      $("sistate").textContent = "That took too long. Close this and try again.";
+      $("tgsignin").hidden = false; $("tgsignin").disabled = false;
+      return;
+    }
+    let st;
+    try {
+      st = await fetch(`/api/signin/status?id=${encodeURIComponent(out.id)}&userId=${encodeURIComponent(userId)}`)
+        .then((r) => r.json());
+    } catch { return; }
+    if (st.status === "pending") return;
+    clearInterval(siPoll); siPoll = null;
+
+    if (st.status === "approved") {
+      $("sistate").textContent = "Signed in. Everything it knows about you is here now.";
+      refreshAll();
+      setTimeout(() => { $("scrim").classList.remove("on"); resetSignIn(); }, 1400);
+      return;
+    }
+    const why = {
+      denied: "Turned down in Telegram, so nothing changed.",
+      wrong: "That wasn't the number, so I stopped the sign-in. Try again.",
+      expired: "That request expired. Try again.",
+    };
+    $("sistate").textContent = why[st.status] ?? "That didn't go through.";
+    $("tgsignin").hidden = false; $("tgsignin").disabled = false;
+  }, 1500);
+});
+
+$("closelink").addEventListener("click", () => { $("scrim").classList.remove("on"); resetSignIn(); });
 $("scrim").addEventListener("click", (e) => { if (e.target === $("scrim")) $("scrim").classList.remove("on"); });
 $("codeval").addEventListener("click", () => {
   const c = $("codeval").firstChild.nodeValue.trim();
