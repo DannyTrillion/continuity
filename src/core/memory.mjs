@@ -384,7 +384,35 @@ function cachedKb(query) {
   return { key, hits: null };
 }
 
-export async function recall(namespace, query, { limit = 8, maxTokens = 700, retries = 3, profile = false } = {}) {
+/**
+ * Identical reads happening at the same moment, sharing one request.
+ *
+ * A single page load can ask for the same namespace three times over: the chat
+ * turn, the memory rail, and whatever the person clicked while waiting. Those
+ * are the same question with the same answer, and each one was a separate trip
+ * against a budget of sixty requests a minute shared by every surface.
+ *
+ * Deliberately in-flight only, with no expiry cache behind it. A finished read
+ * is thrown away the instant it settles, so nothing here can serve a stale
+ * answer — which matters on a product whose worst failure is confidently
+ * telling somebody it does not know them.
+ */
+const inFlight = new Map();
+
+/* Not `async`. An async function wraps whatever it returns in a NEW promise,
+   so callers would each get a different object and the sharing would be
+   invisible — true, but unprovable, and a property nothing can observe is a
+   property that quietly stops holding. */
+export function recall(namespace, query, opts = {}) {
+  const key = `${namespace}\u0000${query}\u0000${opts.limit ?? ""}:${opts.maxTokens ?? ""}:${opts.profile ? 1 : 0}`;
+  const running = inFlight.get(key);
+  if (running) return running;
+  const p = recallOnce(namespace, query, opts).finally(() => inFlight.delete(key));
+  inFlight.set(key, p);
+  return p;
+}
+
+async function recallOnce(namespace, query, { limit = 8, maxTokens = 700, retries = 3, profile = false } = {}) {
   const shared = namespace === KB_NS;
   const cache = shared ? cachedKb(query) : null;
   if (cache?.hits) return cache.hits;

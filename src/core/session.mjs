@@ -209,6 +209,9 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
     const turn = await handleTurn({
       personId: who.personId,
       namespaces: who.namespaces,
+      // Minted microseconds ago by resolvePerson, so nothing can exist under
+      // it. The turn uses this to skip reads whose answer is already known.
+      isNew: who.isNew === true,
       message: trimmed,
       onStage,
       history: history(who.personId),

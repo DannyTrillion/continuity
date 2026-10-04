@@ -244,6 +244,7 @@ export async function handleTurn({
   // that can see. Walrus Memory stores text, so the description is what
   // becomes a memory; the file itself is just served back.
   attachment = null,
+  isNew = false,
   /**
    * The message this one is a reply to.
    *
@@ -331,6 +332,20 @@ export async function handleTurn({
     : await Promise.all([
     isOptedOut(personId),
     suppressionsFor(personId).catch(() => new Set()),
+    /* A person whose id was minted during this very request cannot have said
+       anything under it, so both of the reads below have one possible answer
+       and it is already known. Skipping them is not an optimisation that
+       trades correctness for speed — there is nothing to be wrong about.
+
+       It matters where it is felt most. This is somebody's first message, the
+       slowest turn they will ever have and the only one most visitors see, and
+       it was paying for two round trips to a network to be told nothing twice.
+
+       Deliberately keyed on `isNew` rather than on a namespace looking empty.
+       "Looks empty" is the relayer's random empty response, which is the bug
+       that orphaned a person in week one; "was created a moment ago" is a fact
+       about this process. */
+    isNew ? Promise.resolve(namespaces.map(() => [])) :
     Promise.all(namespaces.map((ns) => recall(ns, recallQuery, { limit: 6, maxTokens: 500 }))),
     // A second, fixed query for the basics.
     //
@@ -343,6 +358,7 @@ export async function handleTurn({
     // Only the primary namespace gets the profile query. A merged one belongs
     // to the same person and is covered by the message-specific recall above;
     // querying both doubled the request cost of every turn for very little.
+    isNew ? Promise.resolve([]) :
     recall(namespaces[0], "who this person is: their name, work, setup and preferences", {
       limit: 5, maxTokens: 400, profile: true,
     }).then((hits) => [hits]),
