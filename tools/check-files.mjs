@@ -15,6 +15,7 @@
 import { readFileSync } from "node:fs";
 import { readDocument, canRead } from "../src/core/documents.mjs";
 import { fileNs, fileSentence, parseFile } from "../src/core/files.mjs";
+import { putBlob, getBlob, config as walrusConfig } from "../src/core/walrus.mjs";
 
 let failed = 0, passed = 0;
 const check = (name, ok, detail = "") => {
@@ -154,6 +155,49 @@ check("pasting a file attaches it", /addEventListener\("paste"/.test(chat) && /c
 check("dropping one does too", /addEventListener\("drop"/.test(chat));
 check("and an ordinary text paste is left alone",
   /if \(!items\.length\) return;/.test(chat));
+
+section("the bytes outlive the server");
+
+/* The half that was missing. A description of a file was always durable,
+   because it is a memory and memories are on Walrus; the bytes sat on a
+   Railway volume that a redeploy empties, so the memory outlived the file it
+   described. These checks are the round trip that fixes that — a real upload
+   and a real download, because a mocked one would prove nothing about whether
+   the publisher we point at actually works. */
+{
+  check("the blob id rides inside the memory, beside the filename",
+    /\[walrus:/.test(fileSentence({ file: "a.pdf", description: "x", surface: "web", walrusBlob: "BLOBID123" })));
+  const back = parseFile({ text: fileSentence({
+    file: "a.pdf", name: "a.pdf", description: "A one page invoice.", surface: "web", walrusBlob: "BLOBID123" }) });
+  check("and comes back out of it", back.walrusBlob === "BLOBID123", back.walrusBlob);
+  check("the summary is not polluted by either reference",
+    back.description === "A one page invoice.", back.description);
+  /* The point of all of it: a file whose bytes are gone from this disk is
+     still openable, because the memory knows where else to look. */
+  check("a file off the volume but on Walrus is available, not lost",
+    back.available === true && back.onDisk === false && back.url === "/blob/BLOBID123", back.url);
+  const orphan = parseFile({ text: fileSentence({ file: "b.pdf", description: "y", surface: "web" }) });
+  check("and one that never reached Walrus is honestly unavailable",
+    orphan.available === false && orphan.url === null, orphan.url);
+}
+
+if (process.env.SKIP_NETWORK) {
+  console.log("SKIP  no network checks — SKIP_NETWORK is set");
+} else {
+  const cfg = walrusConfig();
+  console.log(`      publisher: ${cfg.publisher} (${cfg.network})`);
+  const bytes = Buffer.from("continuity round trip " + Date.now(), "utf8");
+  const put = await putBlob(bytes);
+  check("bytes go to Walrus and come back with an id", !!put?.blobId, put?.blobId);
+  if (put?.blobId) {
+    const got = await getBlob(put.blobId);
+    check("and read back byte for byte", got?.equals(bytes) === true,
+      got ? `${got.length} bytes` : "nothing came back");
+  }
+  check("an empty upload is refused rather than stored", (await putBlob(Buffer.alloc(0))) === null);
+  check("a nonsense blob id returns null instead of throwing",
+    (await getBlob("not-a-real-blob-id-at-all-xxxxxxxxxxxxxxxxx")) === null);
+}
 
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);
 process.exit(failed ? 1 : 0);

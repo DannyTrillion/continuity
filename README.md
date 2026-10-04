@@ -289,6 +289,42 @@ description goes into memory like anything else said in that conversation,
 which means it crosses surfaces and shows up in recall. The bytes are kept and
 served back separately.
 
+### Where the bytes go
+
+For a long time "separately" meant a volume on Railway, and that was the wrong
+half to leave behind. The description is a memory, so it is on Walrus and
+durable; the bytes were on a disk a redeploy empties. The memory outlived the
+file it described, and the dashboard had to say so: *file no longer on this
+server.*
+
+The bytes now go to Walrus too, started in parallel with the vision call so the
+upload costs almost no wall clock, and never awaited in a way that can fail a
+turn — an upload that does not land costs durability, not the reply. The blob
+id is written **into the memory**, beside the filename:
+
+```
+A file the user shared on telegram, 4 Oct 2026 (lease.pdf): A residential
+tenancy agreement for 14 Oak Road…
+[file:d86524ec-….md][walrus:nMxaSHx54ESfmruT6HCCOnVlGTZdmtRc3JPn-hLJ-zc]
+```
+
+That is the whole design. The pointer to a file is recovered by the same read
+that finds the file, so there is no database to keep in sync and no sidecar
+state to lose. The volume becomes a cache: served from disk when the bytes are
+there because it is faster, from `/blob/<id>` when they are not. A file is
+"available" when either can produce it, which is why the Files shelf now
+distinguishes *also on Walrus* from *served from Walrus* from *bytes not
+recoverable* instead of treating the last two as the same apology.
+
+One honest split. Memories go to Walrus **mainnet**, because the relayer pays
+for them. Raw blobs have no such sponsor: mainnet writes cost WAL and SUI from
+a funded wallet and the public mainnet publishers are not open, so the default
+publisher is **testnet** — open, free, and really erasure-coded. The network
+travels with every blob id and is shown wherever the id is shown, because
+saying "the files are on mainnet" while they are on testnet is exactly the kind
+of small lie this project is otherwise about not telling. `WALRUS_PUBLISHER`
+and `WALRUS_AGGREGATOR` are the only two things that change.
+
 The looking is done by a cascade, not one model: `qwen/qwen3.8-flash`, then
 `qwen/qwen3-vl-8b-instruct`, then `meta-llama/llama-4-scout` (override with
 `VISION_MODEL`, comma-separated), in three rounds. One evening the first was
@@ -384,9 +420,12 @@ The direction this is heading, after the hackathon submission: an AI workspace
 rather than a chat window, where conversations, memories, files and things the
 assistant makes for you all hang off the same identity.
 
-- **Files as first-class memories.** The `rememberManual()` path — SEAL
-  encryption and embeddings generated client-side — so a PDF or an image is
-  itself a blob the account owns, not just a description of one.
+- **Files the account owns, not just files it can read.** Half of this shipped:
+  an attachment's bytes go to Walrus, and the blob id travels inside the memory
+  that describes them, so a file survives the server losing it. What is left is
+  ownership — the `rememberManual()` path, with SEAL encryption and embeddings
+  generated client-side, would make the blob the account's rather than the
+  relayer's, and would let raw blobs go to mainnet the way memories already do.
 - **Things the assistant creates.** Ask for a to-do list and get a real page,
   saved under *What I Created*, openable and editable later. This needs the
   model to call tools rather than only answer, plus somewhere durable for the

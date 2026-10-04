@@ -37,6 +37,7 @@ import { recall } from "./memory.mjs";
 import { enqueueRemember, pendingFor } from "./outbox.mjs";
 import { describeImage, canSee } from "./vision.mjs";
 import { readDocument, canRead } from "./documents.mjs";
+import { putBlob } from "./walrus.mjs";
 
 /** Where the bytes live. Same volume as everything else durable. */
 export const UPLOADS =
@@ -47,6 +48,9 @@ export const imageNs = (personId) => `ws8::img::${personId}`;
 /* The reference, written into the memory text because text is all there is.
    Kept deliberately plain so it survives a round trip unharmed. */
 const REF = /\[file:([\w.\-]+)\]/;
+/* And the Walrus blob holding the bytes, so a picture outlives the volume the
+   same way a file does. See files.mjs and walrus.mjs for why both halves. */
+const WREF = /\[walrus:([\w.\-]+)\]/;
 
 const when = (d) =>
   new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -58,7 +62,7 @@ const when = (d) =>
  * delays the memory rather than losing it. Nothing waits on this: the person
  * gets their reply now and the blob lands when it lands.
  */
-export function rememberImage(personId, { file, name, description, surface, said, guard }) {
+export function rememberImage(personId, { file, name, description, surface, said, walrusBlob, guard }) {
   if (!file || !description) return;
 
   // Everything a search might reasonably match on, in one sentence: what is in
@@ -80,7 +84,7 @@ export function rememberImage(personId, { file, name, description, surface, said
     `A picture the user shared on ${surface}, ${when(Date.now())}` +
     `${name ? ` (${name})` : ""}: ${body}` +
     `${said && !unread ? `\nThey said: ${said}` : ""}` +
-    `\n[file:${file}]`;
+    `\n[file:${file}]${walrusBlob ? `[walrus:${walrusBlob}]` : ""}`;
 
   enqueueRemember(imageNs(personId), text, {
     label: `image ${file}`,
@@ -183,13 +187,18 @@ export async function listImages(personId, { limit = 40 } = {}) {
   return hits
     .map((h) => {
       const file = h.text.match(REF)?.[1] ?? null;
-      const text = h.text.replace(REF, "").trim();
+      const blob = h.text.match(WREF)?.[1] ?? null;
+      const text = h.text.replace(REF, "").replace(WREF, "").trim();
       const m = text.match(PREFIX);
       const [description, said] = (m ? text.slice(m[0].length) : text).split(/\nThey said: /);
+      const onDisk = !!file && existsSync(join(UPLOADS, file));
       return {
         file,
-        url: file ? `/uploads/${file}` : null,
-        available: !!file && existsSync(join(UPLOADS, file)),
+        // Local while the bytes are here, Walrus once they are not.
+        url: onDisk ? `/uploads/${file}` : blob ? `/blob/${blob}` : null,
+        available: onDisk || !!blob,
+        onDisk,
+        walrusBlob: blob,
         surface: m?.[1] ?? null,
         name: m?.[3] ?? null,
         description: description.trim(),
@@ -236,6 +245,15 @@ export async function storeAttachment({ bytes, name, type, hint }) {
   await mkdir(UPLOADS, { recursive: true });
   await writeFile(join(UPLOADS, file), bytes);
 
+  /* The bytes go to Walrus too, started now and collected at the end.
+     Describing an attachment already takes seconds — a vision call or a
+     document read — so the upload rides alongside it and costs almost no wall
+     clock. It is deliberately not awaited here: if Walrus is slow or down,
+     the person still gets their reply and their file, and only durability is
+     lost. The local copy remains the fast path; the blob is what survives a
+     redeploy taking the volume with it. */
+  const uploading = putBlob(bytes);
+
   let description;
   let sawIt = false;
   if (canRead(type, ext) && !canSee(type)) {
@@ -281,7 +299,14 @@ export async function storeAttachment({ bytes, name, type, hint }) {
      things somebody is studying — and only this function knows which path the
      bytes actually took. */
   const kind = canRead(type, ext) && !canSee(type) ? "document" : canSee(type) ? "image" : "other";
-  return { id, file, url: `/uploads/${file}`, name: name ?? null, type: type ?? null, description, sawIt, kind };
+  const stored = await uploading;
+  return {
+    id, file, url: `/uploads/${file}`, name: name ?? null, type: type ?? null, description, sawIt, kind,
+    // Null whenever the upload did not land. Callers must treat it that way:
+    // the file still works without it, it just stops being durable.
+    walrusBlob: stored?.blobId ?? null,
+    walrusNetwork: stored?.network ?? null,
+  };
 }
 
 const guessExt = (type) =>

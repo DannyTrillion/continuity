@@ -23,6 +23,7 @@ import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { snapshot } from "./core/metrics.mjs";
 import { storeAttachment, listImages, UPLOADS } from "./core/images.mjs";
 import { listFiles } from "./core/files.mjs";
+import { getBlob, config as walrusConfig } from "./core/walrus.mjs";
 import { saveStep, savePicture, finish as finishOnboarding, receiptsFor, stateFor } from "./core/onboard.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile as writeFileAsync } from "node:fs/promises";
@@ -147,6 +148,28 @@ pollHealth();
 // budget of 1000 — and it counted against the 60-per-minute burst limit that
 // real turns need. A minute is fresh enough for a liveness light.
 setInterval(pollHealth, 60_000).unref();
+
+/**
+ * What kind of file is this?
+ *
+ * A Walrus blob id carries no extension — it is a hash — so the only thing
+ * left to go on is the first few bytes. Served as octet-stream a PDF
+ * downloads instead of opening and an image renders as a broken icon, which
+ * would make a recovered file look like a lost one. Magic numbers only, and a
+ * conservative fallback: guessing wrong is worse than being vague.
+ */
+function sniff(b) {
+  if (b.length > 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) return "application/pdf";
+  if (b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b.length > 6 && b.subarray(0, 6).toString("latin1").startsWith("GIF8")) return "image/gif";
+  if (b.length > 12 && b.subarray(0, 4).toString("latin1") === "RIFF"
+      && b.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  // Text, if every byte in a decent sample is one a person could have typed.
+  const head = b.subarray(0, 2048);
+  const printable = head.every((c) => c === 9 || c === 10 || c === 13 || (c >= 32 && c < 127) || c >= 128);
+  return printable ? "text/plain; charset=utf-8" : "application/octet-stream";
+}
 
 /** Screenshots come back as a PNG buffer; JSON can only carry it as a data URL. */
 const withImage = (out) =>
@@ -500,6 +523,8 @@ const server = createServer(async (req, res) => {
         facts,
         pictures,
         files,
+        // Which Walrus the file bytes went to, so the page links to a live explorer.
+        walrusNetwork: walrusConfig().network,
         stats: {
           total: facts.length,
           collapsed: live.length - collapsed.length,
@@ -565,9 +590,38 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  // Files are served back from disk. On a platform with an ephemeral
-  // filesystem these do not survive a redeploy — the DESCRIPTION does, because
-  // that lives on Walrus, which is the part that had to be durable.
+  /**
+   * A file fetched back from Walrus rather than from this disk.
+   *
+   * This is the other half of the attachment story. The description of a file
+   * has always been durable, because it is a memory and memories are on
+   * Walrus; the bytes sat on a Railway volume that a redeploy empties, so the
+   * memory outlived the file it described and the dashboard had to say "file
+   * no longer on this server." Now the bytes go to Walrus too, and the blob id
+   * travels inside the memory beside the filename — which means the pointer to
+   * the file is recovered by the same read that finds the file, with no
+   * database and no sidecar state to lose.
+   *
+   * So the volume is a cache. When it has the bytes they are served from it
+   * because that is faster; when it does not, this route reads them back out
+   * of storage and the file opens anyway.
+   */
+  const blob = url.pathname.match(/^\/blob\/([\w.-]{10,100})$/);
+  if (blob) {
+    const bytes = await getBlob(blob[1]);
+    if (!bytes) return json(res, 404, { error: "Walrus could not produce that blob." });
+    res.writeHead(200, {
+      // Content-addressed: the id IS the hash, so these can be cached forever.
+      "Content-Type": sniff(bytes),
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Walrus-Network": walrusConfig().network,
+    });
+    return res.end(bytes);
+  }
+
+  // Files are served back from disk first, because that is the fast path. When
+  // the volume has lost them, the memory still carries a Walrus blob id and
+  // `/blob/<id>` above serves the same bytes.
   const upload = url.pathname.match(/^\/uploads\/([\w.-]+)$/);
   if (upload) {
     try {

@@ -52,18 +52,16 @@ export const fileNs = (personId) => `ws8::file::${personId}`;
 /* Same shape the picture bank uses, and deliberately plain so it survives a
    round trip through storage and a model's hands unharmed. */
 const REF = /\[file:([\w.\-]+)\]/;
+/* The Walrus blob holding the bytes, written into the sentence beside the
+   local filename. This is the half that makes a file outlive the volume: the
+   filename is only good while the server still has the bytes, and the blob id
+   is good for as long as the storage is paid for. */
+const WREF = /\[walrus:([\w.\-]+)\]/;
 const PREFIX = /^A file the user shared on (\w+), ([^(:]+)(?:\(([^)]+)\))?: /;
 
 const when = (d) =>
   new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-/**
- * Write a file into memory.
- *
- * Durable through the outbox like every other write, so a relayer bad patch
- * delays the memory rather than losing it. Nothing waits on this: the person
- * gets their reply now and the blob lands when it lands.
- */
 /**
  * The sentence that gets stored.
  *
@@ -73,7 +71,7 @@ const when = (d) =>
  * agree: change the prefix at one end and the shelf silently empties at the
  * other, while the memories sit on Walrus perfectly intact.
  */
-export function fileSentence({ file, name, description, pages, surface, said, at = Date.now() }) {
+export function fileSentence({ file, name, description, pages, surface, said, walrusBlob, at = Date.now() }) {
   /**
    * When the text could not be extracted, that failure must not become the
    * memory: "a file the assistant could not read" matches nothing anyone would
@@ -91,39 +89,45 @@ export function fileSentence({ file, name, description, pages, surface, said, at
     `${name ? ` (${name})` : ""}: ${body}` +
     `${pages ? `\n${pages} pages.` : ""}` +
     `${said && !unread ? `\nThey said: ${said}` : ""}` +
-    `\n[file:${file}]`;
+    `\n[file:${file}]${walrusBlob ? `[walrus:${walrusBlob}]` : ""}`;
 }
 
-export function rememberFile(personId, { file, name, description, pages, surface, said, guard }) {
+/**
+ * Write a file into memory.
+ *
+ * Durable through the outbox like every other write, so a relayer bad patch
+ * delays the memory rather than losing it. Nothing waits on this: the person
+ * gets their reply now and the blob lands when it lands.
+ */
+export function rememberFile(personId, { file, name, description, pages, surface, said, walrusBlob, guard }) {
   if (!file || !description) return;
 
-  enqueueRemember(fileNs(personId), fileSentence({ file, name, description, pages, surface, said }), {
+  enqueueRemember(fileNs(personId), fileSentence({ file, name, description, pages, surface, said, walrusBlob }), {
     label: `file ${file}`,
     idempotencyKey: `file:${file}`,
     guard,
   });
 }
 
-/**
- * Everything they have sent that was not a picture.
- *
- * `available` is the honest bit. The bytes live on the server's volume, which
- * on a platform with an ephemeral filesystem does not survive a redeploy — the
- * memory does, because that is on Walrus. So the shelf can hold a file it can
- * describe and can no longer open, and says so rather than offering a link
- * that 404s.
- */
 /** One stored sentence, back into the fields it was built from. */
 export function parseFile(hit) {
   const ref = hit.text.match(REF)?.[1] ?? null;
-  const text = hit.text.replace(REF, "").trim();
+  const blob = hit.text.match(WREF)?.[1] ?? null;
+  const text = hit.text.replace(REF, "").replace(WREF, "").trim();
   const m = text.match(PREFIX);
   const rest = m ? text.slice(m[0].length) : text;
   const [head, said] = rest.split(/\nThey said: /);
+  const onDisk = !!ref && existsSync(join(UPLOADS, ref));
   return {
     file: ref,
-    url: ref ? `/uploads/${ref}` : null,
-    available: !!ref && existsSync(join(UPLOADS, ref)),
+    /* Local while the bytes are here, Walrus once they are not. The dashboard
+       asks for one url and gets whichever one currently works, so a redeploy
+       that empties the volume changes where a file is fetched from and not
+       whether it can be opened. */
+    url: onDisk ? `/uploads/${ref}` : blob ? `/blob/${blob}` : null,
+    available: onDisk || !!blob,
+    onDisk,
+    walrusBlob: blob,
     surface: m?.[1] ?? null,
     name: m?.[3]?.trim() ?? null,
     description: head.replace(/\n\d+ pages\.\s*$/, "").trim(),
@@ -134,6 +138,14 @@ export function parseFile(hit) {
   };
 }
 
+/**
+ * Everything they have sent that was not a picture.
+ *
+ * `available` used to mean "still on this server's volume", and a redeploy
+ * turned a shelf of files into a shelf of apologies. It now means the bytes
+ * can be fetched from somewhere — the volume if they are still there, Walrus
+ * if they are not — which is the whole point of putting them on Walrus.
+ */
 export async function listFiles(personId, { limit = 40 } = {}) {
   const hits = await recall(fileNs(personId), "a file the user shared", { limit, maxTokens: 6000 })
     .catch(() => []);

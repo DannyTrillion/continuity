@@ -2664,7 +2664,18 @@ function fileHtml(f, i) {
       ${f.studying ? '<span class="pill">being studied</span>' : ""}
       ${f.available
         ? `<a class="verify" href="${esc(f.url)}" target="_blank" rel="noopener">open the file ↗</a>`
-        : '<span class="pill cold">file no longer on this server</span>'}
+        : '<span class="pill cold">bytes not recoverable</span>'}
+      ${/* The bytes themselves, on Walrus. This is the pill worth having: when
+            it is here, losing the server does not lose the file, and the one
+            below it proves the sentence describing it is stored too. The
+            network comes from the server rather than being written in, because
+            memories go to mainnet and raw blobs go wherever the configured
+            publisher points — and a link to the wrong explorer is a dead one. */
+        f.walrusBlob
+        ? `<a class="verify wal" target="_blank" rel="noopener"
+            href="https://walruscan.com/${esc(data.walrusNetwork ?? "testnet")}/blob/${encodeURIComponent(f.walrusBlob)}"
+            title="The file's own bytes, stored on Walrus">${f.onDisk ? "also on Walrus" : "served from Walrus"} ↗</a>`
+        : ""}
       ${f.blobId ? `<a class="verify" target="_blank" rel="noopener"
         href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}">${esc(f.blobId.slice(0, 18))}… ↗</a>` : ""}
     </div>

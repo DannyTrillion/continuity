@@ -37,18 +37,25 @@ const FACTS = [
 const PICTURES = [{ file: "506fcf59-1842-4f11-8fd9-c7deaa955125.png", url: "/assets/shots/picture.jpg", available: true, surface: "web",
   name: "skating.png", description: "A light blue graphic with an ice skate.", said: "me ice skating", at: "2026-09-26T22:00:00Z", blobId: BLOB }];
 
-/* Two files: one whose bytes are still on the volume, one whose are not — the
-   shelf has to show the second as a memory it can still read rather than a
-   link that 404s. */
+/* Three files, one per state the shelf has to tell apart: on the volume and
+   on Walrus, off the volume but recoverable from Walrus, and gone from both.
+   The middle one is the whole point of putting bytes on Walrus — before that
+   it was indistinguishable from the last. */
 const FILES = [
-  { file: "lease.pdf", url: "/uploads/lease.pdf", available: true, surface: "telegram",
+  { file: "lease.pdf", url: "/uploads/lease.pdf", available: true, onDisk: true, surface: "telegram",
     name: "lease.pdf", pages: 9, said: "keep this somewhere safe",
+    walrusBlob: "nMxaSHx54ESfmruT6HCCOnVlGTZdmtRc3JPn-hLJ-zc",
     description: "A residential tenancy agreement for 14 Oak Road, twelve months from 1 November.",
     at: "2026-10-02T09:00:00Z", blobId: "FILEBLOB00000000000000000000000000000000000" },
-  { file: "gone.txt", url: "/uploads/gone.txt", available: false, surface: "web",
+  { file: "gone.md", url: "/blob/8uX9lijwxorrfGQeNv51sqdHc7jmRxCmNvMruQ4WIxE", available: true, onDisk: false, surface: "web",
     name: "runbook.md", pages: null, said: null,
+    walrusBlob: "8uX9lijwxorrfGQeNv51sqdHc7jmRxCmNvMruQ4WIxE",
     description: "A deployment runbook: Railway, volume at /data, deploy with railway up.",
     at: "2026-09-28T09:00:00Z", blobId: null },
+  { file: "lost.txt", url: null, available: false, onDisk: false, surface: "discord",
+    name: "scratch.txt", pages: null, said: null, walrusBlob: null,
+    description: "A scratch file written before attachments went to Walrus.",
+    at: "2026-09-20T09:00:00Z", blobId: null },
 ];
 const CONVOS = Array.from({ length: 7 }, (_, i) => ({ id: "c" + i, title: ["Teach me recursion", "Plan my Lisbon trip", "Why does my build fail", "Name my side project", "Interview prep", "What do you know about me?", "Read this link"][i],
   surface: ["web", "telegram", "discord"][i % 3], startedAt: "2026-09-27T10:00:00Z", endedAt: "2026-09-27T10:0" + i + ":00Z", turns: 2, live: false, blobId: BLOB }));
@@ -327,8 +334,18 @@ try {
     check("the name is still there, with its kind", /lease\.pdf/.test(rows[0]?.head ?? ""), rows[0]?.head);
     check("and the page count and which app it came from", /9 pages/.test(rows[0]?.foot ?? "") && /telegram/i.test(rows[0]?.foot ?? ""), rows[0]?.foot);
     check("a file still on disk offers to open", (await count(page, '.filerow a[href^="/uploads/"]')) === 1);
-    check("and one whose bytes are gone says so instead",
-      /no longer on this server/.test(rows[1]?.foot ?? ""), rows[1]?.foot);
+    /* The state that only exists because the bytes go to Walrus: gone from
+       this server, still openable. Before that this row and the next one were
+       the same row, and both of them were an apology. */
+    check("one off the volume is served from Walrus instead",
+      /served from Walrus/.test(rows[1]?.foot ?? "") && (await count(page, '.filerow a[href^="/blob/"]')) === 1,
+      rows[1]?.foot);
+    check("and the Walrus link points at the explorer for the right network",
+      await page.$eval('.filerow a.wal', (a) => /walruscan\.com\/(main|test)net\/blob\//.test(a.href)));
+    check("a file on both says so without crying wolf",
+      /also on Walrus/.test(rows[0]?.foot ?? ""), rows[0]?.foot);
+    check("and one that reached neither is honestly marked lost",
+      /not recoverable/.test(rows[2]?.foot ?? ""), rows[2]?.foot);
     await page.goBack(); await sleep(600);
 
     await page.type("#q", "node"); await sleep(400);
