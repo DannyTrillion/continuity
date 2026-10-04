@@ -208,6 +208,18 @@
   .shot{display:block;margin-top:11px;border-radius:12px;overflow:hidden;border:1px solid var(--edge);
     transition:border-color .22s,transform .22s}
   .shot:hover{border-color:var(--live);transform:translateY(-1px)}
+  /* Not everything attached has a thumbnail. A document gets its name and its
+     kind instead, which is what somebody needs to recognise it again. */
+  /* Its own line, sized to its own content. inline-flex kept it beside the
+     words, so "see this file" and the file ran together as one sentence. */
+  .filechip{display:flex;width:fit-content;align-items:center;gap:9px;margin-top:10px;max-width:100%;
+    padding:8px 12px 8px 9px;border-radius:10px;border:1px solid var(--edge);
+    background:rgba(0,0,0,.26);text-decoration:none;transition:border-color .2s ease}
+  .filechip:hover{border-color:var(--live)}
+  .filechip .ext{flex:none;padding:3px 7px;border-radius:5px;background:rgba(127,227,212,.15);
+    color:var(--wal,#7FE3D4);font:500 9.5px ui-monospace,Menlo,monospace;letter-spacing:.08em}
+  .filechip .nm{font-size:12.5px;color:var(--soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .me .filechip{background:rgba(0,0,0,.22);border-color:rgba(255,255,255,.18)}
   .shot img{display:block;width:100%;height:auto}
   .bubble p{margin:0 0 7px}
   .bubble p:last-child{margin-bottom:0}
@@ -941,9 +953,38 @@ function recordTurn(you, bot, { attached = null, picture = null } = {}) {
   session.turns.push({ you, bot, attached, picture });
   saveSession();
 }
-const shotHtml = (f, alt) => f?.file
-  ? `<a class="shot" href="/uploads/${encodeURIComponent(f.file)}" target="_blank" rel="noopener"><img src="/uploads/${encodeURIComponent(f.file)}" alt="${esc(alt ?? "")}" loading="lazy"></a>`
-  : "";
+/**
+ * What somebody attached, drawn under what they said.
+ *
+ * It only ever drew an `<img>`. A photo looked right and everything else did
+ * not exist: send a PDF and your own message showed the words alone, while the
+ * reply underneath discussed thirty pages of it — the bot could see something
+ * the chat never showed you sending. Worse in a reopened conversation, where
+ * the same code pointed an `<img>` at a PDF and rendered a broken image.
+ *
+ * So: a picture gets a picture, and everything else gets its name and its
+ * kind, which is what a person needs to recognise it again.
+ */
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
+const isPicture = (a) =>
+  /^image\//.test(a?.type ?? "") || IMAGE_EXT.test(a?.name ?? "") || IMAGE_EXT.test(a?.file ?? "");
+
+function attachedHtml(a, alt) {
+  if (!a) return "";
+  const href = a.url ?? (a.file ? `/uploads/${encodeURIComponent(a.file)}` : null);
+  if (!href) return "";
+  if (isPicture(a)) {
+    return `<a class="shot" href="${esc(href)}" target="_blank" rel="noopener"><img src="${esc(href)}" alt="${esc(alt ?? a.name ?? "")}" loading="lazy"></a>`;
+  }
+  const name = a.name ?? a.file ?? "file";
+  const ext = (name.split(".").pop() ?? "").toUpperCase().slice(0, 4);
+  return `<a class="filechip" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(name)}">
+      <span class="ext">${esc(/^[A-Z0-9]{2,4}$/.test(ext) ? ext : "FILE")}</span>
+      <span class="nm">${esc(name)}</span>
+    </a>`;
+}
+/* The old name, kept because the restore path reads better with it. */
+const shotHtml = (f, alt) => attachedHtml(f, alt);
 /** Draw saved turns: the picture they sent under theirs, the one it found under its own. */
 function renderTurns(turns) {
   for (const t of turns) {
@@ -1103,10 +1144,9 @@ async function ask(text, { silent = false } = {}) {
   const sending = pending;
   if (!silent) {
     const mine = bubble(turn("me"), esc(text));
-    if (sending?.url && /^image\//.test(sending.type ?? "")) {
-      mine.insertAdjacentHTML("beforeend",
-        `<a class="shot" href="${sending.url}" target="_blank" rel="noopener"><img src="${sending.url}" alt="${esc(sending.name ?? "")}"></a>`);
-    }
+    // Whatever it was, show that it went. Images used to be the only kind
+    // that appeared, so sending a PDF looked like sending nothing.
+    if (sending) mine.insertAdjacentHTML("beforeend", attachedHtml(sending));
   }
   pending = null;
   $("attached").hidden = true;

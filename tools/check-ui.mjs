@@ -658,6 +658,55 @@ try {
       await up.page.close();
     }
 
+    /* Danny, with a PDF attached: "it says it sees the file but the chat UI
+       doesn't show it above my message". It did not. The renderer only ever
+       emitted an <img>, so a photo looked right and a document was invisible
+       — your own message showed the words alone while the reply underneath
+       discussed thirty pages of it. In a reopened conversation the same code
+       pointed an <img> at a PDF and drew a broken image. */
+    {
+      const at = await open("/chat");
+      await sleep(900);
+      const drawn = await at.page.evaluate(() => {
+        const one = (a) => {
+          const d = document.createElement("div");
+          d.innerHTML = window.attachedHtml(a);
+          const el = d.firstElementChild;
+          return {
+            kind: el?.className ?? null,
+            img: !!el?.querySelector("img"),
+            ext: el?.querySelector(".ext")?.textContent ?? null,
+            name: el?.querySelector(".nm")?.textContent ?? null,
+            href: el?.getAttribute("href") ?? null,
+          };
+        };
+        return {
+          pdf: one({ url: "/uploads/a.pdf", name: "notes.pdf", type: "application/pdf" }),
+          md: one({ url: "/uploads/b.md", name: "runbook.md", type: "text/markdown" }),
+          png: one({ url: "/uploads/c.png", name: "shot.png", type: "image/png" }),
+          // A reopened conversation has a filename and no mime type at all.
+          restoredPdf: one({ file: "d8-6.pdf", name: "lease.pdf" }),
+          restoredPng: one({ file: "e4-2.png", name: "skating.png" }),
+          nothing: window.attachedHtml(null),
+        };
+      });
+
+      check("a document is shown, not silently dropped", drawn.pdf.kind === "filechip", drawn.pdf);
+      check("by name and kind, since it has no thumbnail",
+        drawn.pdf.ext === "PDF" && drawn.pdf.name === "notes.pdf", drawn.pdf);
+      check("and it never pretends to be an image", !drawn.pdf.img && !drawn.md.img);
+      check("a picture still gets a picture", drawn.png.kind === "shot" && drawn.png.img, drawn.png);
+      /* The restore path has a filename and nothing else, which is where the
+         broken image came from. */
+      check("a reopened conversation reads the kind off the filename",
+        drawn.restoredPdf.kind === "filechip" && drawn.restoredPng.kind === "shot",
+        { pdf: drawn.restoredPdf.kind, png: drawn.restoredPng.kind });
+      check("and links at the file either way",
+        drawn.restoredPdf.href === "/uploads/d8-6.pdf", drawn.restoredPdf.href);
+      check("nothing attached draws nothing", drawn.nothing === "");
+      await at.page.close();
+    }
+
     check("a signed-in wallet shows in the header", chip.shown, chip.text);
     check("shortened the way a wallet shortens it", /^0x\w{4}…\w{4}$/.test(chip.text), chip.text);
     await w.page.close();
