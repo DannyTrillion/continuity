@@ -8,7 +8,7 @@
 
 import { noteSent, takeSent } from "../core/sent.mjs";
 import { openSignIn, answerSignIn, denySignIn } from "../core/signin.mjs";
-import { resolvePerson } from "../core/identity.mjs";
+import { resolvePerson, rememberWho } from "../core/identity.mjs";
 import { respond, lookup } from "../core/session.mjs";
 import { storeAttachment } from "../core/images.mjs";
 import { ACTIONS, MENU_COMMANDS, GROUP_SAFE } from "../core/commands.mjs";
@@ -518,6 +518,17 @@ export async function startTelegram({ token }) {
                   personId: me?.personId,
                   surfaceUserId: String(tap.from.id),
                 });
+                /* The browser has just inherited this person. Whatever
+                   Telegram already knows about them goes in with it, so the
+                   web does not greet somebody who has just proved who they
+                   are by asking what to call them. */
+                if (out.ok && me?.personId) {
+                  rememberWho(me.personId, {
+                    firstName: tap.from.first_name,
+                    handle: tap.from.username ?? null,
+                    surface: "Telegram",
+                  });
+                }
                 text = out.ok
                   ? "✅ *Confirmed.* Go back to your browser — it signs you in, and everything I know about you comes with it."
                   : out.reason === "wrong"

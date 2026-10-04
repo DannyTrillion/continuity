@@ -456,7 +456,8 @@
   .tgbtn:hover{transform:scale(1.02);filter:brightness(1.07)}
   .tgbtn:disabled{opacity:.55;cursor:default;transform:none}
   #sinum{font:500 34px var(--mono);letter-spacing:.1em;text-align:center}
-  #siwait[hidden],#codeway[hidden],#siorline[hidden]{display:none}
+  #siwait[hidden],#codeway[hidden],#siorline[hidden],#siwrap[hidden]{display:none}
+  .qc[hidden],.white[hidden]{display:none}
   .nudge{display:block;margin:12px 0 0;padding:11px 13px;border-radius:var(--r-md);cursor:pointer;
     border:1px solid rgba(90,169,255,.3);background:var(--live-ghost);color:var(--live);
     font:400 12.5px/1.5 var(--sans);text-align:left;transition:.22s}
@@ -1885,9 +1886,19 @@ let botUser = "walrusmemory_bot";
 $("linkbtn").addEventListener("click", async () => {
   $("scrim").classList.add("on");
   const pending = ["telegram", "discord"].filter((c) => !connectedNow.includes(c));
-  $("linkintro").textContent = pending.length
+  const needsTelegram = pending.includes("telegram");
+  $("linktitle").textContent = pending.length
+    ? `Use me on ${pending.map((c) => SURFACE_LABEL[c]).join(" and ")}`
+    : "You're connected everywhere";
+  $("linkintro").textContent = needsTelegram
     ? "One tap in Telegram and this browser becomes the same person — everything either of us knows comes with it."
-    : "You're already connected everywhere. Use this code to add another account if you want.";
+    : pending.length
+      ? "Send this code to Discord and I'll know it's still you — everything I remember comes with you."
+      : "Telegram, Discord and this browser are already the same person to me. Use this code only if you want to add another account.";
+  // The one-tap path is Telegram's. Offering it to somebody who has already
+  // connected Telegram is offering to do something that is done.
+  $("siwrap").hidden = !needsTelegram;
+  $("siorline").hidden = !needsTelegram;
   resetSignIn();
   $("codeval").firstChild.nodeValue = "······";
   $("qr").classList.remove("on");
@@ -2402,6 +2413,29 @@ function paintSurfaces(connected, name) {
   $("railsub").textContent = others.length
     ? `${others.map((c) => SURFACE_LABEL[c]).join(" and ")} ${others.length > 1 ? "see" : "sees"} these too.`
     : "These follow you to Telegram and Discord.";
+
+  /* Stop asking for what has already been given.
+     Every one of these used to read "Connect another app" and "Link Telegram
+     or Discord" forever, including to somebody who had connected everything —
+     so the product's one real achievement, that all three are the same person,
+     was displayed as an outstanding chore. Now the words name what is actually
+     missing, and when nothing is, they go away. */
+  const missing = ["telegram", "discord"].filter((c) => !connected.includes(c));
+  const linkbtn = $("linkbtn");
+  const quick = document.querySelector("[data-link]");
+  if (missing.length === 0) {
+    linkbtn.hidden = true;
+    if (quick) quick.hidden = true;
+  } else {
+    linkbtn.hidden = false;
+    linkbtn.textContent = `Connect ${missing.map((c) => SURFACE_LABEL[c]).join(" or ")}`;
+    if (quick) {
+      quick.hidden = false;
+      quick.textContent = missing.length === 1
+        ? `Use me on ${SURFACE_LABEL[missing[0]]}`
+        : "Use me on Telegram or Discord";
+    }
+  }
 
   const all = ["web", "telegram", "discord"].every((c) => connected.includes(c));
   let banner = $("allset");

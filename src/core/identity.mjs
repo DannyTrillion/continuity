@@ -189,6 +189,38 @@ export async function redeemLinkCode(surface, surfaceUserId, rawCode) {
  * every memory written under them is still reachable; nothing is rewritten and
  * nothing on Walrus is touched, because nothing on Walrus can be.
  */
+/**
+ * Keep what the app you just connected already knows about you.
+ *
+ * Connecting Telegram hands over a name and a handle the person has already
+ * typed once, somewhere else. Not keeping them means the web greets somebody
+ * who has just proved who they are with "what should I call you?", which is
+ * the exact question this product exists not to ask twice.
+ *
+ * Written verbatim into the person's own namespace rather than through the
+ * extractor, because the extractor rewrites what it is given and a name is the
+ * one fact that must come back as it went in.
+ *
+ * The idempotency key carries the name itself. Keying it on the person alone
+ * would be a one-way door: MemWal returns 409 forever for a key reused with
+ * different content, so somebody changing their Telegram name would silently
+ * stop being nameable (issue #1057, filed from this project).
+ */
+export function rememberWho(personId, { firstName, handle, surface }) {
+  if (!personId || !/^[\p{L}][\p{L}\p{M}' .-]{0,40}$/u.test(String(firstName ?? "").trim())) return false;
+  const name = String(firstName).trim();
+
+  const text = handle
+    ? `User's name is ${name}. They are @${handle} on ${surface}.`
+    : `User's name is ${name}, from their ${surface} account.`;
+
+  enqueueRemember(personNs(personId), text, {
+    label: `name from ${surface}`,
+    idempotencyKey: `who:${personId}:${surface}:${name.toLowerCase().replace(/\s+/g, "-")}`,
+  });
+  return true;
+}
+
 export async function adoptPerson(surface, surfaceUserId, personId, known = null) {
   const current = known ?? (await resolvePerson(surface, surfaceUserId));
   if (current.personId === personId) return { ...toPerson({ personId, mergedFrom: current.mergedFrom }), alreadyLinked: true };

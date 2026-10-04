@@ -76,12 +76,15 @@ const SSE_LINK = [
 ].map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
 
 let receipts = [];
+/* Which apps this person has joined up. A test overrides it to check that the
+   product stops asking for what it already has. */
+let CONNECTED = ["web", "telegram", "discord"];
 let lastSaid = null;                 // what the page last sent to be answered
 function answer(url, method, body) {
   const p = url.pathname;
   const json = (o, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(o) });
-  if (p === "/api/memory") return json({ personId: "p1", linked: true, connected: ["web", "telegram", "discord"], name: "Danny", facts: FACTS.map(({ text, at, blobId }) => ({ text, at, blobId })) });
-  if (p === "/api/memory/full") return json({ personId: "p1", name: "Danny", connected: ["web", "telegram", "discord"], facts: FACTS, pictures: PICTURES, files: FILES,
+  if (p === "/api/memory") return json({ personId: "p1", linked: true, connected: CONNECTED, name: "Danny", facts: FACTS.map(({ text, at, blobId }) => ({ text, at, blobId })) });
+  if (p === "/api/memory/full") return json({ personId: "p1", name: "Danny", connected: CONNECTED, facts: FACTS, pictures: PICTURES, files: FILES,
     stats: { total: FACTS.length, collapsed: 1, suppressed: 0, namespaces: 3, crossSurface: 3, neverRead: 1 } });
   if (p === "/api/conversations") return json({ conversations: CONVOS });
   if (p === "/api/conversations/open") return json({ conversation: { id: "c0", title: "Teach me recursion", turns: [{ you: "Teach me recursion", bot: "Start with a **base case**." }] }, restored: 2 });
@@ -353,6 +356,34 @@ try {
     check("no errors", errors.length === 0, errors.slice(0, 2));
     await page.close(); }
 
+  /* ── what it asks for when something IS missing ── */
+  section("asking only for what is missing");
+  {
+    CONNECTED = ["web", "telegram"];           // Discord not joined up
+    const { page } = await open("/chat");
+    await sleep(900);
+    const one = await page.evaluate(() => ({
+      button: document.getElementById("linkbtn")?.textContent.trim(),
+      quick: document.querySelector("[data-link]")?.textContent.trim(),
+      hidden: document.getElementById("linkbtn")?.hidden,
+    }));
+    check("it names the one app that is missing", /Discord/.test(one.button ?? "") && !/Telegram/.test(one.button ?? ""), one.button);
+    check("and the quick chip says it in plain words", /Discord/.test(one.quick ?? ""), one.quick);
+    check("and is still shown, because there is something to do", one.hidden === false);
+
+    /* Telegram already joined up, so the one-tap sign-in has nothing to do.
+       Offering it would be offering to do something that is done. */
+    await page.click("#linkbtn"); await sleep(500);
+    const panel = await page.evaluate(() => {
+      const vis = (el) => !!el && !el.hidden && getComputedStyle(el).display !== "none";
+      return { signin: vis(document.getElementById("siwrap")), title: document.getElementById("linktitle")?.textContent.trim() };
+    });
+    check("the Telegram one-tap is not offered to somebody who has Telegram", !panel.signin, panel);
+    check("and the panel is titled for what is left", /Discord/.test(panel.title ?? ""), panel.title);
+    await page.close();
+    CONNECTED = ["web", "telegram", "discord"];
+  }
+
   /* ── history ── */
   section("history");
   { const { page, errors } = await open("/history");
@@ -513,6 +544,9 @@ try {
        `dataset.link` was the empty string and the handler's truthiness test
        never fired: the button was wired, and silently did nothing on every
        click for as long as it existed. Checked by pressing each one. */
+    /* Something has to be left to connect, or the control correctly isn't
+       there — which is the whole point of the section further down. */
+    CONNECTED = ["web", "telegram"];
     const qc = await open("/chat", { store: { "ws8-user": "qc-check" } });
     await sleep(1400);
     const controls = await qc.page.$$eval(".qc", (bs) =>
@@ -542,6 +576,7 @@ try {
       check("and the panel carries a real code", /^[A-Z0-9]{6}$/.test(panel.code), panel.code || "(none)");
     }
     await qc.page.close();
+    CONNECTED = ["web", "telegram", "discord"];
 
     /* Signing in with a wallet and seeing the page look exactly as it did
        before is indistinguishable from it having failed, which was most of why
@@ -555,6 +590,28 @@ try {
       const el = document.getElementById("walletchip");
       return { shown: !!(el && !el.hidden), text: document.getElementById("walletchiptext")?.textContent ?? "" };
     });
+    /* Danny: "when the apps are connected it still keeps on showing connect".
+       It did. "Connect another app" and "Link Telegram or Discord" were
+       written into the page and never consulted what was already connected,
+       so the one thing this product achieves — three apps, one person — was
+       displayed to the people who had achieved it as an outstanding chore. */
+    {
+      const all = await open("/chat");
+      await sleep(900);
+      const shown = await all.page.evaluate(() => {
+        const vis = (el) => !!el && !el.hidden && getComputedStyle(el).display !== "none";
+        return {
+          button: vis(document.getElementById("linkbtn")),
+          quick: vis(document.querySelector("[data-link]")),
+          allset: !!document.getElementById("allset"),
+        };
+      });
+      check("with all three connected it stops asking for more",
+        !shown.button && !shown.quick, shown);
+      check("and says so once instead", shown.allset);
+      await all.page.close();
+    }
+
     check("a signed-in wallet shows in the header", chip.shown, chip.text);
     check("shortened the way a wallet shortens it", /^0x\w{4}…\w{4}$/.test(chip.text), chip.text);
     await w.page.close();
