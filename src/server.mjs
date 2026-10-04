@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 
 import { respond } from "./core/session.mjs";
 import { rememberLastGood } from "./core/agent.mjs";
-import { studyShelf } from "./core/study.mjs";
+import { studyShelf, listMaterials } from "./core/study.mjs";
 import { modeFor, stackItems, planItems, awayInWords } from "./core/modes.mjs";
 import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, NS_INDEX } from "./core/memory.mjs";
 import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor } from "./core/identity.mjs";
@@ -22,6 +22,7 @@ import { issueMemoryKey, redeemMemoryKey, issueChallenge, peekChallenge, spendCh
 import { verifyPersonalMessageSignature } from "@mysten/sui/verify";
 import { snapshot } from "./core/metrics.mjs";
 import { storeAttachment, listImages, UPLOADS } from "./core/images.mjs";
+import { listFiles } from "./core/files.mjs";
 import { saveStep, savePicture, finish as finishOnboarding, receiptsFor, stateFor } from "./core/onboard.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile as writeFileAsync } from "node:fs/promises";
@@ -449,7 +450,7 @@ const server = createServer(async (req, res) => {
     if (!userId) return json(res, 400, { error: "userId is required" });
     try {
       const who = await resolvePerson("web", userId);
-      const [sets, suppressed, connected, pictures] = await Promise.all([
+      const [sets, suppressed, connected, pictures, sent, materials] = await Promise.all([
         Promise.all(who.namespaces.map((ns) =>
           recall(ns, "everything known about this person", { limit: 12, maxTokens: 1800 }))),
         suppressionsFor(who.personId).catch(() => new Set()),
@@ -457,7 +458,27 @@ const server = createServer(async (req, res) => {
         // Pictures are memories too, kept in their own namespace; the
         // dashboard shows them as a collection beside the written ones.
         listImages(who.personId).catch(() => []),
+        // So are files, in theirs.
+        listFiles(who.personId).catch(() => []),
+        /* A file uploaded in Tutor mode lives in the study namespace, because
+           it is kept to be quizzed from rather than merely recognised. Writing
+           it to both would cost a second round trip against a sixty-a-minute
+           budget, so the shelf unions the two here instead: stored once, shown
+           wherever someone would think to look for it. */
+        listMaterials(who.personId).catch(() => []),
       ]);
+
+      const seenFile = new Set(sent.map((f) => f.file));
+      const files = [
+        ...sent,
+        ...materials
+          .filter((m) => m.file && !seenFile.has(m.file))
+          .map((m) => ({
+            file: m.file, url: `/uploads/${m.file}`, available: true,
+            surface: null, name: m.name, description: m.summary, pages: null,
+            said: null, at: m.at, blobId: m.blobId, studying: true,
+          })),
+      ].sort((a, b) => Date.parse(b.at ?? 0) - Date.parse(a.at ?? 0));
 
       const live = withoutSuppressed(sets.flat(), suppressed);
       const collapsed = dedupe(live);
@@ -478,6 +499,7 @@ const server = createServer(async (req, res) => {
         connected,
         facts,
         pictures,
+        files,
         stats: {
           total: facts.length,
           collapsed: live.length - collapsed.length,

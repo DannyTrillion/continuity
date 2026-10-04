@@ -14,6 +14,7 @@
  */
 import { readFileSync } from "node:fs";
 import { readDocument, canRead } from "../src/core/documents.mjs";
+import { fileNs, fileSentence, parseFile } from "../src/core/files.mjs";
 
 let failed = 0, passed = 0;
 const check = (name, ok, detail = "") => {
@@ -76,6 +77,83 @@ If writes stall, check the relayer rate limit before anything else.
   check("and quotes the opening, so the memory is worth having", /It begins: "/.test(long.description));
   check("the whole thing stays a sensible size for a memory", long.description.length < 2000, long.description.length + " chars");
 }
+
+section("a file is kept as a file, not as a photograph of one");
+
+/* Every attachment that was not a study material used to be written by
+   `rememberImage`, so a PDF of someone's lease was stored as "a picture the
+   user shared" and filed under Photos. These checks are about the two halves
+   of the fix: the agent routes by kind, and what the file shelf writes is what
+   the file shelf can read back.
+
+   The round trip matters more than it looks. Both ends are regexes over a
+   sentence, written in two different files, and nothing but a test makes them
+   agree — a prefix changed at one end silently empties the shelf at the other,
+   while the memories sit on Walrus perfectly intact. */
+const agent = readFileSync("src/core/agent.mjs", "utf8");
+check("a document no longer goes to the picture bank",
+  /attachment\.kind !== "image"[\s\S]{0,400}rememberFile\(/.test(agent));
+check("a photo still does",
+  /else \{\s*rememberImage\(/.test(agent));
+check("and a tutor's material still goes to the things being studied",
+  /mode === "tutor" && attachment\.kind === "document"[\s\S]{0,200}rememberMaterial\(/.test(agent));
+
+check("files get a namespace of their own", fileNs("p1") === "ws8::file::p1", fileNs("p1"));
+
+/* The round trip, with no relayer in the way: build the sentence that gets
+   stored, then read it back the way the shelf does. The two regexes live at
+   opposite ends of files.mjs and only this keeps them agreeing. */
+{
+  const written = fileSentence({
+    file: "abc-123.pdf",
+    name: "lease.pdf",
+    description: "A residential tenancy agreement for 14 Oak Road, twelve months from 1 November, rent 1450 a month.",
+    pages: 9,
+    surface: "telegram",
+    said: "keep this somewhere safe",
+    at: Date.parse("2026-10-04T10:00:00Z"),
+  });
+  const f = parseFile({ text: written, created_at: "2026-10-04T10:00:00Z", blob_id: "BLOB1" });
+
+  check("the file reference survives the round trip", f.file === "abc-123.pdf", f.file);
+  check("so does which app it came from", f.surface === "telegram", f.surface);
+  check("the name is pulled back out of the sentence", f.name === "lease.pdf", f.name);
+  check("the summary is what the file said, not what it was called",
+    /tenancy agreement/.test(f.description) && !/lease\.pdf/.test(f.description), f.description.slice(0, 64));
+  check("the page count comes back as a number", f.pages === 9, f.pages);
+  check("what they said while sending it is kept apart from the summary",
+    f.said === "keep this somewhere safe", f.said);
+  check("the blob id rides along, so the shelf can prove it", f.blobId === "BLOB1", f.blobId);
+  check("a file whose bytes are gone is marked unavailable, not linked",
+    f.available === false, f.available);
+
+  // A file with no page count and nothing said is the common case, and the
+  // optional halves of the sentence must not leak into the summary.
+  const bare = parseFile({ text: fileSentence({
+    file: "n.txt", name: "notes.txt", description: "Shopping list: oats, tahini, lemons.", surface: "web",
+  }) });
+  check("the plain case keeps its summary clean",
+    bare.description === "Shopping list: oats, tahini, lemons." && bare.pages === null && bare.said === null,
+    JSON.stringify({ d: bare.description, p: bare.pages, s: bare.said }));
+}
+
+/* The dashboard has to actually offer the shelf, or the memories are written
+   and never shown — which is the state this started in. */
+const dash = readFileSync("src/web/memory.html", "utf8");
+check("the dashboard has a Files shelf", /id: "files", label: "Files"/.test(dash));
+check("and draws a file row rather than a fact row", /function fileHtml\(/.test(dash));
+check("fed by what the API returns", /b\.set\("files", data\.files/.test(dash));
+const srv = readFileSync("src/server.mjs", "utf8");
+check("which the API actually sends", /\n\s*files,\n/.test(srv));
+check("and which unions tutor materials in, so nothing hides",
+  /listMaterials\(who\.personId\)/.test(srv));
+
+/* Pasting a file was the gesture that did nothing at all. */
+const chat = readFileSync("src/web/chat.html", "utf8");
+check("pasting a file attaches it", /addEventListener\("paste"/.test(chat) && /clipboardData/.test(chat));
+check("dropping one does too", /addEventListener\("drop"/.test(chat));
+check("and an ordinary text paste is left alone",
+  /if \(!items\.length\) return;/.test(chat));
 
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);
 process.exit(failed ? 1 : 0);

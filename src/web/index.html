@@ -537,7 +537,11 @@
        this browser has been here before. */
     const user = (() => { try { return localStorage.getItem("ws8-user"); } catch { return null; } })();
     if (!user) {
-      setTimeout(() => say("I remember the people I talk to &mdash; here, on Telegram and on Discord."), 2400);
+      /* Short enough to actually fit. The bubble is one nowrap line clipped at
+         26ch, so the sentence that used to be here arrived as "I remember the
+         people I tal…" — a mascot whose whole job is to prove it remembers,
+         visibly losing the end of its own sentence. */
+      setTimeout(() => say("I&rsquo;ll remember you."), 2400);
       return;
     }
 
@@ -549,8 +553,11 @@
     fetch("/api/memory?userId=" + encodeURIComponent(user))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        const name = d?.name ? String(d.name).split(/\s+/)[0] : null;
-        say(name ? `Welcome back, <b>${name}</b>.` : "Welcome back.");
+        /* First name only, and clipped: "Welcome back, " is already 14 of the
+           26 characters the bubble can show, so a long name would take the
+           greeting out with it. */
+        const first = d?.name ? String(d.name).split(/\s+/)[0].slice(0, 11) : null;
+        say(first ? `Welcome back, <b>${first}</b>.` : "Welcome back.");
       })
       .catch(() => {});
   })();

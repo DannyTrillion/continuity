@@ -17,6 +17,7 @@ import { chat, DEFAULT_MODEL } from "./llm.mjs";
 import { isOptedOut } from "./identity.mjs";
 import { asksForPicture, findImages, loadImage, rememberImage } from "./images.mjs";
 import { rememberMaterial } from "./study.mjs";
+import { rememberFile } from "./files.mjs";
 import { resolveDates, todayLine } from "./time.mjs";
 import { MODES, modeFor, suggestMode } from "./modes.mjs";
 import { firstTurnToday, pickFollowUps, markAsked } from "./followups.mjs";
@@ -636,6 +637,21 @@ export async function handleTurn({
           description: attachment.description,
           pages: attachment.pages,
           surface,
+          guard,
+        });
+      } else if (attachment.kind !== "image") {
+        /* Anything that is not a photo is a file, and used to be written as
+           one anyway: a PDF of someone's lease went to the picture bank as "a
+           picture the user shared" and was filed under Photos, findable only
+           by whoever thought to look for their contract among their holiday
+           snaps. A document is not a picture of a document. */
+        rememberFile(personId, {
+          file: attachment.file,
+          name: attachment.name,
+          description: attachment.description,
+          pages: attachment.pages,
+          surface,
+          said: message,
           guard,
         });
       } else {

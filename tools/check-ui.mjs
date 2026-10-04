@@ -36,6 +36,20 @@ const FACTS = [
 ];
 const PICTURES = [{ file: "506fcf59-1842-4f11-8fd9-c7deaa955125.png", url: "/assets/shots/picture.jpg", available: true, surface: "web",
   name: "skating.png", description: "A light blue graphic with an ice skate.", said: "me ice skating", at: "2026-09-26T22:00:00Z", blobId: BLOB }];
+
+/* Two files: one whose bytes are still on the volume, one whose are not — the
+   shelf has to show the second as a memory it can still read rather than a
+   link that 404s. */
+const FILES = [
+  { file: "lease.pdf", url: "/uploads/lease.pdf", available: true, surface: "telegram",
+    name: "lease.pdf", pages: 9, said: "keep this somewhere safe",
+    description: "A residential tenancy agreement for 14 Oak Road, twelve months from 1 November.",
+    at: "2026-10-02T09:00:00Z", blobId: "FILEBLOB00000000000000000000000000000000000" },
+  { file: "gone.txt", url: "/uploads/gone.txt", available: false, surface: "web",
+    name: "runbook.md", pages: null, said: null,
+    description: "A deployment runbook: Railway, volume at /data, deploy with railway up.",
+    at: "2026-09-28T09:00:00Z", blobId: null },
+];
 const CONVOS = Array.from({ length: 7 }, (_, i) => ({ id: "c" + i, title: ["Teach me recursion", "Plan my Lisbon trip", "Why does my build fail", "Name my side project", "Interview prep", "What do you know about me?", "Read this link"][i],
   surface: ["web", "telegram", "discord"][i % 3], startedAt: "2026-09-27T10:00:00Z", endedAt: "2026-09-27T10:0" + i + ":00Z", turns: 2, live: false, blobId: BLOB }));
 const SSE = [
@@ -60,7 +74,7 @@ function answer(url, method, body) {
   const p = url.pathname;
   const json = (o, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(o) });
   if (p === "/api/memory") return json({ personId: "p1", linked: true, connected: ["web", "telegram", "discord"], name: "Danny", facts: FACTS.map(({ text, at, blobId }) => ({ text, at, blobId })) });
-  if (p === "/api/memory/full") return json({ personId: "p1", name: "Danny", connected: ["web", "telegram", "discord"], facts: FACTS, pictures: PICTURES,
+  if (p === "/api/memory/full") return json({ personId: "p1", name: "Danny", connected: ["web", "telegram", "discord"], facts: FACTS, pictures: PICTURES, files: FILES,
     stats: { total: FACTS.length, collapsed: 1, suppressed: 0, namespaces: 3, crossSurface: 3, neverRead: 1 } });
   if (p === "/api/conversations") return json({ conversations: CONVOS });
   if (p === "/api/conversations/open") return json({ conversation: { id: "c0", title: "Teach me recursion", turns: [{ you: "Teach me recursion", bot: "Start with a **base case**." }] }, restored: 2 });
@@ -294,6 +308,29 @@ try {
     check("a photo opens in the lightbox", await page.$eval("#lb", (e) => e.classList.contains("on")));
     await page.keyboard.press("Escape"); await sleep(300);
     check("Escape closes it", !(await page.$eval("#lb", (e) => e.classList.contains("on"))));
+
+    /* Files used to be written into the picture bank, so a PDF of someone's
+       lease sat under Photos and the shelf people would look on did not
+       exist. It does now, and it has to show what is really kept: the summary
+       (which is the part on Walrus) rather than the filename, and an honest
+       state for a file whose bytes a redeploy has taken. */
+    await page.goBack(); await sleep(600);
+    await page.click('.cover[data-col="files"]'); await sleep(700);
+    const rows = await page.$$eval(".filerow", (e) => e.map((r) => ({
+      head: r.querySelector("b")?.textContent ?? "",
+      body: r.querySelector("p")?.textContent ?? "",
+      foot: r.querySelector(".memofoot")?.textContent.replace(/\s+/g, " ").trim() ?? "",
+    })));
+    check("the files shelf opens into the files", rows.length === FILES.length, rows.length);
+    check("each one leads with what the file said, not what it was called",
+      /tenancy agreement/.test(rows[0]?.body ?? ""), rows[0]?.body?.slice(0, 50));
+    check("the name is still there, with its kind", /lease\.pdf/.test(rows[0]?.head ?? ""), rows[0]?.head);
+    check("and the page count and which app it came from", /9 pages/.test(rows[0]?.foot ?? "") && /telegram/i.test(rows[0]?.foot ?? ""), rows[0]?.foot);
+    check("a file still on disk offers to open", (await count(page, '.filerow a[href^="/uploads/"]')) === 1);
+    check("and one whose bytes are gone says so instead",
+      /no longer on this server/.test(rows[1]?.foot ?? ""), rows[1]?.foot);
+    await page.goBack(); await sleep(600);
+
     await page.type("#q", "node"); await sleep(400);
     check("search cuts across shelves", (await count(page, ".memo")) === 1, await count(page, ".memo"));
     check("no errors", errors.length === 0, errors.slice(0, 2));

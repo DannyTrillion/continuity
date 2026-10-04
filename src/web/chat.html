@@ -55,6 +55,16 @@
     animation:arrive .5s cubic-bezier(.22,.7,.28,1) both}
   /* Picks up where the landing page's fade-out left off. */
   @keyframes arrive{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  /* Dragging a file over the page. An outline rather than an overlay: an
+     overlay would cover the conversation you are dropping the file into, and
+     the question at that moment is only "will this take it", not "where". */
+  .app.dropping::after{
+    content:"Drop it anywhere";position:fixed;inset:10px;z-index:30;pointer-events:none;
+    border:2px dashed rgba(90,169,255,.55);border-radius:var(--r);
+    background:rgba(90,169,255,.05);
+    display:flex;align-items:flex-end;justify-content:center;padding-bottom:26px;
+    font:500 13px var(--sans);color:var(--live);
+  }
   /* The bar deliberately has no entry animation. It is named as persistent
      furniture for the view transition — held still while the page changes
      underneath — and an element cannot both hold still and animate itself in.
@@ -1172,9 +1182,15 @@ async function prepare(file) {
   }
 }
 
-$("file").addEventListener("change", async (e) => {
-  const file = e.target.files?.[0];
-  e.target.value = "";
+/**
+ * One path in, three ways to reach it.
+ *
+ * The paperclip was the only way to attach anything, which meant the most
+ * natural gesture for a file — copy it and press paste, or drag it onto the
+ * conversation — did nothing at all, silently. Both now land here, so there is
+ * one upload to get right rather than three.
+ */
+async function attach(file) {
   if (!file) return;
   if (file.size > 8 * 1024 * 1024) {
     showAttached({ name: file.name, error: "Over 8MB — try a smaller one." });
@@ -1203,6 +1219,47 @@ $("file").addEventListener("change", async (e) => {
     describing = null;
     settle();
   }
+}
+
+$("file").addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  attach(file);
+});
+
+/* Paste. `clipboardData.files` carries a file copied from the desktop; a
+   screenshot on the clipboard arrives as an item with no name, so it gets one
+   rather than being uploaded as "blob". Text pasted into the box is left
+   completely alone — checking for files first is what keeps an ordinary paste
+   of a paragraph from being swallowed here. */
+addEventListener("paste", (e) => {
+  const items = [...(e.clipboardData?.items ?? [])].filter((i) => i.kind === "file");
+  if (!items.length) return;
+  const file = items[0].getAsFile();
+  if (!file) return;
+  e.preventDefault();
+  attach(file.name && file.name !== "image.png"
+    ? file
+    : new File([file], `pasted-${Date.now()}.${(file.type.split("/")[1] ?? "png")}`, { type: file.type }));
+});
+
+/* Drag and drop, with a border to say the page will take it. dragleave fires
+   when the pointer crosses onto a child element too, so the counter is what
+   stops the highlight flickering off over every word in the conversation. */
+let dragDepth = 0;
+const dropzone = document.querySelector(".app") ?? document.body;
+addEventListener("dragover", (e) => { if ([...e.dataTransfer.types].includes("Files")) e.preventDefault(); });
+addEventListener("dragenter", (e) => {
+  if (![...e.dataTransfer.types].includes("Files")) return;
+  if (++dragDepth === 1) dropzone.classList.add("dropping");
+});
+addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; dropzone.classList.remove("dropping"); } });
+addEventListener("drop", (e) => {
+  if (![...e.dataTransfer.types].includes("Files")) return;
+  e.preventDefault();
+  dragDepth = 0;
+  dropzone.classList.remove("dropping");
+  attach(e.dataTransfer.files?.[0]);
 });
 
 function showAttached(a) {
