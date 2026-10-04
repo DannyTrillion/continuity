@@ -180,6 +180,21 @@ const HELP = `${INTRO}\n\n${COMMAND_LIST.map(([c, what]) => `${c} — ${what[0].
  *
  * Returns the slash command this means, or null.
  */
+/**
+ * Commands that work when Walrus does not.
+ *
+ * Identity is resolved before anything else in a turn, and when the relayer is
+ * rate-limited that resolution fails and the turn falls back to answering
+ * blind. That is right for conversation and wrong for these: clearing a window
+ * and moving between sections of a website need no memory at all, so refusing
+ * them because a storage network is busy is the tail wagging the dog. Someone
+ * whose chat is mid-429 is exactly the person most likely to want a fresh one.
+ */
+export const WITHOUT_MEMORY = new Set(["/clear", "/clearchat", "/newchat", "/open", "/go", "/help", "/menu"]);
+
+export const needsNoMemory = (cmd) =>
+  WITHOUT_MEMORY.has(String(cmd ?? "").trim().split(/\s+/)[0].toLowerCase());
+
 export function siteIntent(text) {
   const t = String(text ?? "").trim();
   // Long messages are conversation, not instruction, whatever words are in them.

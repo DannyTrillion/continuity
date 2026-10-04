@@ -8,7 +8,7 @@
 
 import { resolvePerson } from "./identity.mjs";
 import { recall, dedupe, withoutSuppressed, suppressionsFor } from "./memory.mjs";
-import { handleCommand, actionsFor, siteIntent } from "./commands.mjs";
+import { handleCommand, actionsFor, siteIntent, needsNoMemory } from "./commands.mjs";
 import { handleTurn } from "./agent.mjs";
 import { record as recordTurn } from "./conversations.mjs";
 
@@ -111,6 +111,29 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
     console.error(`[${surface}] could not resolve identity:`, err.message);
     const rateLimited = err?.status === 429;
     const wait = err?.retryAfterSeconds;
+
+    /* Some commands are about this window, not about this person. Clearing a
+       chat and opening a section need no identity, so a busy relayer should
+       not turn them into an apology from the model. There is nothing
+       server-side to clear for someone we could not identify — the thread is
+       keyed by a person id we never got — so this does exactly what it says
+       and no less. */
+    const offline = trimmed.startsWith("/") ? trimmed : siteIntent(trimmed);
+    if (offline && needsNoMemory(offline)) {
+      const cmd = await handleCommand({
+        text: offline, surface, surfaceUserId,
+        person: { personId: `transient:${surface}:${surfaceUserId}` },
+      }).catch(() => null);
+      if (cmd?.handled) {
+        return {
+          reply: cmd.reply,
+          actions: actionsFor(cmd.actions),
+          data: cmd.data ?? null,
+          client: cmd.client ?? null,
+          meta: { command: true, memoryless: true },
+        };
+      }
+    }
 
     try {
       if (streamed) throw err; // half an answer is already on screen

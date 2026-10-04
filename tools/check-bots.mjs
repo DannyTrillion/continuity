@@ -11,7 +11,7 @@
  * tokens, no relayer and no network — issuing a link code is in-memory, and a
  * person with no namespaces makes the memory commands answer without a read.
  */
-import { ACTIONS, actionsFor, handleCommand, siteIntent } from "../src/core/commands.mjs";
+import { ACTIONS, actionsFor, handleCommand, siteIntent, needsNoMemory } from "../src/core/commands.mjs";
 import { keyboard, formatted } from "../src/adapters/telegram.mjs";
 import { rowsFor, embedFor } from "../src/adapters/discord.mjs";
 
@@ -310,6 +310,19 @@ section("asked in words, not with a slash");
   check("a long message is conversation, never an instruction",
     siteIntent("clear the chat " + "x".repeat(120)) === null);
 }
+
+/* Found by testing against production during a 429 I had caused myself:
+   identity is resolved before the command branch, so a rate-limited relayer
+   turned /clear into an apology from the model. Clearing a window needs no
+   memory; refusing it because a storage network is busy is backwards, and the
+   person mid-429 is the one most likely to want a fresh chat. */
+check("clearing works when Walrus does not", needsNoMemory("/clear"));
+check("so does moving around the site", needsNoMemory("/open files") && needsNoMemory("/go modes"));
+check("and asking what it can do", needsNoMemory("/help") && needsNoMemory("/menu"));
+check("but anything that reads or writes memory still needs it",
+  !needsNoMemory("/whatyouknow") && !needsNoMemory("/study") && !needsNoMemory("/forgetme")
+  && !needsNoMemory("/quiz") && !needsNoMemory("/link"),
+  ["/whatyouknow", "/study", "/forgetme", "/quiz", "/link"].filter(needsNoMemory));
 
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);
 process.exit(failed ? 1 : 0);
