@@ -43,9 +43,11 @@
 
 import { join } from "node:path";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { recall } from "./memory.mjs";
-import { enqueueRemember } from "./outbox.mjs";
+import { enqueueRemember, pendingFor } from "./outbox.mjs";
 import { UPLOADS } from "./images.mjs";
+import { getBlob } from "./walrus.mjs";
 
 export const fileNs = (personId) => `ws8::file::${personId}`;
 
@@ -155,4 +157,84 @@ export async function listFiles(personId, { limit = 40 } = {}) {
     .map(parseFile)
     .filter((f) => f.file && !seen.has(f.file) && seen.add(f.file))
     .sort((a, b) => Date.parse(b.at ?? 0) - Date.parse(a.at ?? 0));
+}
+
+
+/**
+ * Does this sound like somebody asking for a file back?
+ *
+ * The same keyword test the picture bank uses, and narrow for the same reason:
+ * it runs on every turn, and the cost of being wrong is one wasted read rather
+ * than a wrong answer. It has to name a document. "Send it" is far too broad,
+ * and handing somebody a lease because they said "send it" about a link is
+ * worse than not fetching at all.
+ */
+export function asksForFile(text) {
+  const t = String(text ?? "");
+  return /\b(file|files|document|documents|doc|docs|pdf|pdfs|notes?|slides?|spreadsheet|csv|invoice|receipt|contract|lease|report|paper|handout|attachment|transcript)\b/i.test(t);
+}
+
+/* Words that say nothing about WHICH file is meant. */
+const NOISE = new Set(("a an and the of to in on at for with my me i you your it is was that this those these did do does " +
+  "have has had file files document documents doc docs pdf attachment send sent share shared fetch bring back get find " +
+  "show give stored store keep kept saved save one some any please can could would again so right").split(" "));
+
+const words = (t) => String(t ?? "").toLowerCase().match(/[a-z0-9]{3,}/g) ?? [];
+
+/** How well a queued file matches the question, when recall cannot see it yet. */
+function nearness(query, text) {
+  const asked = new Set(words(query).filter((w) => !NOISE.has(w)));
+  if (!asked.size) return /\b(this|that|it|just sent|i sent|the one)\b/i.test(query) ? 0.45 : 0.95;
+  const has = words(text).filter((w) => asked.has(w)).length;
+  return has ? Math.max(0.2, 0.6 - has * 0.12) : 0.9;
+}
+
+/**
+ * Find the files that best match what they asked for.
+ *
+ * Returns what it knows even when the bytes have gone, because "you sent me a
+ * lease in March, but I no longer have the file" is a better answer than
+ * silence — and far better than the one this replaces, which was the bot
+ * flatly claiming it could not fetch a file at all while holding both a copy
+ * on disk and a blob id on Walrus.
+ */
+export async function findFiles(personId, query, { limit = 3, offline = false } = {}) {
+  const ns = fileNs(personId);
+  let failed = offline;
+  const hits = offline ? [] : await recall(ns, query, { limit, maxTokens: 900 })
+    .catch(() => { failed = true; return []; });
+
+  // Still on their way to Walrus: recall cannot see them, so match by hand.
+  const waiting = pendingFor(ns).map((j) => ({
+    text: j.text, distance: nearness(query, j.text), pending: true,
+  }));
+
+  const seen = new Set();
+  const found = [...hits, ...waiting]
+    .map((h) => ({ ...parseFile(h), distance: h.distance, pending: Boolean(h.pending) }))
+    .filter((f) => (f.file && seen.has(f.file) ? false : (seen.add(f.file), true)))
+    .sort((a, b) => a.distance - b.distance);
+
+  found.failed = failed && found.length === 0;
+  return found;
+}
+
+/**
+ * The bytes, from wherever they still are.
+ *
+ * Disk first because it is instant, then Walrus, which is the whole reason the
+ * blob id travels inside the memory: a redeploy takes the volume and the file
+ * is still fetchable. Null only when neither can produce it, and then the
+ * model is told to say so rather than to apologise vaguely.
+ */
+export async function loadFile(f) {
+  if (!f?.file || !/^[\w.\-]+$/.test(f.file)) return null; // never let a name escape the directory
+  try {
+    const bytes = await readFile(join(UPLOADS, f.file));
+    return { bytes, name: f.name ?? f.file, from: "disk" };
+  } catch { /* not here any more; Walrus may still have it */ }
+
+  if (!f.walrusBlob) return null;
+  const bytes = await getBlob(f.walrusBlob);
+  return bytes ? { bytes, name: f.name ?? f.file, from: "walrus" } : null;
 }

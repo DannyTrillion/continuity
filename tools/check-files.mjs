@@ -14,7 +14,7 @@
  */
 import { readFileSync } from "node:fs";
 import { readDocument, canRead } from "../src/core/documents.mjs";
-import { fileNs, fileSentence, parseFile } from "../src/core/files.mjs";
+import { fileNs, fileSentence, parseFile, asksForFile, loadFile } from "../src/core/files.mjs";
 import { putBlob, getBlob, config as walrusConfig } from "../src/core/walrus.mjs";
 
 let failed = 0, passed = 0;
@@ -197,6 +197,71 @@ if (process.env.SKIP_NETWORK) {
   check("an empty upload is refused rather than stored", (await putBlob(Buffer.alloc(0))) === null);
   check("a nonsense blob id returns null instead of throwing",
     (await getBlob("not-a-real-blob-id-at-all-xxxxxxxxxxxxxxxxx")) === null);
+}
+
+section("asking for a file back");
+
+/* Danny, on Telegram, after sending a PDF: "could you fetch me the pdf i sent
+   to you". The bot replied "I can't fetch or display the PDF itself — I only
+   have the description", which was false twice over: the bytes were on this
+   disk AND on Walrus. Pictures had a fetch path and files simply did not. */
+{
+  const yes = [
+    "could you fetch me the pdf i sent to you",
+    "send me that file again",
+    "where are my lecture notes",
+    "can I have the lease document",
+    "do you still have that spreadsheet",
+  ];
+  const no = ["show me the picture", "what do you know about me", "send it over", "how are you"];
+  check("it hears somebody asking for a file", yes.every(asksForFile), yes.filter((q) => !asksForFile(q)));
+  /* Narrow on purpose: it runs on every turn, and handing somebody a lease
+     because they said "send it" about a link is worse than not fetching. */
+  check("and does not hear it in everything else", !no.some(asksForFile), no.filter(asksForFile));
+}
+
+section("the bytes come back from wherever they still are");
+{
+  const offDisk = parseFile({ text: fileSentence({
+    file: "definitely-not-on-this-disk.md", name: "proof.md", surface: "web",
+    description: "A deploy check.",
+    walrusBlob: "Eab86j7CBtdMwiw2S7awVAnUfGWLO6JyHPffmgnzBbw",
+  }) });
+  check("a file off this disk still counts as available",
+    offDisk.available === true && offDisk.onDisk === false, offDisk.url);
+
+  check("a path trying to climb out of the uploads directory is refused",
+    (await loadFile({ file: "../../etc/passwd", walrusBlob: null })) === null);
+  check("and one that reached neither disk nor Walrus returns null, not a throw",
+    (await loadFile(parseFile({ text: fileSentence({ file: "nope.md", description: "x", surface: "web" }) }))) === null);
+
+  if (process.env.SKIP_NETWORK) {
+    console.log("SKIP  the Walrus fetch — SKIP_NETWORK is set");
+  } else {
+    /* The whole point of putting attachment bytes on Walrus: the server losing
+       them stops mattering. This fetches a blob written from production. */
+    const got = await loadFile(offDisk);
+    check("gone from the volume, it is fetched back from Walrus",
+      got?.from === "walrus", got ? `${got.bytes.length} bytes` : "nothing came back");
+    check("byte for byte, with the name it was sent under",
+      /outlived the server/.test(got?.bytes?.toString("utf8") ?? "") && got?.name === "proof.md", got?.name);
+  }
+}
+
+/* The surfaces have to actually send it, and each one differently: Telegram
+   compresses a photo and would destroy a PDF, so it needs sendDocument. */
+{
+  const tg = readFileSync("src/adapters/telegram.mjs", "utf8");
+  const dc = readFileSync("src/adapters/discord.mjs", "utf8");
+  const agent = readFileSync("src/core/agent.mjs", "utf8");
+  check("Telegram sends it as a document, not as a photo",
+    /sendDocument/.test(tg) && /form\.append\("document"/.test(tg));
+  check("Discord sends a real attachment", /files: \[\{ attachment: document\.bytes/.test(dc));
+  check("and the turn carries one back at all", /document: document \? \{ bytes/.test(agent));
+  /* The model has to be told, or it apologises for not having the thing that
+     is attached to its own reply. */
+  check("the model is told the file is attached and must not deny it",
+    /NEVER say you cannot fetch, \n?\s*send or display a file/.test(agent) || /never say you cannot fetch/i.test(agent));
 }
 
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);

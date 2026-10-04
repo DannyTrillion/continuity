@@ -182,6 +182,25 @@ function streamer(token, chatId) {
 }
 
 /** Photos go as multipart, with the caption alongside. */
+/**
+ * Send a file back as a file.
+ *
+ * `sendDocument`, not `sendPhoto`: Telegram compresses a photo and strips what
+ * it does not need, which is right for a snapshot and destroys a PDF. This is
+ * the half that was missing when the bot told somebody it could not fetch the
+ * PDF they had sent it, while holding a copy on disk and a blob id on Walrus.
+ */
+async function sendDocument(token, chatId, doc, caption) {
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  if (caption) form.append("caption", caption.slice(0, 1024));
+  form.append("document", new Blob([doc.bytes]), doc.name ?? "file");
+  const res = await fetch(API(token, "sendDocument"), { method: "POST", body: form });
+  const json = await res.json();
+  if (!json.ok) throw new Error(`telegram sendDocument: ${json.description}`);
+  return json.result;
+}
+
 async function sendPhoto(token, chatId, image, caption) {
   const form = new FormData();
   form.append("chat_id", String(chatId));
@@ -409,9 +428,9 @@ export async function startTelegram({ token }) {
       4000,
     );
     const stream = streamer(token, chatId);
-    let reply, image, actions, data, client;
+    let reply, image, document, actions, data, client;
     try {
-      ({ reply, image, actions, data, client } = await respond({
+      ({ reply, image, document, actions, data, client } = await respond({
         surface: "telegram",
         surfaceUserId: String(from.id),
         displayName: from.username ?? from.first_name,
@@ -429,7 +448,16 @@ export async function startTelegram({ token }) {
     if (client?.do === "clear") await wipe(token, chatId).catch(() => {});
 
     const streamed = await stream.finish(reply, actions);
-    if (image) {
+    if (document) {
+      // The words first if they have not streamed, then the file under them.
+      const sent = await sendDocument(token, chatId, document, streamed ? "" : reply)
+        .catch((err) => { console.error("[telegram] could not send the file:", err.message); return null; });
+      noteSent("telegram", chatId, sent?.message_id);
+      if (!sent && !streamed) {
+        const fb = await send(token, chatId, reply, actions, formatted(data));
+        noteSent("telegram", chatId, fb?.message_id);
+      }
+    } else if (image) {
       const sent = await sendPhoto(token, chatId, image, streamed ? "" : reply);
       noteSent("telegram", chatId, sent?.message_id);
     } else if (!streamed) {

@@ -598,7 +598,7 @@ export async function startDiscord({ token }) {
           .catch((err) => { console.error("[discord] could not read attachment:", err.message); return null; });
       }
 
-      const { reply, image, actions, client: act } = await respond({
+      const { reply, image, document, actions, client: act } = await respond({
         surface: "discord",
         surfaceUserId: msg.author.id,
         displayName: msg.author.username,
@@ -635,7 +635,13 @@ export async function startDiscord({ token }) {
 
       const parts = chunk(out);
       const keep = (m) => { noteSent("discord", msg.channel.id, m?.id); return m; };
-      if (image) {
+      if (document) {
+        // A real attachment, not a code block: a PDF pasted as text is useless.
+        const body = { content: parts[0], files: [{ attachment: document.bytes, name: document.name ?? "file" }], components };
+        if (placeholder) await placeholder.delete().catch(() => {});
+        keep(await msg.reply(body));
+        for (const extra of parts.slice(1)) keep(await msg.reply(extra));
+      } else if (image) {
         const body = { content: parts[0], files: [{ attachment: image.png, name: image.name ?? "shot.png" }], components };
         if (placeholder) await placeholder.delete().catch(() => {});
         keep(await msg.reply(body));

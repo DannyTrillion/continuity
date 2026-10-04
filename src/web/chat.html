@@ -1200,6 +1200,13 @@ async function ask(text, { silent = false } = {}) {
     const reply = final?.reply ?? acc;
     b.innerHTML = fmt(reply || final?.error || "Something went wrong.");
     if (final?.image) attachImage(b, final.image, reply);
+    // A file it found and sent back: a chip to open, the same one the person's
+    // own attachment gets, so both ends of the exchange look alike.
+    if (final?.meta?.file?.file) {
+      b.insertAdjacentHTML("beforeend", attachedHtml({
+        file: final.meta.file.file, name: final.meta.file.name,
+      }));
+    }
     if (final?.meta) addRecalled(t, final.meta);
     offer(t, final?.actions);
     if (reply) copyable(t, () => reply);

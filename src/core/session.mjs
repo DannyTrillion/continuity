@@ -231,6 +231,8 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
     return {
       reply: turn.text,
       image: turn.image,
+      // A file it found and is sending back, the way `image` carries a picture.
+      document: turn.document ?? null,
       actions: actionsFor(turn.actions),
       meta: { ...turn, personId: who.personId },
     };

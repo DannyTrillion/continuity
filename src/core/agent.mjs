@@ -17,7 +17,7 @@ import { chat, DEFAULT_MODEL } from "./llm.mjs";
 import { isOptedOut } from "./identity.mjs";
 import { asksForPicture, findImages, loadImage, rememberImage } from "./images.mjs";
 import { rememberMaterial } from "./study.mjs";
-import { rememberFile } from "./files.mjs";
+import { rememberFile, asksForFile, findFiles, loadFile } from "./files.mjs";
 import { resolveDates, todayLine } from "./time.mjs";
 import { MODES, modeFor, suggestMode } from "./modes.mjs";
 import { firstTurnToday, pickFollowUps, markAsked } from "./followups.mjs";
@@ -113,6 +113,13 @@ attached to the very same reply makes you look broken.
 Pictures people send are kept: described, written to memory, and brought back on any app
 when they ask. Never tell someone that pictures, or anything else, "don't carry over
 between conversations" — carrying over is the one thing you are for.
+
+FILES
+The same is true of files. A PDF, a set of notes, a spreadsheet: you read what is in it,
+keep that, and can send the file itself back later on any app. Never say you only kept a
+description, never say you cannot fetch or display a file, and never ask someone to send
+again something they have already sent you. If one is attached to your reply, it is really
+there and they can open it.
 
 NEVER SAY "THIS IS OUR FIRST CONVERSATION", that you have never spoken to someone, or that
 you have no memory of them, unless a system note below says in so many words that this
@@ -285,6 +292,10 @@ export async function handleTurn({
    * minute to spare, so it does not run speculatively.
    */
   const lookingForPicture = asksForPicture(message) && !attachment;
+  /* Asking for a document is not asking for a photo, and until now only one of
+     the two was answerable: the bot would say "I can't fetch or display the
+     PDF itself" while holding a copy on disk and a blob id on Walrus. */
+  const lookingForFile = asksForFile(message) && !attachment;
 
   // A memoryless turn still asks whether they opted out, because it may still
   // write (below). `null` means the answer could not be read, and then nothing
@@ -313,9 +324,10 @@ export async function handleTurn({
      on top of one would be two voices at once. */
   const modeRead = memoryless || persona ? Promise.resolve(null) : modeFor(personId).catch(() => null);
 
-  const [optedOut, suppressed, personalSets, profileSets, kb, pages, pictures, plans] = memoryless
+  const [optedOut, suppressed, personalSets, profileSets, kb, pages, pictures, docs, plans] = memoryless
     ? [await isOptedOut(personId).catch(() => null), new Set(), [], [], [], await Promise.all(links.map((u) => readPage(u))),
-       lookingForPicture ? await findImages(personId, message, { offline: true }) : [], []]
+       lookingForPicture ? await findImages(personId, message, { offline: true }) : [],
+       lookingForFile ? await findFiles(personId, message, { offline: true }) : [], []]
     : await Promise.all([
     isOptedOut(personId),
     suppressionsFor(personId).catch(() => new Set()),
@@ -346,6 +358,7 @@ export async function handleTurn({
     }),
     Promise.all(links.map((u) => readPage(u))),
     lookingForPicture ? findImages(personId, message).catch(() => []) : Promise.resolve([]),
+    lookingForFile ? findFiles(personId, message).catch(() => []) : Promise.resolve([]),
     firstToday
       ? recall(namespaces[0], "plans, appointments, interviews, trips, deadlines and events on a date", { limit: 6, maxTokens: 400 }).catch(() => [])
       : Promise.resolve([]),
@@ -477,6 +490,38 @@ export async function handleTurn({
             `so you CANNOT show them — say that honestly rather than pretending to send ` +
             `one:\n\n${pictures.map((p) => `- ${p.description}`).join("\n")}`;
 
+  /* The same shape as the picture note above, for the same reason: a model
+     that is not told the file is attached will apologise for not having it
+     while the person is looking at it. */
+  const haveFiles = docs.filter((d) => d.available).sort((a, b) => a.distance - b.distance);
+  const wanted = haveFiles[0] && haveFiles[0].distance < 0.62 ? haveFiles[0] : null;
+  const document = wanted ? await loadFile(wanted) : null;
+
+  const fileNote = !lookingForFile ? null
+    : docs.failed
+      ? "THEY ASKED ABOUT A FILE AND YOU COULD NOT CHECK THIS TURN — the memory service did not " +
+        "answer. Do NOT say you have none and do NOT say you cannot send files. Say you cannot " +
+        "look through them this second and to ask again in a minute."
+    : docs.length === 0
+      ? "THEY ASKED ABOUT A FILE AND NONE IS STORED FOR THEM YET. Say you have not been sent one " +
+        "so far and that you will keep any they send. Do not invent one, and do not say files are " +
+        "not kept between conversations; they are."
+      : document
+        ? `YOU HAVE FOUND THE FILE THEY ARE ASKING FOR AND IT IS ALREADY ATTACHED TO THIS REPLY. ` +
+          `It will arrive in their chat as a real file they can open. NEVER say you cannot fetch, ` +
+          `send or display a file, never say you only kept a description, and never ask them to ` +
+          `send it again — it is right there. Say what it is in a line and let them open it. ` +
+          `It is called "${document.name}". Here is what it holds:\n\n${wanted.description}` +
+          `${document.from === "walrus" ? "\n\n(This server no longer had the bytes; you fetched them back from Walrus. Worth saying in half a sentence if it fits.)" : ""}` +
+          `${wanted.pending ? "\n\n(It was sent moments ago and is still being written to Walrus. It IS kept.)" : ""}`
+        : haveFiles.length
+          ? `THEY ASKED ABOUT A FILE. You hold these, but none is a confident match for what they ` +
+            `described, so none is attached. Say which you have and ask which they mean:\n\n` +
+            `${haveFiles.map((d) => `- ${d.name ?? "a file"}: ${d.description}`).join("\n")}`
+          : `THEY ASKED ABOUT A FILE. You remember these, but the bytes are gone from this server ` +
+            `and from Walrus, so you CANNOT send them — say that plainly rather than pretending:\n\n` +
+            `${docs.map((d) => `- ${d.name ?? "a file"}: ${d.description}`).join("\n")}`;
+
   const attached = attachment?.description
     ? `THE PERSON ATTACHED SOMETHING TO THIS MESSAGE (a model looked at it and ` +
       `described it; treat the description as what they showed you, and quote ` +
@@ -571,6 +616,7 @@ export async function handleTurn({
     // list the model read past it and fell back on insisting it cannot see
     // images — while attaching one to that very reply.
     ...(pictureNote ? [{ role: "system", content: pictureNote }] : []),
+    ...(fileNote ? [{ role: "system", content: fileNote }] : []),
     ...(followNote ? [{ role: "system", content: followNote }] : []),
     ...(suggested ? [{
       role: "system",
@@ -675,6 +721,10 @@ export async function handleTurn({
     // Discord, a photo on Telegram, inline on the web.
     image: sending,
     picture: picture ? { file: picture.file, distance: picture.distance } : null,
+    /* A file to send back, the same way. Telegram sends a document, Discord an
+       attachment, the web a link to open. */
+    document: document ? { bytes: document.bytes, name: document.name, from: document.from } : null,
+    file: wanted ? { file: wanted.file, name: wanted.name, distance: wanted.distance, from: document?.from ?? null } : null,
     model: answer.model,
     fellBack: answer.fellBack ?? false,
     recalled: { personal: personal.length, kb: kb.length },
