@@ -330,15 +330,17 @@ try {
     await page.goBack(); await sleep(600);
     await page.click('.cover[data-col="files"]'); await sleep(700);
     const rows = await page.$$eval(".filerow", (e) => e.map((r) => ({
-      head: r.querySelector("b")?.textContent ?? "",
+      head: r.querySelector(".fname")?.textContent ?? "",
       body: r.querySelector("p")?.textContent ?? "",
+      meta: r.querySelector(".fmeta")?.textContent ?? "",
       foot: r.querySelector(".memofoot")?.textContent.replace(/\s+/g, " ").trim() ?? "",
     })));
     check("the files shelf opens into the files", rows.length === FILES.length, rows.length);
     check("each one leads with what the file said, not what it was called",
       /tenancy agreement/.test(rows[0]?.body ?? ""), rows[0]?.body?.slice(0, 50));
     check("the name is still there, with its kind", /lease\.pdf/.test(rows[0]?.head ?? ""), rows[0]?.head);
-    check("and the page count and which app it came from", /9 pages/.test(rows[0]?.foot ?? "") && /telegram/i.test(rows[0]?.foot ?? ""), rows[0]?.foot);
+    check("and the page count and which app it came from",
+      /9 pages/.test(rows[0]?.meta ?? "") && /telegram/i.test(rows[0]?.meta ?? ""), rows[0]?.meta);
     check("a file still on disk offers to open", (await count(page, '.filerow a[href^="/uploads/"]')) === 1);
     /* The state that only exists because the bytes go to Walrus: gone from
        this server, still openable. Before that this row and the next one were
@@ -350,6 +352,32 @@ try {
       await page.$eval('.filerow a.wal', (a) => /walruscan\.com\/(main|test)net\/blob\//.test(a.href)));
     check("a file on both says so without crying wolf",
       /also on Walrus/.test(rows[0]?.foot ?? ""), rows[0]?.foot);
+    /* Danny: "the writeup on the front end is too much, I want the website to
+       be very user friendly just display the file names". It printed the whole
+       extracted description per row — four hundred words about drug absorption
+       mechanisms, six rows deep. That text is WHY a file is findable and it is
+       not why anybody opens this page. */
+    const shelf = await page.evaluate(() => {
+      const first = document.querySelector(".filerow");
+      const body = first.querySelector(".fbody");
+      const closed = getComputedStyle(body).gridTemplateRows;
+      first.querySelector(".frow").click();
+      const opened = getComputedStyle(body).gridTemplateRows;
+      return {
+        closed, opened,
+        marked: first.classList.contains("on"),
+        aria: first.querySelector(".frow").getAttribute("aria-expanded"),
+        rowHeight: Math.round(document.querySelectorAll(".filerow")[1].getBoundingClientRect().height),
+      };
+    });
+    check("a file is one line until you ask for more",
+      shelf.closed.startsWith("0"), shelf.closed);
+    check("and a closed row stays short enough to scan a list of them",
+      shelf.rowHeight < 70, shelf.rowHeight + "px");
+    check("opening it reveals what the file said", shelf.opened !== shelf.closed && !shelf.opened.startsWith("0"), shelf.opened);
+    check("the row says it is open, to a screen reader too",
+      shelf.marked && shelf.aria === "true", shelf);
+
     check("and one that reached neither is honestly marked lost",
       /not recoverable/.test(rows[2]?.foot ?? ""), rows[2]?.foot);
     await page.goBack(); await sleep(600);

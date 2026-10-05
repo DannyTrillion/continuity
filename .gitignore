@@ -12,3 +12,6 @@ provenance.json
 provenance.json.tmp
 followups.json
 uploads/
+
+# Raw screen recordings and the edit. Large, and not part of the product.
+clips/

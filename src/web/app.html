@@ -731,12 +731,32 @@
 #p-memory .photo figcaption p{margin:0;font-size:12.5px;line-height:1.5;color:var(--soft);
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 #p-memory .photo .memofoot{margin-top:8px}
-#p-memory .filerow .fhead{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+#p-memory .filerow{border:1px solid var(--edge);border-radius:var(--r-md);overflow:hidden;
+    background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+    animation:rise-mem .45s var(--ease) both;transition:border-color .25s var(--ease)}
+#p-memory .filerow:hover{border-color:var(--edge-2)}
+#p-memory .filerow.on{border-color:rgba(127,227,212,.3)}
+#p-memory .frow{display:flex;align-items:center;gap:11px;width:100%;padding:13px 15px;
+    background:none;border:0;cursor:pointer;text-align:left;color:inherit}
 #p-memory .filerow .ext{flex:none;padding:3px 7px;border-radius:5px;background:rgba(127,227,212,.14);
     color:var(--wal);font:500 9.5px var(--mono);letter-spacing:.09em}
-#p-memory .filerow .fhead b{font:500 13.5px var(--sans);color:var(--ink);overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap}
-#p-memory .filerow p{margin:0;font-size:13px;line-height:1.6;color:var(--soft)}
+#p-memory .fname{font:500 13.5px var(--sans);color:var(--ink);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;min-width:0}
+#p-memory .fmeta{margin-left:auto;flex:none;font:400 11px var(--mono);color:var(--faint);white-space:nowrap}
+#p-memory .chev{flex:none;color:var(--faint);transition:transform .3s var(--ease),color .2s}
+#p-memory .filerow.on .chev{transform:rotate(180deg);color:var(--wal)}
+#p-memory .frow:hover .chev{color:var(--soft)}
+#p-memory .fbody{display:grid;grid-template-rows:0fr;transition:grid-template-rows .36s var(--ease)}
+#p-memory .filerow.on .fbody{grid-template-rows:1fr}
+#p-memory .fbody-in{overflow:hidden}
+#p-memory .filerow.on .fbody-in{border-top:1px solid var(--edge)}
+#p-memory .fbody-in > *{padding-inline:15px}
+#p-memory .filerow p{margin:13px 0 0;font-size:13px;line-height:1.65;color:var(--soft)}
+#p-memory .filerow .memofoot{margin:11px 0 14px}
+@media (max-width:600px){#p-memory .fmeta{display:none}}
+@media (prefers-reduced-motion:reduce){#p-memory .fbody{transition:none}
+#p-memory .chev{transition:none}
+#p-memory .filerow{animation:none}}
 #p-memory .empty,#p-memory .loading{padding:50px 20px;text-align:center;color:var(--faint);font-size:14px}
 #p-memory .empty a{color:var(--live)}
 #p-memory .foot{margin-top:40px;padding-top:22px;border-top:1px solid var(--edge);
@@ -3050,36 +3070,48 @@ const ASSET = new Set(["photos", "files"]);
    a redeploy can wipe, and what survives on Walrus is the text — so what is
    shown is the part that is really stored, with the link to the bytes offered
    underneath only while they are still there. */
+/**
+ * A file, as a name you can scan past.
+ *
+ * It used to print the whole extracted description — four hundred words about
+ * drug absorption mechanisms, per row, six rows deep. That text is why the
+ * file is findable and it is not why anybody opens this page: they came to see
+ * which files are here. So the row is the name, and the text it kept is one
+ * tap away.
+ */
 function fileHtml(f, i) {
   const ext = (f.name ?? f.file ?? "").split(".").pop().toUpperCase().slice(0, 4);
-  return `<div class="memo filerow" style="animation-delay:${Math.min(i * 35, 280)}ms">
-    <div class="fhead">
+  const net = esc(data.walrusNetwork ?? "testnet");
+  const gist = (f.description || f.said || "").replace(/\s+/g, " ").trim();
+  return `<div class="filerow" style="animation-delay:${Math.min(i * 45, 400)}ms">
+    <button class="frow" type="button" aria-expanded="false">
       <span class="ext">${esc(/^[A-Z0-9]{2,4}$/.test(ext) ? ext : "FILE")}</span>
-      <b>${esc(f.name ?? "a file")}</b>
-    </div>
-    <p>${esc(f.description || f.said || "A file")}</p>
-    <div class="memofoot">
-      ${f.at ? `<span class="pill">${fmtDate(f.at)}</span>` : ""}
-      ${f.surface ? `<span class="pill">sent on ${SURFACE[f.surface] ?? f.surface}</span>` : ""}
-      ${f.pages ? `<span class="pill">${f.pages} pages</span>` : ""}
-      ${f.studying ? '<span class="pill">being studied</span>' : ""}
-      ${f.available
-        ? `<a class="verify" href="${esc(f.url)}" target="_blank" rel="noopener">open the file ↗</a>`
-        : '<span class="pill cold">bytes not recoverable</span>'}
-      ${/* The bytes themselves, on Walrus. This is the pill worth having: when
-            it is here, losing the server does not lose the file, and the one
-            below it proves the sentence describing it is stored too. The
-            network comes from the server rather than being written in, because
-            memories go to mainnet and raw blobs go wherever the configured
-            publisher points — and a link to the wrong explorer is a dead one. */
-        f.walrusBlob
-        ? `<a class="verify wal" target="_blank" rel="noopener"
-            href="https://walruscan.com/${esc(data.walrusNetwork ?? "testnet")}/blob/${encodeURIComponent(f.walrusBlob)}"
-            title="The file's own bytes, stored on Walrus">${f.onDisk ? "also on Walrus" : "served from Walrus"} ↗</a>`
-        : ""}
-      ${f.blobId ? `<a class="verify" target="_blank" rel="noopener"
-        href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}">${esc(f.blobId.slice(0, 18))}… ↗</a>` : ""}
-    </div>
+      <span class="fname">${esc(f.name ?? "a file")}</span>
+      <span class="fmeta">${[
+        f.pages ? `${f.pages} pages` : null,
+        f.at ? fmtDate(f.at) : null,
+        f.surface ? SURFACE[f.surface] ?? f.surface : null,
+      ].filter(Boolean).join(" · ")}</span>
+      <svg class="chev" width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <div class="fbody"><div class="fbody-in">
+      <p>${esc(gist || "A file")}</p>
+      <div class="memofoot">
+        ${f.studying ? '<span class="pill">being studied</span>' : ""}
+        ${f.available
+          ? `<a class="verify" href="${esc(f.url)}" target="_blank" rel="noopener">open the file ↗</a>`
+          : '<span class="pill cold">bytes not recoverable</span>'}
+        ${f.walrusBlob
+          ? `<a class="verify wal" target="_blank" rel="noopener"
+              href="https://walruscan.com/${net}/blob/${encodeURIComponent(f.walrusBlob)}"
+              title="The file's own bytes, stored on Walrus">${f.onDisk ? "also on Walrus" : "served from Walrus"} ↗</a>`
+          : ""}
+        ${f.blobId ? `<a class="verify" target="_blank" rel="noopener"
+          href="https://walruscan.com/mainnet/blob/${encodeURIComponent(f.blobId)}">${esc(f.blobId.slice(0, 18))}… ↗</a>` : ""}
+      </div>
+    </div></div>
   </div>`;
 }
 
@@ -3105,6 +3137,16 @@ function coverHtml(c, items, i) {
 }
 
 /* ── views ── */
+
+/* One open at a time would hide what somebody just compared against, so they
+   stack. Delegated, because the rows are rebuilt on every render. */
+document.addEventListener("click", (e) => {
+  const row = e.target.closest(".frow");
+  if (!row) return;
+  const card = row.closest(".filerow");
+  const open = card.classList.toggle("on");
+  row.setAttribute("aria-expanded", open ? "true" : "false");
+});
 
 function buckets(facts) {
   const b = new Map(COLLECTIONS.map((c) => [c.id, []]));
