@@ -14,7 +14,7 @@ import { rememberLastGood } from "./core/agent.mjs";
 import { studyShelf, listMaterials } from "./core/study.mjs";
 import { modeFor, stackItems, planItems, awayInWords } from "./core/modes.mjs";
 import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, NS_INDEX } from "./core/memory.mjs";
-import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor, adoptPerson } from "./core/identity.mjs";
+import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor, adoptPerson, accountsFor } from "./core/identity.mjs";
 import { startOutbox, onSettled, outboxStats, pendingFor, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
 import { list as listConversations, get as getConversation, flushAll } from "./core/conversations.mjs";
 import { resume, hasHistory } from "./core/session.mjs";
@@ -384,10 +384,12 @@ const server = createServer(async (req, res) => {
 
       const facts = [...landed, ...queued];
       const connected = await surfacesFor(who.personId).catch(() => ["web"]);
+      const accounts = await accountsFor(who.personId).catch(() => ({}));
       return json(res, 200, {
         personId: who.personId,
         linked: connected.length > 1,
         connected,
+        accounts,
         name: nameFrom(facts),
         facts,
         saving: queued.length,
@@ -474,11 +476,13 @@ const server = createServer(async (req, res) => {
     if (!userId) return json(res, 400, { error: "userId is required" });
     try {
       const who = await resolvePerson("web", userId);
-      const [sets, suppressed, connected, pictures, sent, materials] = await Promise.all([
+      const [sets, suppressed, connected, accounts, pictures, sent, materials] = await Promise.all([
         Promise.all(who.namespaces.map((ns) =>
           recall(ns, "everything known about this person", { limit: 12, maxTokens: 1800 }))),
         suppressionsFor(who.personId).catch(() => new Set()),
         surfacesFor(who.personId).catch(() => []),
+        // Which account on each, so "connected" can be checked rather than believed.
+        accountsFor(who.personId).catch(() => ({})),
         // Pictures are memories too, kept in their own namespace; the
         // dashboard shows them as a collection beside the written ones.
         listImages(who.personId).catch(() => []),
@@ -521,6 +525,7 @@ const server = createServer(async (req, res) => {
         personId: who.personId,
         name: nameFrom(facts),
         connected,
+        accounts,
         facts,
         pictures,
         files,

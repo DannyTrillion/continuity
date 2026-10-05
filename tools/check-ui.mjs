@@ -79,11 +79,14 @@ let receipts = [];
 /* Which apps this person has joined up. A test overrides it to check that the
    product stops asking for what it already has. */
 let CONNECTED = ["web", "telegram", "discord"];
+/* Which account on each. "Telegram: connected" is a claim; a handle is
+   something somebody can check against the app in their hand. */
+const ACCOUNTS = { telegram: "DannyTrillion", discord: "danny_t" };
 let lastSaid = null;                 // what the page last sent to be answered
 function answer(url, method, body) {
   const p = url.pathname;
   const json = (o, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(o) });
-  if (p === "/api/memory") return json({ personId: "p1", linked: true, connected: CONNECTED, name: "Danny", facts: FACTS.map(({ text, at, blobId }) => ({ text, at, blobId })) });
+  if (p === "/api/memory") return json({ personId: "p1", linked: true, connected: CONNECTED, accounts: ACCOUNTS, name: "Danny", facts: FACTS.map(({ text, at, blobId }) => ({ text, at, blobId })) });
   if (p === "/api/memory/full") return json({ personId: "p1", name: "Danny", connected: CONNECTED, facts: FACTS, pictures: PICTURES, files: FILES,
     stats: { total: FACTS.length, collapsed: 1, suppressed: 0, namespaces: 3, crossSurface: 3, neverRead: 1 } });
   if (p === "/api/conversations") return json({ conversations: CONVOS });
@@ -705,6 +708,34 @@ try {
         drawn.restoredPdf.href === "/uploads/d8-6.pdf", drawn.restoredPdf.href);
       check("nothing attached draws nothing", drawn.nothing === "");
       await at.page.close();
+    }
+
+    /* Danny: "if a user clicks on any of the discord connected or telegram
+       connect button it shows the specific account connected to it". A
+       connected chip was `disabled`, so the one question it raises — connected
+       as who? — had nowhere to be asked. */
+    {
+      const sf = await open("/chat");
+      await sleep(1100);
+      const acc = await sf.page.evaluate(() => {
+        const chip = (s) => document.querySelector(`.sf[data-surface="${s}"]`);
+        const read = () => { const l = document.getElementById("whoami"); return !l || l.hidden ? null : l.textContent.trim(); };
+        const out = { disabled: chip("telegram")?.disabled, title: chip("telegram")?.title };
+        chip("telegram").click(); out.telegram = read();
+        chip("discord").click();  out.discord = read();
+        chip("web").click();      out.web = read();
+        chip("web").click();      out.closedAgain = read();
+        return out;
+      });
+
+      check("a connected chip is still a button", acc.disabled === false);
+      check("and pressing it names the account", /@DannyTrillion/.test(acc.telegram ?? ""), acc.telegram);
+      check("each one names its own", /@danny_t/.test(acc.discord ?? "") && !/DannyTrillion/.test(acc.discord ?? ""), acc.discord);
+      check("the browser says what it is rather than inventing a handle",
+        /browser/i.test(acc.web ?? "") && !/@/.test(acc.web ?? ""), acc.web);
+      check("pressing the same one again puts it away", acc.closedAgain === null);
+      check("and hovering says it without a click", /@DannyTrillion/.test(acc.title ?? ""), acc.title);
+      await sf.page.close();
     }
 
     check("a signed-in wallet shows in the header", chip.shown, chip.text);

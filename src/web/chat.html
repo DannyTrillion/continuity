@@ -487,6 +487,11 @@
   /* `display:flex` above outranks the attribute, so the retry button would
      have sat there permanently offering to retry nothing. */
   .walletbtn[hidden]{display:none}
+  .whoami{margin:9px 0 0;font-size:12px;line-height:1.5;color:var(--dim);
+    padding:8px 11px;border-radius:9px;background:rgba(255,255,255,.04);
+    border:1px solid var(--edge)}
+  .whoami b{color:var(--ink);font-weight:600}
+  .whoami[hidden]{display:none}
   .tgbtn{display:flex;width:100%;align-items:center;justify-content:center;gap:9px;
     padding:13px 18px;border-radius:999px;border:0;cursor:pointer;
     background:#2AABEE;color:#fff;font:600 14.5px var(--sans);
@@ -2073,7 +2078,7 @@ async function refreshMemory() {
       : `I remember ${n} thing${n === 1 ? "" : "s"} about you`) + still;
     if (name) $("tagline").textContent = `remembers ${name}`;
     $("viewmem").hidden = false;
-    paintSurfaces(m.connected ?? [], name);
+    paintSurfaces(m.connected ?? [], name, m.accounts ?? {});
     maybeNudge(n);
     for (const f of facts) knownFacts.add(f.text);
     first = false;
@@ -2087,17 +2092,33 @@ async function refreshMemory() {
 const SURFACE_LABEL = { web: "Web", telegram: "Telegram", discord: "Discord" };
 let connectedNow = [];
 
-function paintSurfaces(connected, name) {
+let connectedAccounts = {};
+
+function paintSurfaces(connected, name, accounts = {}) {
   connectedNow = connected;
+  connectedAccounts = accounts ?? {};
   const box = $("surfaces");
   box.hidden = false;
   for (const chip of box.querySelectorAll(".sf")) {
-    const on = connected.includes(chip.dataset.surface);
+    const surface = chip.dataset.surface;
+    const on = connected.includes(surface);
     chip.classList.toggle("on", on);
-    chip.innerHTML = `${SURFACE_LABEL[chip.dataset.surface]}<span class="tick">${on ? "connected" : "connect"}</span>`;
-    chip.disabled = on;
+    chip.innerHTML = `${SURFACE_LABEL[surface]}<span class="tick">${on ? "connected" : "connect"}</span>`;
+    /* A connected chip used to be disabled, so the one question somebody
+       actually has about it — which account? — had nowhere to be asked.
+       It is a button again, and pressing it answers that. */
+    chip.disabled = false;
+    const who = connectedAccounts[surface];
+    chip.title = on
+      ? (who ? `Connected as @${who}` : surface === "web" ? "This browser" : "Connected")
+      : `Connect ${SURFACE_LABEL[surface]}`;
   }
 
+  if (!$("whoami")) {
+    const line = document.createElement("p");
+    line.className = "whoami"; line.id = "whoami"; line.hidden = true;
+    box.insertAdjacentElement("afterend", line);
+  }
   const others = connected.filter((c) => c !== "web");
   $("railsub").textContent = others.length
     ? `${others.map((c) => SURFACE_LABEL[c]).join(" and ")} ${others.length > 1 ? "see" : "sees"} these too.`
@@ -2141,10 +2162,27 @@ function paintSurfaces(connected, name) {
   }
 }
 
-// A chip that isn't connected yet is the shortest route to connecting it.
+/* A chip that isn't connected yet is the shortest route to connecting it. One
+   that is connected answers the question it raises: connected as who? */
 $("surfaces").addEventListener("click", (e) => {
   const chip = e.target.closest(".sf");
-  if (chip && !chip.classList.contains("on")) $("linkbtn").click();
+  if (!chip) return;
+  if (!chip.classList.contains("on")) return void $("linkbtn").click();
+
+  const surface = chip.dataset.surface;
+  const who = connectedAccounts[surface];
+  const line = $("whoami");
+  const said = who
+    ? `${SURFACE_LABEL[surface]} · <b>@${esc(who)}</b> — the same person as here.`
+    : surface === "web"
+      ? "This browser. Everything below was read from it."
+      : `${SURFACE_LABEL[surface]} is connected. I don't have the account name stored yet — say something there and I will.`;
+
+  // Pressing the same chip twice puts it away again.
+  if (line.dataset.open === surface) { line.hidden = true; line.dataset.open = ""; return; }
+  line.innerHTML = said;
+  line.hidden = false;
+  line.dataset.open = surface;
 });
 
 

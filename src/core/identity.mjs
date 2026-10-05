@@ -116,7 +116,7 @@ export async function resolvePerson(surface, surfaceUserId, { displayName } = {}
     }
     const rec = { personId: primary, mergedFrom };
     identities.set(key, rec);
-    noteSurface(primary, surface).catch(() => {});
+    noteSurface(primary, surface, displayName).catch(() => {});
     return toPerson(rec);
   }
 
@@ -131,7 +131,7 @@ export async function resolvePerson(surface, surfaceUserId, { displayName } = {}
     JSON.stringify({ personId: rec.personId, surface, surfaceUserId, displayName }),
     { idempotencyKey: `id:${surface}:${surfaceUserId}` },
   );
-  noteSurface(rec.personId, surface).catch(() => {});
+  noteSurface(rec.personId, surface, displayName).catch(() => {});
   return toPerson(rec, true);
 }
 
@@ -285,40 +285,73 @@ export function bindAccount(surface, surfaceUserId, personId, mergedFrom = []) {
   return toPerson(rec);
 }
 
-/** personId -> Set of surfaces, so a repeat visit costs no read and no write. */
+/** personId -> { set, accounts }, so a repeat visit costs no read and no write. */
 const surfaces = new Map();
 
-/**
- * Note that a person uses this surface, writing only when it is news.
- * Called on every resolve, so it must stay cheap for the common case.
- */
-export async function noteSurface(personId, surface) {
-  let known = surfaces.get(personId);
-  if (!known) {
-    const stored = parse(await readLatest(profileNs(personId)));
-    known = new Set(stored?.surfaces ?? []);
-    surfaces.set(personId, known);
-  }
-  if (known.has(surface)) return [...known];
+async function profileOf(personId) {
+  let p = surfaces.get(personId);
+  if (p) return p;
+  const stored = parse(await readLatest(profileNs(personId)));
+  p = { set: new Set(stored?.surfaces ?? []), accounts: { ...(stored?.accounts ?? {}) } };
+  surfaces.set(personId, p);
+  return p;
+}
 
-  known.add(surface);
+/**
+ * Note that a person uses this surface, and under which account.
+ *
+ * The account name is the point of knowing it. "Telegram: connected" is a
+ * claim somebody has to take on trust; "@dannytrillion" is something they can
+ * check against the app in their hand, which is the difference between being
+ * told two accounts are the same person and being shown it.
+ *
+ * Writes only when something is news, because this runs on every resolve.
+ *
+ * THE KEY CARRIES THE CONTENT, AND HAS TO
+ *
+ * It used to be `profile:<personId>`, fixed, while the payload grew every time
+ * a surface was added. That is MemWal issue #1057, filed from this project: an
+ * idempotency key reused with changed content answers 409 forever. So the first
+ * write landed and every later one was rejected in silence — the record on
+ * Walrus still said "web" for somebody who had since connected Telegram and
+ * Discord, and it looked right only because the in-process copy was correct
+ * until the next restart.
+ */
+export async function noteSurface(personId, surface, handle = null) {
+  const p = await profileOf(personId);
+  const name = handle ? String(handle).replace(/^@/, "").slice(0, 60) : null;
+  const newSurface = !p.set.has(surface);
+  const newHandle = !!name && p.accounts[surface] !== name;
+  if (!newSurface && !newHandle) return [...p.set];
+
+  p.set.add(surface);
+  if (name) p.accounts[surface] = name;
+
+  const body = { personId, surfaces: [...p.set].sort(), accounts: p.accounts };
   persist(
     `profile ${personId}`,
     profileNs(personId),
-    JSON.stringify({ personId, surfaces: [...known].sort() }),
-    { idempotencyKey: `profile:${personId}` },
+    JSON.stringify(body),
+    { idempotencyKey: `profile:${personId}:${hash(JSON.stringify(body.surfaces) + JSON.stringify(body.accounts))}` },
   );
-  return [...known];
+  return [...p.set];
+}
+
+/* Short, stable, and different whenever the content is. */
+function hash(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36);
 }
 
 /** Which surfaces this person has connected. Cheap after the first read. */
 export async function surfacesFor(personId) {
-  const known = surfaces.get(personId);
-  if (known) return [...known];
-  const stored = parse(await readLatest(profileNs(personId)));
-  const set = new Set(stored?.surfaces ?? []);
-  surfaces.set(personId, set);
-  return [...set];
+  return [...(await profileOf(personId)).set];
+}
+
+/** And under which account on each, for a page that wants to show it. */
+export async function accountsFor(personId) {
+  return { ...(await profileOf(personId)).accounts };
 }
 
 const optOutNs = (personId) => `ws8::optout::${personId}`;
