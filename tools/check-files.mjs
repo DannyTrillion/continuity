@@ -15,6 +15,7 @@
 import { readFileSync } from "node:fs";
 import { readDocument, canRead } from "../src/core/documents.mjs";
 import { fileNs, fileSentence, parseFile, asksForFile, loadFile } from "../src/core/files.mjs";
+import { loadImage } from "../src/core/images.mjs";
 import { putBlob, getBlob, config as walrusConfig } from "../src/core/walrus.mjs";
 
 let failed = 0, passed = 0;
@@ -262,6 +263,48 @@ section("the bytes come back from wherever they still are");
      is attached to its own reply. */
   check("the model is told the file is attached and must not deny it",
     /NEVER say you cannot fetch, \n?\s*send or display a file/.test(agent) || /never say you cannot fetch/i.test(agent));
+}
+
+section("a picture is as recoverable as a file");
+
+/* Danny, on Discord, asking for a photo back: the reply read "Here's the
+   Bugatti… [Attached: telegram-photo.jpg]" and no photo arrived. Two things
+   had gone wrong and they had the same cause — the dashboard's reader was
+   taught about Walrus today and the FETCH path was not, so the two drifted.
+   A picture recoverable from Walrus was reported as lost by the one piece of
+   code whose job is fetching it back, and the walrus reference leaked into
+   the description handed to the model. */
+{
+  const img = readFileSync("src/core/images.mjs", "utf8");
+  check("findImages strips the Walrus reference as well as the file one",
+    /\.replace\(REF, ""\)\.replace\(WREF, ""\)/.test(img));
+  check("and 'available' means somebody can be shown it, not that this disk has it",
+    /available: onDisk \|\| !!blob/.test(img));
+
+  check("a path climbing out of the uploads directory is refused",
+    (await loadImage({ file: "../../etc/passwd" })) === null);
+  check("a picture that reached neither disk nor Walrus returns null",
+    (await loadImage({ file: "nope.png" })) === null);
+
+  const agent = readFileSync("src/core/agent.mjs", "utf8");
+  check("the whole match is loaded, so the blob id travels with it",
+    /loadImage\(picture\)/.test(agent));
+  check("a picture found but unloadable is admitted, not described as visible",
+    /BYTES COULD NOT BE/.test(agent));
+  /* The marker is the part Danny actually saw. Nothing in this codebase
+     writes it; the model invented it, which is worse — it looks like a bug
+     and is a lie. */
+  check("and the model is forbidden from inventing an attachment marker",
+    /Never write a marker like "\[Attached:/.test(agent));
+
+  if (process.env.SKIP_NETWORK) {
+    console.log("SKIP  the Walrus picture fetch — SKIP_NETWORK is set");
+  } else {
+    const got = await loadImage({ file: "not-on-this-disk-at-all.png",
+      walrusBlob: "Eab86j7CBtdMwiw2S7awVAnUfGWLO6JyHPffmgnzBbw" });
+    check("gone from the volume, a picture is fetched back from Walrus",
+      got?.from === "walrus", got ? `${got.png.length} bytes` : "nothing came back");
+  }
 }
 
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);

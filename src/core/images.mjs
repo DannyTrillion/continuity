@@ -37,7 +37,7 @@ import { recall } from "./memory.mjs";
 import { enqueueRemember, pendingFor } from "./outbox.mjs";
 import { describeImage, canSee } from "./vision.mjs";
 import { readDocument, canRead } from "./documents.mjs";
-import { putBlob } from "./walrus.mjs";
+import { putBlob, getBlob } from "./walrus.mjs";
 
 /** Where the bytes live. Same volume as everything else durable. */
 export const UPLOADS =
@@ -135,14 +135,25 @@ export async function findImages(personId, query, { limit = 3, offline = false }
   const found = [...hits, ...waiting]
     .map((h) => {
       const file = h.text.match(REF)?.[1] ?? null;
+      const blob = h.text.match(WREF)?.[1] ?? null;
+      const onDisk = !!file && existsSync(join(UPLOADS, file));
       return {
         file,
-        // The reference is machinery; it should never reach the model or the
-        // person, who would only wonder what it meant.
-        description: h.text.replace(REF, "").trim(),
+        walrusBlob: blob,
+        /* Both references are machinery and neither should ever reach the
+           model or the person. Only the first was being stripped, so every
+           picture stored since the bytes started going to Walrus handed the
+           model a sentence ending in "[walrus:nMxaSH…]" and invited it to
+           repeat the thing back. */
+        description: h.text.replace(REF, "").replace(WREF, "").trim(),
         distance: h.distance,
         pending: Boolean(h.pending),
-        available: !!file && existsSync(join(UPLOADS, file)),
+        /* Available means somebody can be shown it, not that this disk still
+           has it. The dashboard learned that today and this did not, which is
+           how the two drifted: a picture recoverable from Walrus was reported
+           as lost by the one code path whose job is fetching it back. */
+        onDisk,
+        available: onDisk || !!blob,
       };
     })
     .filter((p) => (p.file && seen.has(p.file) ? false : (seen.add(p.file), true)))
@@ -212,14 +223,37 @@ export async function listImages(personId, { limit = 40 } = {}) {
 }
 
 /** The bytes, ready to hand to whichever surface asked. */
-export async function loadImage(file) {
-  if (!file || !/^[\w.\-]+$/.test(file)) return null; // never let a name escape the directory
-  try {
-    const png = await readFile(join(UPLOADS, file));
-    return { png, name: file };
-  } catch {
+/**
+ * The bytes of a picture, from wherever they still are.
+ *
+ * Takes the whole match rather than a filename, because the filename alone is
+ * only good while this server still has the file — and the blob id beside it
+ * is good for as long as the storage is paid for. Disk first because it is
+ * instant, Walrus second, which is the entire reason the blob id travels
+ * inside the memory.
+ *
+ * It took a filename until now, and the cost was a photo the bot could
+ * describe and could not show after a redeploy took the volume.
+ */
+export async function loadImage(match) {
+  const file = typeof match === "string" ? match : match?.file;
+  const blob = typeof match === "string" ? null : match?.walrusBlob;
+
+  if (file && /^[\w.\-]+$/.test(file)) { // never let a name escape the directory
+    try {
+      return { png: await readFile(join(UPLOADS, file)), name: file, from: "disk" };
+    } catch { /* not here any more; Walrus may still have it */ }
+  }
+  if (!blob) {
+    if (file) console.error(`[images] ${file} is not on this disk and has no Walrus blob`);
     return null;
   }
+  const bytes = await getBlob(blob);
+  if (!bytes) {
+    console.error(`[images] ${file ?? "a picture"} was not on disk and Walrus did not return ${blob}`);
+    return null;
+  }
+  return { png: bytes, name: file ?? "picture", from: "walrus" };
 }
 
 /**

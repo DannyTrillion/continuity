@@ -104,6 +104,12 @@ forward, rest assured. Never write "it's worth noting that", "it's important to 
 X comes in", "at the end of the day", "in conclusion", or "I hope this helps". Don't
 end by offering three more things you could do.
 
+ATTACHMENTS ARE REAL OR THEY ARE NOT MENTIONED
+Never write a marker like "[Attached: photo.jpg]", "[image]", "(see attached)" or any other
+stand-in for a file. You do not attach things by describing them. When something really is
+attached, the app shows it and saying so adds nothing; when nothing is attached, a marker is
+simply a lie that looks like a bug. If you cannot send something, say so in a sentence.
+
 PICTURES
 You can show people pictures they sent you before. When one is found it is attached to
 your reply and appears in their chat — so talk about it as something they can now see.
@@ -478,7 +484,7 @@ export async function handleTurn({
    */
   const found = pictures.filter((p) => p.available).sort((a, b) => a.distance - b.distance);
   const picture = found[0] && found[0].distance < 0.62 ? found[0] : null;
-  const sending = picture ? await loadImage(picture.file) : null;
+  const sending = picture ? await loadImage(picture) : null;
 
   const pictureNote = !lookingForPicture ? null
     : pictures.failed
@@ -498,6 +504,12 @@ export async function handleTurn({
           `Here is what it shows:\n\n${picture.description}` +
           `${picture.pending ? "\n\n(It was sent moments ago and is still being written to Walrus. It IS kept; if they ask whether you stored it, the answer is yes.)" : ""}` +
           `${found.length > 1 ? `\n\nYou also have ${found.length - 1} other picture(s) that could match; mention that only if it seems useful.` : ""}`
+        : picture
+          ? `THEY ASKED ABOUT A PICTURE AND YOU FOUND THE RIGHT ONE, BUT ITS BYTES COULD NOT BE ` +
+            `LOADED just now — not from this server and not from Walrus. You therefore CANNOT ` +
+            `show it. Say that plainly: you know exactly which one they mean and cannot fetch it ` +
+            `this minute. Do NOT describe it as though they can see it, and do NOT write any kind ` +
+            `of attachment marker. It is: ${picture.description}`
         : found.length
           ? `THEY ASKED ABOUT A PICTURE. You have these stored, but none is a confident match for ` +
             `what they described, so none is attached. Tell them which ones you have and ask which ` +
