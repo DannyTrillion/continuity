@@ -86,19 +86,36 @@ export async function putBlob(bytes, { epochs = EPOCHS } = {}) {
   }
 }
 
-/** Read bytes back. Null when the aggregator cannot produce them. */
+/**
+ * Read bytes back. Null only when the aggregator really cannot produce them.
+ *
+ * Retried, because the aggregator intermittently drops a connection outright —
+ * a plain `fetch failed`, no status, retrying works immediately. Letting that
+ * through would mean a person asking for their file is told it cannot be
+ * fetched, on the one code path that exists so a file survives the server
+ * losing it. Three attempts over about a second and a half.
+ *
+ * A 404 is not retried. The aggregator saying it does not have this blob is an
+ * answer, and asking again more loudly does not change it.
+ */
 export async function getBlob(blobId) {
   if (!blobId) return null;
-  try {
-    const res = await fetch(`${AGGREGATOR}/v1/blobs/${encodeURIComponent(blobId)}`, {
-      signal: AbortSignal.timeout(GET_TIMEOUT),
-    });
-    if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
-  } catch (err) {
-    console.error("[walrus] download failed:", err.message);
-    return null;
+  let last = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, attempt * 500));
+    try {
+      const res = await fetch(`${AGGREGATOR}/v1/blobs/${encodeURIComponent(blobId)}`, {
+        signal: AbortSignal.timeout(GET_TIMEOUT),
+      });
+      if (res.status === 404) return null;
+      if (!res.ok) { last = `status ${res.status}`; continue; }
+      return Buffer.from(await res.arrayBuffer());
+    } catch (err) {
+      last = err.message;
+    }
   }
+  console.error(`[walrus] download failed after 3 tries (${last}):`, blobId);
+  return null;
 }
 
 export const config = () => ({ publisher: PUBLISHER, aggregator: AGGREGATOR, network: NETWORK, epochs: EPOCHS });
