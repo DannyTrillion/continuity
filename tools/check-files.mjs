@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { readDocument, canRead } from "../src/core/documents.mjs";
 import { fileNs, fileSentence, parseFile, asksForFile, loadFile } from "../src/core/files.mjs";
 import { loadImage } from "../src/core/images.mjs";
-import { putBlob, getBlob, config as walrusConfig } from "../src/core/walrus.mjs";
+import { putBlob, getBlob, encrypting, config as walrusConfig } from "../src/core/walrus.mjs";
 
 let failed = 0, passed = 0;
 const check = (name, ok, detail = "") => {
@@ -305,6 +305,57 @@ section("a picture is as recoverable as a file");
     check("gone from the volume, a picture is fetched back from Walrus",
       got?.from === "walrus", got ? `${got.png.length} bytes` : "nothing came back");
   }
+}
+
+section("nothing private goes onto a public network in the clear");
+
+/* From Sui's own docs, in a caution box: "Both blob contents and their
+   metadata are public. Blob IDs ... are all discoverable by anyone, so an
+   attacker can enumerate and read everything you store. Never store secrets or
+   private data unencrypted."
+   This shipped doing exactly that for two days. Somebody's lease, raw on a
+   public network, with the blob id printed on their own memory page. */
+check("there is a key to seal with", encrypting() === true);
+
+if (process.env.SKIP_NETWORK) {
+  console.log("SKIP  the sealing round trip — SKIP_NETWORK is set");
+} else {
+  const secret = Buffer.from("A LEASE: 14 Oak Road, 12 months from 1 November. Private.");
+  const put = await putBlob(secret);
+  check("an attachment still uploads", !!put?.blobId, put?.blobId);
+  check("and says it sealed it", put?.sealed === true);
+
+  /* A blob is certified before every aggregator can serve it, so uploading and
+     reading back in the same breath races propagation — which nothing real
+     does. Waiting is the honest way to test that it round trips; shortening
+     the assertion to make it pass would be testing something else. */
+  const settle = async (id, tries = 10) => {
+    for (let i = 0; i < tries; i++) {
+      const r = await fetch(`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${id}`).catch(() => null);
+      if (r?.ok) return Buffer.from(await r.arrayBuffer());
+      await new Promise((f) => setTimeout(f, 1500));
+    }
+    return null;
+  };
+  const raw = await settle(put.blobId);
+  check("it lands on Walrus and can be fetched", !!raw, raw ? `${raw.length}B` : "never appeared");
+  check("the server opens it again and gets the real bytes",
+    (await getBlob(put.blobId))?.equals(secret) === true);
+
+  check("but a stranger reading Walrus gets ciphertext",
+    !!raw && !/Oak Road/.test(raw.toString("utf8")),
+    raw ? raw.subarray(0, 20).toString("utf8").replace(/[^\x20-\x7e]/g, ".") : "no bytes");
+  check("marked so it can be opened later", raw?.subarray(0, 5).toString() === "WALX1");
+
+  /* Breaking files already stored, to fix how new ones are stored, helps
+     nobody — so anything without the header is passed straight through. */
+  const plain = Buffer.from("an older blob, from before any of this");
+  const direct = await fetch("https://publisher.walrus-testnet.walrus.space/v1/blobs?epochs=5",
+    { method: "PUT", body: plain }).then((r) => r.json());
+  const oldId = direct?.newlyCreated?.blobObject?.blobId ?? direct?.alreadyCertified?.blobId;
+  await settle(oldId);
+  check("and a blob from before the header still reads",
+    (await getBlob(oldId))?.equals(plain) === true);
 }
 
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);
