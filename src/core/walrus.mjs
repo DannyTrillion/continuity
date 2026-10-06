@@ -124,8 +124,29 @@ const EPOCHS = Number(process.env.WALRUS_EPOCHS ?? 10);
 const PUT_TIMEOUT = Number(process.env.WALRUS_PUT_TIMEOUT_MS ?? 45_000);
 const GET_TIMEOUT = Number(process.env.WALRUS_GET_TIMEOUT_MS ?? 25_000);
 
+/**
+ * Where to look up a blob of FILE BYTES, which this module wrote.
+ *
+ * Tied to this module's own network, because that is the one it uploads to.
+ */
 export const walruscan = (blobId) =>
   `https://walruscan.com/${NETWORK}/blob/${encodeURIComponent(blobId)}`;
+
+/**
+ * Where to look up a blob of MEMORY, which the relayer wrote.
+ *
+ * Always mainnet, and deliberately a separate function rather than a parameter
+ * nobody remembers to pass. The two halves of this project live on two
+ * networks — memories on mainnet because the relayer pays for them, file bytes
+ * on testnet because nothing sponsors those — and a single `walruscan()` makes
+ * it far too easy to print a mainnet blob id under a testnet URL.
+ *
+ * Which I did, in the MCP server, within an hour of writing that distinction
+ * into the article. The link resolved to nothing and looked like a lie about
+ * the one claim this project rests on.
+ */
+export const memoryscan = (blobId) =>
+  `https://walruscan.com/mainnet/blob/${encodeURIComponent(blobId)}`;
 
 /**
  * Store bytes and return the id they can be read back under.

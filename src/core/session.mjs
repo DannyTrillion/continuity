@@ -268,16 +268,40 @@ export async function respond({ surface, surfaceUserId, displayName, text, onDel
         attachment,
         memoryless: true,
       });
-      // If it could fall back on what it read a few minutes ago, it did not
-      // answer cold, and saying so would be its own small untruth.
+      /**
+       * The note has to describe the answer the person is actually looking at.
+       *
+       * Three different things can have happened by this point and only one of
+       * them is "answered cold". It fell back on what it read a few minutes
+       * ago; or the answer came out of this very conversation, because they
+       * told it one message ago; or it genuinely had nothing. Collapsing those
+       * into one apology produces the worst sentence this bot can say — a
+       * correct answer, immediately followed by a claim it could not answer.
+       *
+       * That happened. "Which package manager do I use?" → "pnpm. And you'd
+       * switch projects before touching npm." → "-# I know who you are, I just
+       * couldn't read your memory back this second." Both halves true, read
+       * together as either a bug or a lie. It is the same mistake as telling
+       * somebody who asked to be forgotten that storage is broken: the state
+       * is fine, the sentence describing it is not.
+       */
+      const fromThisChat = history(who.personId).length > 0;
+      const soon = wait ? (wait >= 60 ? `${Math.round(wait / 60)} minutes` : `${wait} seconds`) : "a minute";
       const note = blind.stale
         ? `\n\n-# My memory didn't answer just then, so I went on what I read a few minutes ago.`
-        : rateLimited
-          ? `\n\n-# I know who you are, I just couldn't read your memory back this ` +
-            `second — too many requests at once. Try again in ${wait ? (wait >= 60 ? `${Math.round(wait / 60)} minutes` : `${wait} seconds`) : "a minute"} and it'll be there.`
-          : network
-            ? `\n\n-# I lost my connection to my memory partway through that, so I answered it cold. Nothing's lost.`
-            : `\n\n-# I couldn't read my memory back just then, so I answered that one cold. Nothing's lost.`;
+        : fromThisChat
+          /* Say where the answer came from, not what failed. The person can
+             see it was answered; what they cannot see is that it came from the
+             last few messages rather than from storage. */
+          ? rateLimited
+            ? `\n\n-# That came from this conversation — reading my longer memory back is rate-limited for another ${soon}.`
+            : `\n\n-# That came from this conversation; I couldn't reach my longer memory just then. Nothing's lost.`
+          : rateLimited
+            ? `\n\n-# I know who you are, I just couldn't read your memory back this ` +
+              `second — too many requests at once. Try again in ${soon} and it'll be there.`
+            : network
+              ? `\n\n-# I lost my connection to my memory partway through that, so I answered it cold. Nothing's lost.`
+              : `\n\n-# I couldn't read my memory back just then, so I answered that one cold. Nothing's lost.`;
       // Still part of the conversation: the next message has to be able to
       // refer back to this one, and the transcript has to include it.
       pushHistory(who.personId, trimmed, blind.text, attachment);

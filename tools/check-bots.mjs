@@ -359,5 +359,39 @@ section("asking to be forgotten is not a storage failure");
     /if \(!recording\)/.test(web) && /Not recording you/.test(web));
 }
 
+section("a footnote may not contradict the answer above it");
+
+/* Same shape, found while measuring the article's before/after against
+   production. I had rate-limited myself, and the fallback answered correctly
+   out of the live conversation and then apologised for being unable to answer:
+
+     "which package manager do I use?"
+     "pnpm. And you'd switch projects before touching npm."
+     "-# I know who you are, I just couldn't read your memory back this second"
+
+   The answer is right there. Telling somebody their memory is broken while
+   handing them the remembered answer teaches them to distrust both. */
+{
+  const ses = readFileSync("src/core/session.mjs", "utf8");
+  check("answering out of the live conversation is its own case",
+    /const fromThisChat = history\(who\.personId\)\.length > 0/.test(ses));
+  /* Order is checked against the code with the comments stripped out, because
+     the comment above the fix quotes the bad footnote verbatim and every text
+     anchor I tried matched the explanation instead of the branch. Writing down
+     what went wrong should not fail the test that it is fixed — check-known
+     had the same false positive, matching an attack's own words. */
+  const code = ses.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  check("and it is checked before the rate-limit apology",
+    code.indexOf("fromThisChat") < code.indexOf("-# I know who you are"));
+  check("the note says where the answer came from instead of what failed",
+    /That came from this conversation/.test(ses));
+  /* "Nothing's lost" is still true and still worth saying — the outbox has
+     the write. What is not true is that it could not answer. */
+  check("a stale read still says it is stale rather than cold",
+    /went on what I read a few minutes ago/.test(ses));
+  check("and a genuinely cold answer still admits it",
+    /answered that one cold/.test(ses));
+}
+
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);
 process.exit(failed ? 1 : 0);

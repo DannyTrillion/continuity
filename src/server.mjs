@@ -24,6 +24,7 @@ import { snapshot } from "./core/metrics.mjs";
 import { storeAttachment, listImages, UPLOADS } from "./core/images.mjs";
 import { listFiles } from "./core/files.mjs";
 import { getBlob, config as walrusConfig } from "./core/walrus.mjs";
+import { dispatch as mcpDispatch, TOOLS as MCP_TOOLS, PROTOCOL as MCP_PROTOCOL } from "./mcp.mjs";
 import { startSignIn, signInStatus, describeDevice } from "./core/signin.mjs";
 import { saveStep, savePicture, finish as finishOnboarding, receiptsFor, stateFor } from "./core/onboard.mjs";
 import { randomUUID } from "node:crypto";
@@ -329,6 +330,42 @@ const server = createServer(async (req, res) => {
   // and confirm this bot's memory is really on Walrus.
   if (url.pathname === "/api/ledger") {
     return json(res, 200, { writes: recentWrites, total: ledgerTotal });
+  }
+
+  /**
+   * The same memory, as tools another agent can call.
+   *
+   * Remote rather than only stdio because the point is that somebody else's
+   * Walrus app can use this without installing anything: a URL in their client
+   * config instead of a process on their machine. One POST, one JSON-RPC
+   * message, one response — a tools-only server needs no streaming, and SSE
+   * would be furniture.
+   *
+   * A GET returns a plain description instead of a protocol error, because the
+   * first thing anybody does with an endpoint like this is open it in a
+   * browser, and "Method not allowed" teaches them nothing.
+   */
+  if (url.pathname === "/mcp") {
+    if (req.method === "GET") {
+      return json(res, 200, {
+        name: "continuity",
+        protocolVersion: MCP_PROTOCOL,
+        transport: "POST a JSON-RPC 2.0 message to this URL",
+        tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
+        note: "Every tool takes `user`: a stable id for the person on your side. It is scoped to " +
+          "the `mcp` surface, so it cannot collide with a Telegram or Discord account.",
+      });
+    }
+    if (req.method !== "POST") return json(res, 405, { error: "POST a JSON-RPC message here." });
+    try {
+      const msg = await readBody(req);
+      const out = await mcpDispatch(msg);
+      // A notification gets no body at all; answering one breaks the client.
+      if (!out) { res.writeHead(202); return res.end(); }
+      return json(res, 200, out);
+    } catch (err) {
+      return json(res, 400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: err.message } });
+    }
   }
 
   // What the bot currently knows about one person, for the sidebar. Kept out
