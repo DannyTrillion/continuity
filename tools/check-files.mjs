@@ -16,6 +16,19 @@ import { readFileSync } from "node:fs";
 import { readDocument, canRead } from "../src/core/documents.mjs";
 import { fileNs, fileSentence, parseFile, asksForFile, loadFile } from "../src/core/files.mjs";
 import { loadImage } from "../src/core/images.mjs";
+
+/* A blob is certified before every aggregator can serve it, so uploading and
+   reading back in the same breath races propagation — which nothing real ever
+   does. Both round-trip sections wait rather than assert early; shortening the
+   assertion to make it pass would be testing something else. */
+const settle = async (id, tries = 12) => {
+  for (let i = 0; i < tries; i++) {
+    const r = await fetch(`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${id}`).catch(() => null);
+    if (r?.ok) return Buffer.from(await r.arrayBuffer());
+    await new Promise((f) => setTimeout(f, 1500));
+  }
+  return null;
+};
 import { putBlob, getBlob, encrypting, config as walrusConfig } from "../src/core/walrus.mjs";
 
 let failed = 0, passed = 0;
@@ -191,6 +204,7 @@ if (process.env.SKIP_NETWORK) {
   const put = await putBlob(bytes);
   check("bytes go to Walrus and come back with an id", !!put?.blobId, put?.blobId);
   if (put?.blobId) {
+    await settle(put.blobId);
     const got = await getBlob(put.blobId);
     check("and read back byte for byte", got?.equals(bytes) === true,
       got ? `${got.length} bytes` : "nothing came back");
@@ -329,14 +343,6 @@ if (process.env.SKIP_NETWORK) {
      reading back in the same breath races propagation — which nothing real
      does. Waiting is the honest way to test that it round trips; shortening
      the assertion to make it pass would be testing something else. */
-  const settle = async (id, tries = 10) => {
-    for (let i = 0; i < tries; i++) {
-      const r = await fetch(`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${id}`).catch(() => null);
-      if (r?.ok) return Buffer.from(await r.arrayBuffer());
-      await new Promise((f) => setTimeout(f, 1500));
-    }
-    return null;
-  };
   const raw = await settle(put.blobId);
   check("it lands on Walrus and can be fetched", !!raw, raw ? `${raw.length}B` : "never appeared");
   check("the server opens it again and gets the real bytes",

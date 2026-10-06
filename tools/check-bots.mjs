@@ -11,6 +11,7 @@
  * tokens, no relayer and no network — issuing a link code is in-memory, and a
  * person with no namespaces makes the memory commands answer without a read.
  */
+import { readFileSync } from "node:fs";
 import { ACTIONS, actionsFor, handleCommand, siteIntent, needsNoMemory } from "../src/core/commands.mjs";
 import { keyboard, formatted } from "../src/adapters/telegram.mjs";
 import { rowsFor, embedFor } from "../src/adapters/discord.mjs";
@@ -323,6 +324,40 @@ check("but anything that reads or writes memory still needs it",
   !needsNoMemory("/whatyouknow") && !needsNoMemory("/study") && !needsNoMemory("/forgetme")
   && !needsNoMemory("/quiz") && !needsNoMemory("/link"),
   ["/whatyouknow", "/study", "/forgetme", "/quiz", "/link"].filter(needsNoMemory));
+
+section("asking to be forgotten is not a storage failure");
+
+/* Danny, after two days of this: "im genuinely fed up". He had opted out,
+   and every memory-dependent answer since told him the Walrus service was
+   returning nothing and to try again in a minute. All three claims false. He
+   had used the one control the product offers and been told it was broken.
+
+   Correct behaviour wearing the costume of a failure, which is the exact
+   shape of bug this project spent three weeks filing against somebody else. */
+{
+  const agent = readFileSync("src/core/agent.mjs", "utf8");
+  check("an opted-out person gets their own branch, before the broken-memory one",
+    agent.indexOf('optedOut === true') > 0
+    && agent.indexOf('optedOut === true') < agent.indexOf('YOU KNOW THIS PERSON'));
+  check("and the model is forbidden from blaming the service",
+    /NEVER say you cannot read your memory, that the service returned nothing/.test(agent));
+  check("it is told to name the real reason and the way back",
+    /asked you to forget them/.test(agent) && /`\/remember me`/.test(agent));
+  /* Append-only storage cannot unwrite, and the one moment somebody most
+     needs to hear that is when they have just asked you to forget them. */
+  check("and to keep saying that nothing was unwritten",
+    /append-only storage cannot be unwritten/.test(agent));
+
+  const cmds = readFileSync("src/core/commands.mjs", "utf8");
+  check("/whatyouknow says you are opted out rather than staying silent",
+    /const off = await isOptedOut/.test(cmds) && /asked me to stop recording you/.test(cmds));
+
+  const srv = readFileSync("src/server.mjs", "utf8");
+  const web = readFileSync("src/web/chat.html", "utf8");
+  check("the API reports whether anything is being written", /recording,/.test(srv));
+  check("and the header stops claiming it is saving when it is not",
+    /if \(!recording\)/.test(web) && /Not recording you/.test(web));
+}
 
 console.log(failed ? `\n${failed} check(s) failed, ${passed} passed` : `\nall ${passed} checks passed`);
 process.exit(failed ? 1 : 0);

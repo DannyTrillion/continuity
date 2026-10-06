@@ -5,7 +5,7 @@
  * linking behaves identically everywhere and lives in one place.
  */
 
-import { issueLinkCode, redeemLinkCode, resolvePerson, setOptOut } from "./identity.mjs";
+import { issueLinkCode, redeemLinkCode, resolvePerson, setOptOut, isOptedOut } from "./identity.mjs";
 import { recall, personNs, KB_NS } from "./memory.mjs";
 import { searchWeb, screenshotUrl } from "./web.mjs";
 import { MODES, isMode, modeFor, setMode, planItems, stackItems, awayInWords } from "./modes.mjs";
@@ -399,6 +399,13 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
     }
 
     case "/whatyouknow": {
+      /* Asking to see your own file is not the same as the assistant reading
+         it back at you mid-conversation, so this still answers after an
+         opt-out — but it says so. Without that line the only way to discover
+         you had turned recording off was that every other answer started
+         blaming the storage. */
+      const off = await isOptedOut(person.personId).catch(() => false);
+
       // Every namespace this person owns — including accounts merged in by
       // linking, or anything said before the link would silently vanish.
       const sets = await Promise.all(
@@ -410,14 +417,20 @@ export async function handleCommand({ text, surface, surfaceUserId, person }) {
       if (!hits.length) {
         return {
           handled: true,
-          reply: "Nothing yet — we haven't talked about anything worth keeping.",
+          reply: off
+            ? "Nothing stored, and I'm not recording you either — you asked me to stop. Say `/remember me` to turn it back on."
+            : "Nothing yet — we haven't talked about anything worth keeping.",
           actions: ["help"],
         };
       }
       const lines = hits.map((h) => `• ${h.text}`).join("\n");
       return {
         handled: true,
-        reply: `Here's what I have:\n\n${lines}`,
+        reply: off
+          ? `You asked me to stop recording you, so I'm not reading any of this back in conversation — ` +
+            `and nothing new is being written. It's still here, and still yours to see:\n\n${lines}\n\n` +
+            `Say \`/remember me\` to turn it back on.`
+          : `Here's what I have:\n\n${lines}`,
         data: {
           kind: "memories",
           items: hits.map((h) => ({ text: h.text, blobId: h.blob_id ?? null })),

@@ -601,6 +601,19 @@ export async function handleTurn({
                   "If they ask about something older that is not here, say it is still saving and to ask " +
                   "again shortly.\n\n"
                 : "") + fence("WHAT I KNOW ABOUT THIS PERSON", personal)
+          /* They asked you to stop. Blaming the storage for that is the worst
+             sentence in this file: somebody exercised the one control the
+             product offers, and every answer afterwards told them the service
+             was broken. Correct behaviour wearing the costume of a failure,
+             which is the exact thing this project keeps filing bugs about. */
+          : optedOut === true
+            ? "THIS PERSON ASKED YOU TO STOP RECORDING AND STOP READING THEM, and you are honouring that. " +
+              "Your memory is NOT broken and the storage service is NOT failing — you are not looking. " +
+              "NEVER say you cannot read your memory, that the service returned nothing, or that they " +
+              "should ask again in a minute: all three are false and they will believe you. Say plainly " +
+              "that they asked you to forget them so you are not reading anything back, that what was " +
+              "already written stays on Walrus because append-only storage cannot be unwritten, and that " +
+              "`/remember me` turns it back on. Answer anything that does not need memory as normal."
           : known
             ? "YOU KNOW THIS PERSON. You have memories of them and have spoken before, but none could be " +
               "read back this turn — the memory service returned nothing. This is NOT your first " +

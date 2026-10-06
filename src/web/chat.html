@@ -2023,8 +2023,18 @@ let first = true;
 // The server decides what "healthy" means and never blocks on the relayer, so
 // this just renders the answer. Before the first poll lands, stay neutral
 // rather than alarming someone who has done nothing wrong.
+/* Set from /api/memory. Opting out is a state the header has to show: without
+   it the banner read "Saving your memory" to somebody who had asked to be
+   forgotten, which is the product contradicting itself in its own chrome. */
+let recording = true;
+
 async function refreshHealth() {
   try {
+    if (!recording) {
+      $("ping").className = "ping";
+      $("pingtext").textContent = "Not recording you";
+      return;
+    }
     const h = await fetch("/healthz").then((r) => r.json());
     if (!h.known) { $("ping").className = "ping"; $("pingtext").textContent = "Connecting…"; return; }
     const ok = h.ok !== false;
@@ -2078,6 +2088,11 @@ async function refreshMemory() {
       : `I remember ${n} thing${n === 1 ? "" : "s"} about you`) + still;
     if (name) $("tagline").textContent = `remembers ${name}`;
     $("viewmem").hidden = false;
+    if (m.recording === false || m.recording === true) {
+      const was = recording;
+      recording = m.recording;
+      if (was !== recording) refreshHealth();
+    }
     paintSurfaces(m.connected ?? [], name, m.accounts ?? {});
     maybeNudge(n);
     for (const f of facts) knownFacts.add(f.text);

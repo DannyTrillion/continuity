@@ -14,7 +14,7 @@ import { rememberLastGood } from "./core/agent.mjs";
 import { studyShelf, listMaterials } from "./core/study.mjs";
 import { modeFor, stackItems, planItems, awayInWords } from "./core/modes.mjs";
 import { health, recall, dedupe, personNs, suppressionsFor, withoutSuppressed, markWrong, NS_INDEX } from "./core/memory.mjs";
-import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor, adoptPerson, accountsFor } from "./core/identity.mjs";
+import { resolvePerson, lookupAccount, issueLinkCode, surfacesFor, adoptPerson, accountsFor, isOptedOut } from "./core/identity.mjs";
 import { startOutbox, onSettled, outboxStats, pendingFor, FILE as OUTBOX_FILE } from "./core/outbox.mjs";
 import { list as listConversations, get as getConversation, flushAll } from "./core/conversations.mjs";
 import { resume, hasHistory } from "./core/session.mjs";
@@ -385,11 +385,16 @@ const server = createServer(async (req, res) => {
       const facts = [...landed, ...queued];
       const connected = await surfacesFor(who.personId).catch(() => ["web"]);
       const accounts = await accountsFor(who.personId).catch(() => ({}));
+      /* Whether anything is actually being written. The header said "Saving
+         your memory" purely from relayer health, so somebody who had asked to
+         be forgotten was told their memory was being saved on every screen. */
+      const recording = (await isOptedOut(who.personId).catch(() => false)) !== true;
       return json(res, 200, {
         personId: who.personId,
         linked: connected.length > 1,
         connected,
         accounts,
+        recording,
         name: nameFrom(facts),
         facts,
         saving: queued.length,
