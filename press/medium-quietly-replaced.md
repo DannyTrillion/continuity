@@ -47,9 +47,9 @@ web        bot [10.9s, recalled 4]: Node 22.
 
 Breadth is also what made the hard bug findable, which I did not expect. Three surfaces reading one memory meant identity had to be exactly right, and that is where everything went wrong.
 
-> **[UPLOAD THE VIDEO HERE — `clips/out/continuity-demo-1080p.mp4`, 76s]**
+https://youtu.be/tU6CjMPRauw
 
-*Seventy-six seconds, no cuts inside a shot. A photo sent on Telegram, asked for on Discord, and the blob holding the memory opened on Walruscan. Then a PDF pasted into the web chat, read, filed, and its bytes shown on Walrus.*
+*Seventy-six seconds, no cuts inside a shot. A photo sent on Telegram, asked for on Discord, and the blob holding the memory opened on Walruscan. Then a PDF pasted into the web chat, read, filed, and its bytes shown on Walrus. Also [on YouTube](https://youtu.be/tU6CjMPRauw), and the file itself is [on Walrus](https://walruscan.com/testnet/blob/BZChq60laZX2o8OCtlrCCIRS1wWmCOLCycNGtUk7hlA) — an article about storing files on Walrus ought to store its own.*
 
 **533** writes on Walrus mainnet · **3** surfaces, one memory · **5** bugs filed on MemWal · **741** checks guarding all of it
 

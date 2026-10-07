@@ -19,12 +19,16 @@ Inkray goes first so Medium can point its canonical at it.
 
 ## Order of operations
 
-1. Paste the Inkray Markdown into Inkray's editor.
+1. Paste into Inkray from `inkray-RICH.html`, not from the Markdown. Open it
+   in a browser, select all, copy, paste. Inkray's editor is block-based: given
+   Markdown it wrapped the entire article in one ```markdown code block, and
+   given plain text it would leave literal asterisks. It does understand pasted
+   HTML. Title goes in the title field from `inkray-TITLE.txt` — plain, no `#`.
 2. Upload `continuity-cover.jpg` as the cover image.
-3. Find the line `**[UPLOAD THE VIDEO HERE — …]**`, upload
-   `../clips/out/continuity-demo-1080p.mp4` there, delete the marker.
-   It is deliberately loud: the video cannot travel in Markdown, and a quiet
-   omission is how a piece ends up referencing a film that is not there.
+3. The video is a bare YouTube link on its own line — most editors turn that
+   into a player on paste. Inkray cannot take an uploaded video file, which is
+   why it is a link and not an upload. The clip is also on Walrus, blob
+   `BZChq60laZX2o8OCtlrCCIRS1wWmCOLCycNGtUk7hlA`, which the caption says.
 4. Upload `cross-app.jpg` where it is referenced.
 5. Publish. Copy the URL.
 6. Repeat for Medium with `medium-quietly-replaced.md`, which also wants

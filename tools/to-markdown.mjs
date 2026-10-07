@@ -276,11 +276,12 @@ for (const m of body.matchAll(BLOCK)) {
     continue;
   }
 
-  /* Deliberately loud. The video does not survive a paste and the writer has
-     to upload it; a quiet omission is how a published piece ends up
-     referencing a film that is not there. */
+  /* The <video> cannot travel, so it becomes the link the editor will turn
+     into a player. It was a loud UPLOAD-ME marker while no link existed,
+     because a quiet omission is how a published piece ends up referencing a
+     film that is not there. Now there is a link, so there is no gap to flag. */
   if (/^<video/.test(whole)) {
-    push("> **[UPLOAD THE VIDEO HERE — `clips/out/continuity-demo-1080p.mp4`, 76s]**");
+    push("https://youtu.be/tU6CjMPRauw");
     continue;
   }
 

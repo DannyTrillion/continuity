@@ -1,0 +1,277 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Paste me</title>
+<body style="max-width:46rem;margin:40px auto;padding:0 20px;font:16px/1.6 -apple-system,system-ui,sans-serif">
+<p style="background:#fffbe6;border:1px solid #e8d48a;padding:12px 14px;border-radius:6px;font-size:14px">
+Select everything below this box (click once in the text, then ⌘A), copy, and paste into the editor.
+Do <b>not</b> use paste-as-plain-text — the formatting is the point.
+</p>
+<hr>
+<h1>The day my chatbot <em>quietly replaced</em> its user</h1>
+
+<p><strong>Why I built a general assistant instead of the support bot everyone suggested, what it taught me about what Walrus is actually for, and the day the memory layer handed me a convincing replacement for one of my users.</strong></p>
+
+<p><em>Walrus Sessions 8 · Chatbots that remember</em> · Danny · Continuity · Kimi K2.5 · never GPT or Claude · 11 min</p>
+
+<p><img src="continuity-cover.jpg" alt="Continuity title card on black: the orb mark above the words Most chatbots forget you. This one can't. One memory on Walrus mainnet. Web, Telegram and Discord."></p>
+
+<hr>
+
+<p>Every time I described this project, somebody suggested I narrow it. Make it a support bot. Make it a shopping assistant. Pick a vertical.</p>
+
+<p>I didn't, and the first reason is sitting in the code: <strong>Support desk is one of four modes</strong>, alongside Tutor, Coding partner and Planner. A customer service bot is not a product here, it is a setting.</p>
+
+<blockquote><p><strong>A niche bot is the easier build and the weaker proof.</strong></p></blockquote>
+
+<p>Give a support bot a memory and you have given it a ticket history: a table keyed on a customer id, a thing that has existed since the 1990s. Nothing about it needs decentralised storage or an append-only log or a blob id you can audit. You could fake it convincingly in an afternoon with Postgres and nobody could tell from outside. Same with a shopping assistant remembering your size. These are the demos that look like memory and are really just rows.</p>
+
+<p>Memory gets interesting when it holds things that stay true across contexts. That I use pnpm and never npm. That the Result step of STAR is where I fall apart under interview pressure. That I got question four wrong on Tuesday. Those facts belong to no vertical, and they are worth something to the person they describe, which is the test I kept returning to: <em>would you want to own this record?</em> Nobody wants to own a shopping bot's model of them. People do want to own the record of how they work and what they are trying to learn.</p>
+
+<p>That question also decides whether any of this belongs on Walrus. Durable, auditable, user-facing storage is overkill for a ticket queue and exactly right for a record someone should be able to inspect, carry between apps, and verify was not quietly rewritten.</p>
+
+<h2>What it actually does for me</h2>
+
+<p><strong>Continuity</strong> is one assistant reachable from three places: a web chat, Telegram, and Discord. Not three bots sharing a database. One memory, on Walrus mainnet, that all three read and write.</p>
+
+<p>It reads documents I paste at it — PDFs, notes, logs — and describes photos I send, so both become things I can search for by describing them months later rather than by remembering a filename. In Tutor mode I can hand it lecture notes and it writes questions from the document's own words, then <strong>remembers which ones I got wrong</strong>, so the thing I fumbled on Telegram on Tuesday comes back on Discord on Friday. Any model can quiz you from a document. Remembering where you got stuck is the part that needed Walrus.</p>
+
+<p>The modes change how it answers without changing what it knows. Pick Tutor on Telegram and you have picked it on Discord. On Telegram I can forward it any message and it keeps it with who said it, or type <code>@walrusmemory_bot</code> in any chat to pull up what it knows without leaving the conversation. There is a dashboard listing everything it has stored about me, each fact carrying the blob that holds it, and a button to tell it that something is wrong.</p>
+
+<p>The demo is deliberately boring, which is the point. Say something in Telegram, ask about it in Discord, ask again on the web. A real recorded session, with the actual latencies:</p>
+
+<pre><code>telegram   Danny: Hi — I'm Danny. I use pnpm, never npm,
+           and I'm on Node 22 on a Mac.
+telegram   bot [17.7s, recalled 0]: Hey Danny. Good setup.
+
+discord    Danny: quick one — which package manager do I use?
+discord    bot [8.1s, recalled 4]: pnpm. You said never npm,
+           and I remember that.
+
+web        Danny: and what Node version am I on again?
+web        bot [10.9s, recalled 4]: Node 22.</code></pre>
+
+<p><em>three apps · three accounts · one person</em></p>
+
+<p>Breadth is also what made the hard bug findable, which I did not expect. Three surfaces reading one memory meant identity had to be exactly right, and that is where everything went wrong.</p>
+
+<p>https://youtu.be/tU6CjMPRauw</p>
+
+<p><em>Seventy-six seconds, no cuts inside a shot. A photo sent on Telegram, asked for on Discord, and the blob holding the memory opened on Walruscan. Then a PDF pasted into the web chat, read, filed, and its bytes shown on Walrus. Also <a href="https://youtu.be/tU6CjMPRauw">on YouTube</a>, and the file itself is <a href="https://walruscan.com/testnet/blob/BZChq60laZX2o8OCtlrCCIRS1wWmCOLCycNGtUk7hlA">on Walrus</a> — an article about storing files on Walrus ought to store its own.</em></p>
+
+<p><strong>533</strong> writes on Walrus mainnet · <strong>3</strong> surfaces, one memory · <strong>5</strong> bugs filed on MemWal · <strong>741</strong> checks guarding all of it</p>
+
+<h2>The day it replaced a user</h2>
+
+<p>Somewhere around the third day of building, a user of my bot stopped existing.</p>
+
+<p>Not dramatically. Nothing errored, nothing went red, no alert fired. A person had four memories stored against their account, opened the web chat, and was greeted like a stranger.</p>
+
+<p>Behind that greeting, the bot had read their identity record, got back an empty result, concluded it had never met them, and minted a brand new person id. Storage is append-only, so newest wins. From that moment every read returned the new, empty person. The four memories were still on Walrus. They were just unreachable, permanently, and nobody would ever have known why.</p>
+
+<pre><code>ws8::id::web::web-proof-2 →
+  d083f353-…   minted by a false empty — no memories
+  fcc93702-…   the real one — 4 memories, orphaned</code></pre>
+
+<p><em>two identities for one account, newest wins</em></p>
+
+<p>I was building for a hackathon whose entire premise is <em>chatbots that remember</em>. The memory layer had just forgotten someone, silently, and handed me a convincing replacement. A support bot would have survived this: lose a ticket history and somebody re-types their order number. Lose the thing that knows who you are across three apps and there is nothing to re-type.</p>
+
+<p><img src="cross-app.jpg" alt="Cross-app memory: one memory, three apps. The chat rail showing Hi Danny, I remember 4 things about you, with Web, Telegram and Discord all marked connected and 50 recent writes to Walrus."></p>
+
+<p><em>Not a claim that it works across apps. The three surfaces reporting themselves connected, with the write count underneath.</em></p>
+
+<h2>What MemWal taught me about Walrus</h2>
+
+<p>Walrus Memory stores text. Every write method takes a string, and for two weeks that was all I needed, because facts about a person are sentences.</p>
+
+<p>Then I added photos. The bytes of a photograph can never be a memory. What <em>can</em> be a memory is a description, and the description turns out to be the valuable half, because it is the part recall can search. "Me ice skating" matches a sentence about a person on ice. It does not match pixels.</p>
+
+<p>So an attachment became two halves: the description to Walrus Memory, the bytes to a volume on the server. That worked, and a redeploy showed me what was wrong with it. A description of a lease is durable because it is a memory. The lease itself sat on a disk that a deploy wipes.</p>
+
+<blockquote><p><strong>The memory outlived the file it described. That is exactly backwards.</strong></p></blockquote>
+
+<p>So I stopped treating Walrus as the thing underneath MemWal and started using it directly. The bytes go to Walrus now, and the blob id is written <strong>into the memory</strong>, next to the filename:</p>
+
+<pre><code>A file the user shared on telegram, 4 Oct 2026 (lease.pdf):
+A residential tenancy agreement for 14 Oak Road, twelve
+months from 1 November…
+[file:d86524ec-….pdf][walrus:nMxaSHx54ESfmruT6HCCOnVl…]</code></pre>
+
+<p><em>one sentence, two pointers — the local copy and the one that outlives it</em></p>
+
+<p>That single line is the whole design. The pointer to a file comes back from the same read that finds the file, so there is no second database to keep in sync and no index sitting on the very disk whose loss this is meant to survive. The volume became a cache.</p>
+
+<p>Mine is a narrow slice of what people build on this storage. <a href="https://docs.sui.io/sui-stack/walrus/only-fins">OnlyFins</a>, Mysten's own reference app, puts images on Walrus and gates them with Seal, each post a Sui object holding a blob id. <strong>Tusky</strong> is consumer file storage on it. Walrus Sites serves whole front-ends from it. All of them treat a blob as the product. Mine treats a blob as the thing a <em>sentence</em> points at, which is the only reason a chatbot can hand you back a file you described rather than named.</p>
+
+<h2>Everything on Walrus is public, and I found out late</h2>
+
+<p>Three days before the deadline I read the storage documentation properly instead of skimming for the endpoint I needed. There is a caution box near the top.</p>
+
+<blockquote><p>"Both blob contents and their metadata are public. Blob IDs, blob attributes, and the onchain blob registration are all discoverable by anyone, so an attacker can enumerate and read everything you store. <strong>Never store secrets or private data unencrypted.</strong>"</p></blockquote>
+
+<blockquote><p>— <em>docs.sui.io — Data Storage Using Walrus</em></p></blockquote>
+
+<p>I had been doing exactly that for two days, and it did not even require enumeration, because my own memory page prints the blob id next to the file.</p>
+
+<p>The worst single thing I put up there was an 87-page pharmacology deck somebody had uploaded to be quizzed on. Not an anonymous PDF. The lecturer's name, their title and their department are on the front page. I cannot unwrite it; append-only means what it says. What I can do is stop pointing at it, so the blob id that used to sit in this article as proof is gone from it. The memories themselves were never at risk, because the relayer SEAL-encrypts those before they leave. It was the attachment layer I built on top that went up readable.</p>
+
+<p>Bytes are sealed now before they leave and opened after they come back: AES-256-GCM, a random nonce per blob so identical files do not produce identical ciphertext, an auth tag so tampering fails to open rather than decoding to nonsense. The blob stays public and enumerable, because that is what Walrus is. What an enumerator finds is ciphertext.</p>
+
+<p>Be precise about what that is <em>not</em>. The key is the server's, so it protects you from a stranger reading Walrus and not from whoever runs this server. The right answer is <a href="https://seal.mystenlabs.com/">Seal</a>, threshold encryption with the access policy on Sui, which is what OnlyFins uses to gate images behind an on-chain token. I know where it plugs in. I did not have time to build it, so I am not claiming it.</p>
+
+<h2>Before and after</h2>
+
+<p>This section used to be a table of numbers I had typed, which is the weakest kind of claim: you had no way to tell a measurement from a flattering memory, and after a week neither did I. So every row below is produced by a script that runs against the live deployment, and every row carries the command that produced it. Run them. Two of them write new blobs to Walrus each time, so your output will not be byte-identical to mine, which is rather the point.</p>
+
+<p><strong>The same sentence, to anyone holding the blob id</strong></p>
+
+<ul><li><strong>was</strong> — Readable. Straight off the public aggregator, no key, no auth.</li><li><strong>now</strong> — 179 bytes: an 8-byte header, a 12-byte nonce, a 16-byte auth tag, and 143 bytes that are not the sentence.</li></ul>
+
+<p><em>check it:</em></p>
+
+<p>Two blobs holding the same sentence, written seconds apart in one run. The first went up the way the old code wrote it. The second went through the app.</p>
+
+<pre><code>$ curl -s https://aggregator.walrus-testnet.walrus.space/v1/blobs/RfDLZ5dWeoJ3M9tLbqmhJcRjZGPmv4PSFYDOaqmtoCA
+Continuity proof-of-encryption, written 2026-10-06T14:25:…
+If you are reading this sentence off the Walrus aggregator, the seal failed.
+
+$ curl -s https://aggregator.walrus-testnet.walrus.space/v1/blobs/Z5PMU1ExNXSeE6TnJsX4BBCzj9TxeoOsc9KZlSEaLlE | xxd -l 24
+00000000: 5741 4c58 3100 0000 b731 8a68 2fad de7b  WALX1....1.h/..{
+00000010: de7d 2a93 e455 1fd2                      .}*..U..</code></pre>
+
+<p><strong>The same file, to the person it belongs to</strong></p>
+
+<ul><li><strong>was</strong> — Gone after a redeploy. "File no longer on this server."</li><li><strong>now</strong> — 143 bytes back, byte-identical to what went in, read out of Walrus and opened.</li></ul>
+
+<p><em>check it:</em></p>
+
+<p>The same blob id as above, through the app instead of the aggregator. Ciphertext to a stranger, the original file to its owner.</p>
+
+<pre><code>$ curl -s continuity-production-6084.up.railway.app/blob/Z5PMU1ExN…
+Continuity proof-of-encryption, written 2026-10-06T14:25:…</code></pre>
+
+<p><strong>The second message anyone ever sends</strong></p>
+
+<ul><li><strong>was</strong> — "I can't read my memory back right now — the storage service is blank this turn."</li><li><strong>now</strong> — "You're Priya, you've got a backend interview coming up next Tuesday, the 13th. And the Result bit of STAR is where you tend to lose your footing."</li></ul>
+
+<p><em>check it:</em></p>
+
+<p>A fresh person id, two messages, no pause between them. The write has not landed yet when the second one arrives — that is the whole difficulty.</p>
+
+<pre><code>$ curl -s continuity…/api/chat -H 'content-type: application/json' \
+    -d '{"userId":"you-pick-one","text":"Hi, I am Priya. I have a backend
+         interview next Tuesday and I fumble the Result part of STAR."}'
+$ curl -s continuity…/api/chat -H 'content-type: application/json' \
+    -d '{"userId":"you-pick-one","text":"what do you know about me?"}'</code></pre>
+
+<p><strong>The memory dashboard, twelve reads at once</strong></p>
+
+<ul><li><strong>was</strong> — 503, blank page.</li><li><strong>now</strong> — 200 twelve times over, in 1.9 seconds.</li></ul>
+
+<p><em>check it:</em></p>
+
+<pre><code>$ for i in $(seq 12); do curl -so /dev/null -w '%{http_code} ' \
+    "continuity…/api/memory?userId=you-pick-one" &amp; done; wait
+200 200 200 200 200 200 200 200 200 200 200 200</code></pre>
+
+<p><strong>Recall latency, and the number I am not going to dress up</strong></p>
+
+<ul><li><strong>was</strong> — Three round trips to confirm a new account was new, before a first-time visitor saw a word.</li><li><strong>now</strong> — One. Recall p50 1.4s, p95 2.9s. First replies still land anywhere from 2.4s to 13.7s, because that is the model's time, not the memory's.</li></ul>
+
+<p><em>check it:</em></p>
+
+<p>Live counters, not a screenshot. The ledger is the last 50 writes, each one a blob id you can open on Walruscan.</p>
+
+<pre><code>$ curl -s continuity…/api/stats | jq .metrics.recall
+$ curl -s continuity…/api/ledger | jq '.writes[0]'</code></pre>
+
+<p>The third receipt is the one that mattered most. A write takes seconds and recall only sees what has landed, so the most natural second message anybody sends arrives inside that gap and reads back as amnesia. What is queued for a person is not a guess, though: they said it out loud a moment ago. Consulting the outbox when the search comes back empty closed it.</p>
+
+<p>Two decisions did the rest. Identity lives at a derived key, <code>ws8::id::::</code>, never at whatever a vector search thinks is close enough, because relevance ranking will happily hand you a superseded record. And "current value" means newest, chosen server-side via <code>sort: "recent"</code>; sorting what came back would mean a superseding record outside the cosine window could never be recovered at all.</p>
+
+<blockquote><p><strong>“Trust me, it's on Walrus” is a claim. A blob id per sentence is evidence.</strong></p></blockquote>
+
+<p><img src="dashboard.jpg" alt="The memory dashboard: Everything it knows about Danny, sorted into collections — Photos, Your setup, About you, Everything else — each with counts and a search field."></p>
+
+<p><em>Everything it knows, sorted, each fact carrying the blob that holds it. You can open any of them on Walruscan without asking me anything.</em></p>
+
+<h2>What broke, honestly</h2>
+
+<p>I filed five bugs on MystenLabs/MemWal while building this. They are worth describing because they share a shape: <strong>failure wearing the costume of success.</strong></p>
+
+<h3>Recall returns empty, at random <a href="https://github.com/MystenLabs/MemWal/issues/1036">#1036</a></h3>
+
+<p>Fourteen identical calls against a namespace holding thirteen memories, 800ms apart:</p>
+
+<pre><code>5  5  5  5  0  0  5  5  0  0  0  0  5  5</code></pre>
+
+<p>Empty six times out of fourteen. No error, no flag. An empty recall is also the correct answer for a genuinely new user, so nothing downstream can tell the difference: your chatbot forgets people roughly 40% of the time and reports perfect health. That is what ate my user's history.</p>
+
+<h3>A relevance filter erases the evidence <a href="https://github.com/MystenLabs/MemWal/issues/1066">#1066</a></h3>
+
+<p>Set <code>maxDistance</code> tight enough to filter everything and you get <code>{results: [], total: 0}</code>, byte-identical to an empty namespace. Both SDKs overwrite the server's match count with the post-filter count, so the library manufactures the exact ambiguity above, deterministically. That threshold was <em>added</em> to keep filler out of prompts, and nobody noticed it destroys the signal separating "nothing relevant" from "nothing stored."</p>
+
+<h3>An idempotency key is a one-way door <a href="https://github.com/MystenLabs/MemWal/issues/1057">#1057</a></h3>
+
+<p>Reuse one with different content and you get a 409, forever. Replaying the <em>original</em> text still works and returns the original blob, so the key behaves perfectly until your payload changes by one character, and then it can never carry a new write again. I locked out a live Telegram account this way. The only symptom was silence.</p>
+
+<h3>Writes that succeed report failure <a href="https://github.com/MystenLabs/MemWal/issues/742">#742</a></h3>
+
+<p><code>rememberAndWait</code> polls for 60 seconds and throws a timeout; on mainnet jobs routinely take longer and then complete normally. Treat the throw as failure and retry, and you own two permanent copies of the same memory, both paid for. I measured a retried fact returning as two recall hits at distance 0.450 and 0.458, with nothing marking either a duplicate.</p>
+
+<p>Two more: <code>maxTokens</code> is not validated (<a href="https://github.com/MystenLabs/MemWal/issues/1068">#1068</a>), so a negative budget silently discards every result and still reports <code>truncated: true</code>; and the TypeScript SDK has no <code>ask()</code> binding though <code>/api/ask</code> is advertised in <code>/health</code> and works from Python (<a href="https://github.com/MystenLabs/MemWal/issues/1067">#1067</a>). Seeding a knowledge base through bulk writes, 190 statements went in and 113 landed. Nothing threw.</p>
+
+<p>None of this is a reason to avoid Walrus Memory. Server-side fact extraction inside a TEE is the right shape, and it saved me both model tokens and shipping raw conversations to a third party. <code>sort: "recent"</code> is exactly the primitive append-only storage needs. But a memory product's failure modes need to be loud, and several of these are mute.</p>
+
+<h2>Putting this memory in your own app</h2>
+
+<p>Three surfaces share one memory because I wrote three adapters that all call the same function. That works, and it stops working the moment somebody else wants a fourth. Nobody building on Walrus should have to wait for me.</p>
+
+<p>So the memory is an MCP server now. Point any client at it and it gets six tools: <code>recall</code>, <code>remember</code>, <code>list_files</code>, <code>find_file</code>, <code>get_file</code>, <code>list_photos</code>. Two transports, stdio for a client that spawns a process and HTTP for one that posts to a URL, both dispatching through the same function so they cannot drift.</p>
+
+<pre><code>$ curl -s continuity-production-6084.up.railway.app/mcp \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
+         {"name":"remember","arguments":{"user":"alice",
+          "fact":"They prefer Rust over Go."}}}'
+Written. walrus: XPp81H4XPE-CdB0N4GI-DIOVR7F2jnWGzcc4i-XBrUY
+
+$ … {"name":"recall","arguments":{"user":"alice",
+      "query":"what language do they like"}}
+• They prefer Rust over Go.
+  walrus: XPp81H4XPE-CdB0N4GI-DIOVR7F2jnWGzcc4i-XBrUY</code></pre>
+
+<p><em>a real round trip against the live deployment — <a href="https://walruscan.com/mainnet/blob/XPp81H4XPE-CdB0N4GI-DIOVR7F2jnWGzcc4i-XBrUY">that blob id opens on mainnet</a></em></p>
+
+<p>Both of those are live. <a href="https://continuity-production-6084.up.railway.app/mcp">GET the same URL</a> and it describes itself rather than returning a protocol error, because the first thing anybody does with an endpoint is open it in a browser.</p>
+
+<p>The identity model already had the bones for this. A person is an id and an account is a <code>(surface, account)</code> pair, so another app is simply a new surface; <code>mcp</code> joins web, telegram and discord, and the existing link flow merges them by union rather than migration. The write returns a blob id rather than the word "ok", because the receipt rule should apply to other people's agents too.</p>
+
+<p>Two things are deliberately missing, and they are the difference between this and the thing you are probably imagining.</p>
+
+<p>**Continuity cannot yet use <em>your</em> tools.** This is the server half: your agent calls into my memory. The reverse — Continuity connecting to a Walrus app's MCP server, discovering its tools and operating it for you — needs a tool-calling loop the agent does not have, because <code>llm.mjs</code> sends a prompt and gets prose back. That is the interesting half and it is not built. I would rather write that sentence than let the word "MCP" imply it.</p>
+
+<p><strong>And the ceiling is not the protocol, it is the rate limit.</strong> Roughly 1000 weighted requests an hour and 60 a minute, shared across every surface, with a chat turn costing about eight. "Any Walrus app can plug in" is true of the interface and false of the budget. Scoped consent is the other gap: a tap-a-number sign-in proves you are holding two devices, and it cannot express <em>this app may read my files but not my facts</em>.</p>
+
+<h2>If you are about to build on this</h2>
+
+<ul><li><strong>Never use a semantic search as an existence check.</strong> "Have I seen this user?" needs an exact lookup. A false negative there is unrecoverable rather than merely wrong, and it is the whole first half of this article.</li><li><strong>Retry on empty, but only for keys you have already seen hold data.</strong> Four attempts over about three seconds took my empty rate from 6-in-14 to 0-in-16. Retrying genuinely empty keys is wasted load and part of what got me rate limited.</li><li><strong>Treat a write timeout as unknown, not failed.</strong> Keep the job id, settle it later with <code>getRememberStatus</code>, and never re-send the text. Retrying blind is how you get permanent duplicates on storage that cannot delete.</li><li><strong>Watch the budget.</strong> Roughly 1000 weighted requests an hour and 60 a minute, shared across every surface. One chat turn spends about eight.</li></ul>
+
+<h2>See for yourself</h2>
+
+<p>Continuity is live, and the bot is <a href="https://t.me/walrusmemory_bot">@walrusmemory_bot</a> on Telegram. The model is Kimi K2.5 through OpenRouter, deliberately not GPT or Claude. Here is a memory written while I was measuring the receipts above, on Walrus mainnet: <a href="https://walruscan.com/mainnet/blob/GO_RrBxG2IooqRbvauy9oIKLV976t87dalOGc4ENAwE"><code>GO_RrBxG2IooqRbvauy9…</code></a>.</p>
+
+<p>One honest split in that pair of networks. Memories go to mainnet because the relayer pays for them. Raw blobs have no sponsor, since mainnet writes cost WAL and SUI from a funded wallet and the public mainnet publishers are not open, so file bytes go to testnet: open, free, genuinely erasure-coded. The network travels with every blob id, because "the files are on mainnet" would be a nicer sentence and a false one.</p>
+
+<p>Two more things I should be doing and am not: <code>WalrusFile</code> batches up to around 660 small blobs into one through Quilt, which is exactly a chatbot's attachment workload, and I upload them one at a time; and <code>send-object-to</code> would transfer the blob object to my own Sui address instead of leaving it with the publisher.</p>
+
+<p>You can also tell it to forget something, and it says exactly what that does:</p>
+
+<blockquote><p>I'll stop using that. The blob itself stays on Walrus — append-only storage means I can't unwrite it, and I'd rather say so.</p></blockquote>
+
+<p>It would have been easy to label that button "delete" and let you assume the rest. On append-only storage that is a lie, and a memory product that lies about forgetting is worse than one that cannot forget.</p>
+
+<p>Both of the worst things in this article were found the same way: by writing down what actually happened and then reading it. The identity bug was findable because the bot keeps a ledger of every blob it writes. The lecture deck was findable because the documentation says so plainly and I eventually sat down and read it.</p>
+
+<blockquote><p><strong>Memory you can't audit isn't memory. It's a confident voice telling you it remembers.</strong></p></blockquote>
+
+<p><a href="https://continuity-production-6084.up.railway.app">Open the chat →</a></p>

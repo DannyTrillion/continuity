@@ -16,9 +16,9 @@ Give a support bot a memory and you have given it a ticket history: a table keye
 
 Memory gets interesting when it holds things that stay true across contexts. That I use pnpm and never npm. That the Result step of STAR is where I fall apart under interview pressure. That I got question four wrong on Tuesday. Those facts belong to no vertical, and they are worth something to the person they describe — which is the test I kept returning to: *would you want to own this record?* Nobody wants to own a shopping bot's model of them. People do want to own the record of how they work and what they are trying to learn.
 
-> **[UPLOAD THE VIDEO HERE — `clips/out/continuity-demo-1080p.mp4`, 76s]**
+https://youtu.be/tU6CjMPRauw
 
-*Seventy-six seconds, no cuts inside a shot. A photo sent on Telegram, asked for on Discord, and the blob holding the memory opened on Walruscan. Then a PDF pasted into the web chat, read, filed, and its bytes shown on Walrus.*
+*Seventy-six seconds, no cuts inside a shot. A photo sent on Telegram, asked for on Discord, and the blob holding the memory opened on Walruscan. Then a PDF pasted into the web chat, read, filed, and its bytes shown on Walrus. Also [on YouTube](https://youtu.be/tU6CjMPRauw), and the file itself is [on Walrus](https://walruscan.com/testnet/blob/BZChq60laZX2o8OCtlrCCIRS1wWmCOLCycNGtUk7hlA) — an article about storing files on Walrus ought to store its own.*
 
 **533** writes on Walrus mainnet · **3** surfaces, one memory · **4** modes, same memory · **6** tools any agent can call
 
