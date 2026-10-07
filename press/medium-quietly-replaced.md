@@ -30,18 +30,7 @@ The modes change how it answers without changing what it knows. Pick Tutor on Te
 
 The demo is deliberately boring, which is the point. Say something in Telegram, ask about it in Discord, ask again on the web. A real recorded session, with the actual latencies:
 
-```
-telegram   Danny: Hi — I'm Danny. I use pnpm, never npm,
-           and I'm on Node 22 on a Mac.
-telegram   bot [17.7s, recalled 0]: Hey Danny. Good setup.
-
-discord    Danny: quick one — which package manager do I use?
-discord    bot [8.1s, recalled 4]: pnpm. You said never npm,
-           and I remember that.
-
-web        Danny: and what Node version am I on again?
-web        bot [10.9s, recalled 4]: Node 22.
-```
+![One person, three accounts. Telegram: Danny says he uses pnpm, never npm, and is on Node 22 on a Mac; the bot replies in 17.7s having recalled 0. Discord: Danny asks which package manager he uses; the bot answers pnpm in 8.1s having recalled 4. Web: Danny asks what Node version he is on; the bot answers Node 22 in 10.9s having recalled 4.](handoff.jpg)
 
 *three apps · three accounts · one person*
 

@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf8">
+<title>Handoff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root{
+    --void:#0A0D12; --panel:#10151C; --raise:#161D26;
+    --ink:#F0F5FA; --body:#A7B5C4; --dim:#6E7A89; --faint:#4B5563;
+    --edge:rgba(255,255,255,.09);
+    --tg:#3AA7E8; --dc:#7A86F5; --web:#5AA9FF;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    --ui:'Inter',-apple-system,system-ui,sans-serif;
+    --display:'Fraunces',Georgia,serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#000}
+
+  .fig{position:relative; width:1240px; padding:44px 40px 40px;
+    background:var(--void); border:1px solid var(--edge); border-radius:16px;
+    font-family:var(--ui); overflow:hidden}
+  .fig::before{content:""; position:absolute; inset:0;
+    background:radial-gradient(80% 60% at 50% -10%, rgba(90,169,255,.10), transparent 65%)}
+
+  .head{position:relative; display:flex; align-items:baseline; gap:14px; margin-bottom:26px}
+  .head h3{font-family:var(--display); font-weight:600; font-size:23px; color:var(--ink);
+    letter-spacing:-.02em}
+  .head span{font-family:var(--mono); font-size:11.5px; letter-spacing:.17em;
+    text-transform:uppercase; color:var(--dim)}
+
+  /* Three panels and the two gaps the memory crosses. */
+  .row{position:relative; display:grid; grid-template-columns:1fr 1fr 1fr; gap:26px}
+
+  .app{background:var(--panel); border:1px solid var(--edge); border-radius:13px;
+    padding:16px 17px 18px; display:flex; flex-direction:column; gap:12px}
+  .app .who{display:flex; align-items:center; gap:8px; margin-bottom:2px}
+  .app .who i{width:9px; height:9px; border-radius:50%; flex:none}
+  .app .who b{font-family:var(--mono); font-size:11px; font-weight:500;
+    letter-spacing:.2em; text-transform:uppercase}
+  .tg .who i{background:var(--tg); box-shadow:0 0 10px rgba(58,167,232,.75)}
+  .tg .who b{color:var(--tg)}
+  .dc .who i{background:var(--dc); box-shadow:0 0 10px rgba(122,134,245,.75)}
+  .dc .who b{color:var(--dc)}
+  .wb .who i{background:var(--web); box-shadow:0 0 10px rgba(90,169,255,.75)}
+  .wb .who b{color:var(--web)}
+
+  .msg{border-radius:11px; padding:11px 13px; font-size:14.5px; line-height:1.5}
+  .me{background:var(--raise); border:1px solid var(--edge); color:var(--ink)}
+  .bot{background:rgba(90,169,255,.09); border:1px solid rgba(90,169,255,.22); color:#D9E7F5}
+  .tg .bot{background:rgba(58,167,232,.09); border-color:rgba(58,167,232,.24)}
+  .dc .bot{background:rgba(122,134,245,.09); border-color:rgba(122,134,245,.24)}
+  .name{display:block; font-size:11px; font-weight:600; letter-spacing:.04em;
+    color:var(--dim); margin-bottom:5px; text-transform:uppercase}
+
+  /* The number that matters: what it pulled back before answering. */
+  .meta{display:flex; gap:7px; align-items:center; margin-top:9px; flex-wrap:wrap}
+  .tag{font-family:var(--mono); font-size:10.5px; letter-spacing:.04em;
+    border:1px solid var(--edge); border-radius:999px; padding:3px 9px; color:var(--dim)}
+  .tag.hit{color:#9FE6D6; border-color:rgba(127,227,212,.3); background:rgba(127,227,212,.07)}
+  .tag.zero{color:var(--faint)}
+
+  /* The thread. It runs behind the panels, left to right, because that is the
+     direction the memory actually travels. */
+  .thread{position:absolute; left:0; right:0; top:50%; height:1px; z-index:0;
+    background:linear-gradient(90deg, transparent, rgba(90,169,255,.5) 12%,
+      rgba(90,169,255,.5) 88%, transparent)}
+  .row > .app{position:relative; z-index:1}
+
+  .foot{position:relative; margin-top:24px; display:flex; justify-content:space-between;
+    align-items:center; gap:16px; flex-wrap:wrap;
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.06em; color:var(--faint)}
+  .foot b{color:var(--body); font-weight:500}
+</style>
+
+<div class="fig">
+  <div class="head">
+    <h3>One person, three accounts</h3>
+    <span>a real recorded session</span>
+  </div>
+
+  <div class="row">
+    <div class="thread"></div>
+
+    <div class="app tg">
+      <div class="who"><i></i><b>Telegram</b></div>
+      <div class="msg me"><span class="name">Danny</span>Hi, I'm Danny. I use pnpm, never npm, and I'm on Node 22 on a Mac.</div>
+      <div class="msg bot"><span class="name">Continuity</span>Hey Danny. Good setup.</div>
+      <div class="meta"><span class="tag">17.7s</span><span class="tag zero">recalled 0</span></div>
+    </div>
+
+    <div class="app dc">
+      <div class="who"><i></i><b>Discord</b></div>
+      <div class="msg me"><span class="name">Danny</span>quick one, which package manager do I use?</div>
+      <div class="msg bot"><span class="name">Continuity</span>pnpm. You said never npm, and I remember that.</div>
+      <div class="meta"><span class="tag">8.1s</span><span class="tag hit">recalled 4</span></div>
+    </div>
+
+    <div class="app wb">
+      <div class="who"><i></i><b>Web</b></div>
+      <div class="msg me"><span class="name">Danny</span>and what Node version am I on again?</div>
+      <div class="msg bot"><span class="name">Continuity</span>Node 22.</div>
+      <div class="meta"><span class="tag">10.9s</span><span class="tag hit">recalled 4</span></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Said once on Telegram. Read back on <b>Discord</b> and <b>the web</b>.</span>
+    <span>One memory, on Walrus mainnet</span>
+  </div>
+</div>

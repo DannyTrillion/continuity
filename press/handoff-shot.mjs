@@ -1,0 +1,12 @@
+import puppeteer from "puppeteer-core";
+const b = await puppeteer.launch({ executablePath:"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", args:["--no-sandbox"] });
+const p = await b.newPage();
+await p.setViewport({ width:1240, height:700, deviceScaleFactor:2 });
+await p.goto("file://"+process.cwd()+"/handoff.html",{waitUntil:"networkidle0"});
+await p.evaluateHandle("document.fonts.ready");
+await new Promise(r=>setTimeout(r,700));
+const el = await p.$(".fig");
+await el.screenshot({ path:"handoff.png" });
+const r = await p.evaluate(()=>{const b=document.querySelector(".fig").getBoundingClientRect();return {w:Math.round(b.width),h:Math.round(b.height)};});
+console.log(JSON.stringify(r));
+await b.close();
