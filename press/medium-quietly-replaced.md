@@ -194,7 +194,7 @@ $ curl -s continuity…/api/ledger | jq '.writes[0]'
 
 The third receipt is the one that mattered most. A write takes seconds and recall only sees what has landed, so the most natural second message anybody sends arrives inside that gap and reads back as amnesia. What is queued for a person is not a guess, though: they said it out loud a moment ago. Consulting the outbox when the search comes back empty closed it.
 
-Two decisions did the rest. Identity lives at a derived key, `ws8::id::::`, never at whatever a vector search thinks is close enough, because relevance ranking will happily hand you a superseded record. And "current value" means newest, chosen server-side via `sort: "recent"`; sorting what came back would mean a superseding record outside the cosine window could never be recovered at all.
+Two decisions did the rest. Identity lives at a derived key, `ws8::id::{surface}::{account}`, never at whatever a vector search thinks is close enough, because relevance ranking will happily hand you a superseded record. And "current value" means newest, chosen server-side via `sort: "recent"`; sorting what came back would mean a superseding record outside the cosine window could never be recovered at all.
 
 > **“Trust me, it's on Walrus” is a claim. A blob id per sentence is evidence.**
 
