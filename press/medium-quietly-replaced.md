@@ -71,7 +71,7 @@ ws8::id::web::web-proof-2 →
 
 I was building for a hackathon whose entire premise is *chatbots that remember*. The memory layer had just forgotten someone, silently, and handed me a convincing replacement. A support bot would have survived this: lose a ticket history and somebody re-types their order number. Lose the thing that knows who you are across three apps and there is nothing to re-type.
 
-![The web chat showing: Hi Danny — I remember 4 things about you. Web, Telegram and Discord each marked connected, with 50 recent writes to Walrus.](cross-app.jpg)
+![Cross-app memory: one memory, three apps. The chat rail showing Hi Danny, I remember 4 things about you, with Web, Telegram and Discord all marked connected and 50 recent writes to Walrus.](cross-app.jpg)
 
 *Not a claim that it works across apps. The three surfaces reporting themselves connected, with the write count underneath.*
 

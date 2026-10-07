@@ -1,0 +1,11 @@
+import puppeteer from "puppeteer-core";
+const b = await puppeteer.launch({ executablePath:"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", args:["--no-sandbox"] });
+const p = await b.newPage();
+await p.setViewport({ width:1200, height:620, deviceScaleFactor:2 });
+await p.goto("file://"+process.cwd()+"/figure.html",{waitUntil:"networkidle0"});
+await p.evaluateHandle("document.fonts.ready");
+await new Promise(r=>setTimeout(r,700));
+const el = await p.$(".fig");
+await el.screenshot({ path:"cross-app-figure.png" });
+console.log("broken:", await p.evaluate(()=>[...document.images].filter(i=>!i.complete||!i.naturalWidth).length));
+await b.close();

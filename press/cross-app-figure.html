@@ -1,0 +1,80 @@
+<!doctype html>
+<meta charset="utf8">
+<title>Cross-app figure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root{
+    --void:#0A0D12; --ink:#F2F6FA; --body:#9DACBD; --dim:#6B7684;
+    --edge:rgba(255,255,255,.10);
+    --live:#5AA9FF;
+    --display:'Fraunces',Georgia,serif;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#000}
+
+  /* The tile's own proportions are a UI affordance — tall, with the mockup
+     pinned to one corner and a column of empty space beside it. As an article
+     figure that empty space is just a hole, so this is the same card rebuilt
+     to a figure's shape. */
+  .fig{position:relative; width:1200px; height:620px; overflow:hidden;
+    background:var(--void); border:1px solid var(--edge); border-radius:16px;
+    display:grid; grid-template-columns:1fr 520px; isolation:isolate}
+
+  .fig::before{content:""; position:absolute; inset:0; z-index:0;
+    background:
+      radial-gradient(90% 70% at 88% 18%, rgba(90,169,255,.13), transparent 62%),
+      radial-gradient(70% 60% at 6% 4%, rgba(255,255,255,.035), transparent 60%)}
+
+  .left{position:relative; z-index:2; padding:54px 30px 54px 56px;
+    display:flex; flex-direction:column; justify-content:center}
+
+  .kicker{display:flex; align-items:center; gap:10px; margin-bottom:22px;
+    font-family:var(--mono); font-size:12.5px; font-weight:500; letter-spacing:.23em;
+    text-transform:uppercase; color:var(--live)}
+
+  h2{font-family:var(--display); font-weight:400; font-variation-settings:'SOFT' 0,'WONK' 1;
+    font-size:46px; line-height:1.08; letter-spacing:-.026em; color:var(--ink)}
+
+  .line{margin-top:20px; font-family:var(--display); font-weight:300;
+    font-size:20px; line-height:1.55; color:var(--body); max-width:19em}
+  .line b{color:var(--ink); font-weight:600}
+
+  /* The three surfaces, stated rather than left to the screenshot alone. */
+  .pills{display:flex; gap:9px; margin-top:34px; flex-wrap:wrap}
+  .pill{font-family:var(--mono); font-size:12px; letter-spacing:.03em; color:#B6C3D1;
+    border:1px solid var(--edge); border-radius:999px; padding:8px 15px;
+    background:rgba(255,255,255,.03); display:flex; align-items:center; gap:8px}
+  .pill i{width:6px; height:6px; border-radius:50%; background:var(--live);
+    box-shadow:0 0 9px rgba(90,169,255,.8); flex:none}
+
+  /* The real screenshot, lit from the left so it sits in the card rather than
+     on top of it. */
+  .right{position:relative; z-index:1; overflow:hidden}
+  /* Sized by HEIGHT, not width. The source is 644x1032, so a width that looked
+     reasonable made it 689px tall inside a 620px card and it bled off both
+     edges. Height first, width follows. */
+  .right img{position:absolute; right:64px; top:50%; transform:translateY(-50%);
+    height:524px; width:auto; display:block;
+    border-radius:14px; border:1px solid rgba(255,255,255,.12);
+    box-shadow:0 40px 90px rgba(0,0,0,.65), 0 0 60px rgba(90,169,255,.08)}
+  /* No overlay. It only covered the right grid column, so its left edge drew
+     a visible vertical seam down the middle of the card. The screenshot sits
+     inside its own column now and needs no help blending. */
+</style>
+
+<div class="fig">
+  <div class="left">
+    <div class="kicker">01 · Cross-app memory</div>
+    <h2>One memory,<br>three apps</h2>
+    <p class="line">Tell it once on Telegram. It knows on Discord and <b>the web</b>.</p>
+    <div class="pills">
+      <span class="pill"><i></i>Web</span>
+      <span class="pill"><i></i>Telegram</span>
+      <span class="pill"><i></i>Discord</span>
+    </div>
+  </div>
+  <div class="right"><img src="img/peek.jpg" alt=""></div>
+</div>

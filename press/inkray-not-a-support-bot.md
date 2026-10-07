@@ -43,7 +43,7 @@ web        bot [10.9s, recalled 4]: Node 22.
 
 *three apps · three accounts · one person*
 
-![The web chat showing: Hi Danny — I remember 4 things about you. Web, Telegram and Discord each marked connected, with 50 recent writes to Walrus.](cross-app.jpg)
+![Cross-app memory: one memory, three apps. The chat rail showing Hi Danny, I remember 4 things about you, with Web, Telegram and Discord all marked connected and 50 recent writes to Walrus.](cross-app.jpg)
 
 *Not a claim that it works across apps. The three surfaces reporting themselves connected, with the write count underneath.*
 
