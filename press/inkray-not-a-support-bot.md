@@ -4,7 +4,7 @@
 
 *Walrus Sessions 8 · Chatbots that remember* · Danny · Continuity · Kimi K2.5 · never GPT or Claude · 5 min
 
-![Cover: three dark monoliths with one unbroken line of amber light running through all three](continuity-cover.jpg)
+![Continuity: Every assistant says it remembers you. This one can prove it. One memory on Walrus mainnet across a web chat, Telegram and Discord, with the memory dashboard shown and a blob id on Walrus mainnet.](continuity-cover.jpg)
 
 ---
 

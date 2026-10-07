@@ -143,7 +143,10 @@ const byline = [...html.matchAll(/<p class="byline">([\s\S]*?)<\/p>/g)]
 if (h1) push(`# ${para(h1)}`);
 if (stand) push(`**${para(stand)}**`);
 if (kicker) push(`*${strip(kicker)}*${byline.length ? ` · ${byline.join(" · ")}` : ""}`);
-push("![Cover: three dark monoliths with one unbroken line of amber light running through all three](continuity-cover.jpg)");
+/* The cover's own alt text, not a copy of it. Hardcoding the description
+   meant changing the cover art left the Markdown describing the old one. */
+const coverAlt = html.match(/<figure class="cover"><img[^>]*alt="([^"]*)"/)?.[1];
+if (coverAlt) push(`![${coverAlt}](continuity-cover.jpg)`);
 push("---");
 
 /**
