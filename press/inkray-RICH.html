@@ -23,17 +23,17 @@ Do <b>not</b> use paste-as-plain-text — the formatting is the point.
 
 <p>Give a support bot a memory and you have given it a ticket history: a table keyed on a customer id, a thing that has existed since the 1990s. Nothing about it needs decentralised storage, or an append-only log, or a blob id you can audit. You could fake it convincingly in an afternoon with Postgres and nobody could tell from outside. Same with a shopping assistant remembering your size. These are the demos that look like memory and are really just rows.</p>
 
-<p>Memory gets interesting when it holds things that stay true across contexts. That I use pnpm and never npm. That the Result step of STAR is where I fall apart under interview pressure. That I got question four wrong on Tuesday. Those facts belong to no vertical, and they are worth something to the person they describe — which is the test I kept returning to: <em>would you want to own this record?</em> Nobody wants to own a shopping bot's model of them. People do want to own the record of how they work and what they are trying to learn.</p>
+<p>Memory gets interesting when it holds things that stay true across contexts. That I use pnpm and never npm. That the Result step of STAR is where I fall apart under interview pressure. That I got question four wrong on Tuesday. Those facts belong to no vertical, and they are worth something to the person they describe, which is the test I kept returning to: <em>would you want to own this record?</em> Nobody wants to own a shopping bot's model of them. People do want to own the record of how they work and what they are trying to learn.</p>
 
 <p>https://youtu.be/tU6CjMPRauw</p>
 
-<p><em>Seventy-six seconds, no cuts inside a shot. A photo sent on Telegram, asked for on Discord, and the blob holding the memory opened on Walruscan. Then a PDF pasted into the web chat, read, filed, and its bytes shown on Walrus. Also <a href="https://youtu.be/tU6CjMPRauw">on YouTube</a>, and the file itself is <a href="https://walruscan.com/testnet/blob/BZChq60laZX2o8OCtlrCCIRS1wWmCOLCycNGtUk7hlA">on Walrus</a> — an article about storing files on Walrus ought to store its own.</em></p>
+<p><em>Seventy-six seconds, no cuts inside a shot. A photo sent on Telegram, asked for on Discord, and the blob holding the memory opened on Walruscan. Then a PDF pasted into the web chat, read, filed, and its bytes shown on Walrus. Also <a href="https://youtu.be/tU6CjMPRauw">on YouTube</a>, and the file itself is <a href="https://walruscan.com/testnet/blob/BZChq60laZX2o8OCtlrCCIRS1wWmCOLCycNGtUk7hlA">on Walrus</a>, because an article about storing files on Walrus ought to store its own.</em></p>
 
 <p><strong>533</strong> writes on Walrus mainnet · <strong>3</strong> surfaces, one memory · <strong>4</strong> modes, same memory · <strong>6</strong> tools any agent can call</p>
 
 <h2>One assistant, three places</h2>
 
-<p><strong>Continuity</strong> is reachable from a web chat, Telegram and Discord. Not three bots sharing a database. One memory, on Walrus mainnet, that all three read and write. The demo is deliberately boring, which is the point — say something in one app, ask about it in another:</p>
+<p><strong>Continuity</strong> is reachable from a web chat, Telegram and Discord. Not three bots sharing a database. One memory, on Walrus mainnet, that all three read and write. The demo is deliberately boring, which is the point: say something in one app, ask about it in another:</p>
 
 <pre><code>telegram   Danny: Hi — I'm Danny. I use pnpm, never npm,
            and I'm on Node 22 on a Mac.
@@ -54,21 +54,21 @@ web        bot [10.9s, recalled 4]: Node 22.</code></pre>
 
 <h2>What it can actually do</h2>
 
-<p><strong>Reads your documents</strong> — Paste a PDF, a set of notes, a log. It reads the contents and writes what the document actually says into memory, so you can find it later by describing it rather than by remembering a filename.</p>
+<p><strong>Reads your documents.</strong> Paste a PDF, a set of notes, a log. It reads the contents and writes what the document actually says into memory, so you can find it later by describing it rather than by remembering a filename.</p>
 
-<p><strong>Describes your photos</strong> — Send a picture and it writes a description. That description is the searchable half: "me ice skating" matches a sentence about a person on ice, and never matches pixels.</p>
+<p><strong>Describes your photos.</strong> Send a picture and it writes a description. That description is the searchable half: "me ice skating" matches a sentence about a person on ice, and never matches pixels.</p>
 
-<p><strong>Fetches either one back</strong> — Ask for "the lease" or "my pharmacology slides" and it finds the file and sends it. Telegram gets it as a document rather than a photo, because the latter compresses and destroys a PDF.</p>
+<p><strong>Fetches either one back.</strong> Ask for "the lease" or "my pharmacology slides" and it finds the file and sends it. Telegram gets it as a document rather than a photo, because the latter compresses and destroys a PDF.</p>
 
-<p><strong>Quizzes you, and remembers the misses</strong> — In Tutor mode, hand it lecture notes and it writes questions from the document's own words — then remembers which ones you got wrong, so Tuesday's stumble comes back on Friday.</p>
+<p><strong>Quizzes you, and remembers the misses.</strong> In Tutor mode, hand it lecture notes and it writes questions from the document's own words, then remembers which ones you got wrong, so Tuesday's stumble comes back on Friday.</p>
 
-<p><strong>Four modes, one memory</strong> — Tutor, Coding partner, Planner, Support desk. They change how it answers without changing what it knows. Pick one on Telegram and you have picked it on Discord.</p>
+<p><strong>Four modes, one memory.</strong> Tutor, Coding partner, Planner, Support desk. They change how it answers without changing what it knows. Pick one on Telegram and you have picked it on Discord.</p>
 
-<p><strong>Keeps what you forward</strong> — Forward any Telegram message and it stores it with who said it. Type <code>@walrusmemory_bot</code> in any chat to pull up what it knows without leaving the conversation.</p>
+<p><strong>Keeps what you forward.</strong> Forward any Telegram message and it stores it with who said it. Type <code>@walrusmemory_bot</code> in any chat to pull up what it knows without leaving the conversation.</p>
 
-<p><strong>Shows its working</strong> — A dashboard lists everything it has stored about you, sorted into collections, each fact carrying the blob id that holds it. Open any of them on Walruscan without asking me anything.</p>
+<p><strong>Shows its working.</strong> A dashboard lists everything it has stored about you, sorted into collections, each fact carrying the blob id that holds it. Open any of them on Walruscan without asking me anything.</p>
 
-<p><strong>Forgets, and says what that means</strong> — Tell it something is wrong and it stops reading that fact back. It will also tell you the blob stays on Walrus, because append-only storage cannot be unwritten.</p>
+<p><strong>Forgets, and says what that means.</strong> Tell it something is wrong and it stops reading that fact back. It will also tell you the blob stays on Walrus, because append-only storage cannot be unwritten.</p>
 
 <h2>Why this had to be Walrus</h2>
 
@@ -78,7 +78,7 @@ web        bot [10.9s, recalled 4]: Node 22.</code></pre>
 
 <blockquote><p><strong>“Trust me, it's stored” is a claim. A blob id per sentence is evidence.</strong></p></blockquote>
 
-<p>The second reason only appeared when I added attachments. Walrus Memory stores text, so a photograph's bytes can never be a memory — but a <em>description</em> can, and the description turns out to be the valuable half because it is the part recall can search. So an attachment became two halves: the description to Walrus Memory, the bytes to a volume on the server.</p>
+<p>The second reason only appeared when I added attachments. Walrus Memory stores text, so a photograph's bytes can never be a memory; a <em>description</em> can, and the description turns out to be the valuable half because it is the part recall can search. So an attachment became two halves: the description to Walrus Memory, the bytes to a volume on the server.</p>
 
 <p>Then a redeploy wiped the volume and I had the problem backwards. The memory had outlived the file it described. The dashboard had to say <em>file no longer on this server</em> next to a perfect description of a document nobody could open.</p>
 
@@ -89,21 +89,21 @@ A residential tenancy agreement for 14 Oak Road, twelve
 months from 1 November…
 [file:d86524ec-….pdf][walrus:nMxaSHx54ESfmruT6HCCOnVl…]</code></pre>
 
-<p><em>one sentence, two pointers — the local copy and the one that outlives it</em></p>
+<p><em>one sentence, two pointers: the local copy and the one that outlives it</em></p>
 
 <p>That single line is the whole design. The pointer to a file comes back from the same read that finds the file, so there is no second database to keep in sync and no index sitting on the very disk whose loss this is meant to survive. The volume became a cache. Delete the local copy and the file still opens, fetched back out of storage.</p>
 
 <h2>Public storage, private documents</h2>
 
-<p>Everything on Walrus is public. Blob contents and metadata both, discoverable and enumerable by anyone — the Sui documentation says so in a caution box, and it is right to. That is fine for a memory the relayer already encrypts, and it is not fine for the bytes of somebody's lease sitting beside it.</p>
+<p>Everything on Walrus is public. Blob contents and metadata both, discoverable and enumerable by anyone. The Sui documentation says so in a caution box, and it is right to. That is fine for a memory the relayer already encrypts, and it is not fine for the bytes of somebody's lease sitting beside it.</p>
 
 <p>So attachment bytes are sealed before they leave and opened after they come back: AES-256-GCM, a random nonce per blob so identical files do not produce identical ciphertext, an auth tag so tampering fails to open rather than decoding to nonsense. The blob stays public, because that is what Walrus is. What an enumerator finds is ciphertext.</p>
 
-<p>You do not have to take that on faith. Below are two blobs holding the same sentence, written seconds apart — one stored the naive way, one through the app:</p>
+<p>You do not have to take that on faith. Below are two blobs holding the same sentence, written seconds apart, one stored the naive way and one through the app:</p>
 
 <p><strong>The same sentence, to anyone holding the blob id</strong></p>
 
-<ul><li><strong>stored naively</strong> — Readable. Straight off the public aggregator, no key, no auth.</li><li><strong>stored by Continuity</strong> — 179 bytes: an 8-byte header, a 12-byte nonce, a 16-byte auth tag, and 143 bytes that are not the sentence.</li></ul>
+<ul><li><strong>stored naively:</strong> Readable. Straight off the public aggregator, no key, no auth.</li><li><strong>stored by Continuity:</strong> 179 bytes: an 8-byte header, a 12-byte nonce, a 16-byte auth tag, and 143 bytes that are not the sentence.</li></ul>
 
 <p><em>run it yourself:</em></p>
 
@@ -115,7 +115,7 @@ $ curl -s https://aggregator.walrus-testnet.walrus.space/v1/blobs/Z5PMU1ExNXSeE6
 00000000: 5741 4c58 3100 0000 b731 8a68 2fad de7b  WALX1....1.h/..{
 00000010: de7d 2a93 e455 1fd2                      .}*..U..</code></pre>
 
-<p>One honest split worth stating. Memories go to mainnet because the relayer pays for them. Raw file bytes have no sponsor — mainnet writes cost WAL and SUI from a funded wallet and the public mainnet publishers are not open — so those go to testnet, which is open, free and genuinely erasure-coded. The network travels with every blob id and is shown wherever the id is, because "the files are on mainnet" would be a nicer sentence and a false one.</p>
+<p>One honest split worth stating. Memories go to mainnet because the relayer pays for them. Raw file bytes have no sponsor. Mainnet writes cost WAL and SUI from a funded wallet, and the public mainnet publishers are not open, so those go to testnet, which is open, free and genuinely erasure-coded. The network travels with every blob id and is shown wherever the id is, because "the files are on mainnet" would be a nicer sentence and a false one.</p>
 
 <h2>Put this memory in your own app</h2>
 
@@ -132,11 +132,11 @@ $ … {"name":"recall","arguments":{"user":"alice",
 • They prefer Rust over Go.
   walrus: XPp81H4XPE-CdB0N4GI-DIOVR7F2jnWGzcc4i-XBrUY</code></pre>
 
-<p><em>live right now — <a href="https://walruscan.com/mainnet/blob/XPp81H4XPE-CdB0N4GI-DIOVR7F2jnWGzcc4i-XBrUY">that blob id opens on mainnet</a></em></p>
+<p><em>live right now; <a href="https://walruscan.com/mainnet/blob/XPp81H4XPE-CdB0N4GI-DIOVR7F2jnWGzcc4i-XBrUY">that blob id opens on mainnet</a></em></p>
 
 <p>A write returns a blob id rather than the word "ok", because an agent deserves the same receipt a person does. The identity model already had the bones for this: a person is an id and an account is a <code>(surface, account)</code> pair, so another app is simply a new surface.</p>
 
-<p>Two honest limits. This is the server half — your agent calls into my memory; Continuity cannot yet call into <em>your</em> tools, because that needs a tool-calling loop it does not have. And the ceiling is not the protocol but the budget: roughly 1000 weighted requests an hour and 60 a minute, shared across every surface, with a chat turn costing about eight.</p>
+<p>Two honest limits. This is the server half: your agent calls into my memory; Continuity cannot yet call into <em>your</em> tools, because that needs a tool-calling loop it does not have. And the ceiling is not the protocol but the budget: roughly 1000 weighted requests an hour and 60 a minute, shared across every surface, with a chat turn costing about eight.</p>
 
 <h2>See for yourself</h2>
 

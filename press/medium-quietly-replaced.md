@@ -24,7 +24,7 @@ That question also decides whether any of this belongs on Walrus. Durable, audit
 
 **Continuity** is one assistant reachable from three places: a web chat, Telegram, and Discord. Not three bots sharing a database. One memory, on Walrus mainnet, that all three read and write.
 
-It reads documents I paste at it — PDFs, notes, logs — and describes photos I send, so both become things I can search for by describing them months later rather than by remembering a filename. In Tutor mode I can hand it lecture notes and it writes questions from the document's own words, then **remembers which ones I got wrong**, so the thing I fumbled on Telegram on Tuesday comes back on Discord on Friday. Any model can quiz you from a document. Remembering where you got stuck is the part that needed Walrus.
+It reads documents I paste at it (PDFs, notes, logs) and describes photos I send, so both become things I can search for by describing them months later rather than by remembering a filename. In Tutor mode I can hand it lecture notes and it writes questions from the document's own words, then **remembers which ones I got wrong**, so the thing I fumbled on Telegram on Tuesday comes back on Discord on Friday. Any model can quiz you from a document. Remembering where you got stuck is the part that needed Walrus.
 
 The modes change how it answers without changing what it knows. Pick Tutor on Telegram and you have picked it on Discord. On Telegram I can forward it any message and it keeps it with who said it, or type `@walrusmemory_bot` in any chat to pull up what it knows without leaving the conversation. There is a dashboard listing everything it has stored about me, each fact carrying the blob that holds it, and a button to tell it that something is wrong.
 
@@ -49,7 +49,7 @@ Breadth is also what made the hard bug findable, which I did not expect. Three s
 
 https://youtu.be/tU6CjMPRauw
 
-*Seventy-six seconds, no cuts inside a shot. A photo sent on Telegram, asked for on Discord, and the blob holding the memory opened on Walruscan. Then a PDF pasted into the web chat, read, filed, and its bytes shown on Walrus. Also [on YouTube](https://youtu.be/tU6CjMPRauw), and the file itself is [on Walrus](https://walruscan.com/testnet/blob/BZChq60laZX2o8OCtlrCCIRS1wWmCOLCycNGtUk7hlA) — an article about storing files on Walrus ought to store its own.*
+*Seventy-six seconds, no cuts inside a shot. A photo sent on Telegram, asked for on Discord, and the blob holding the memory opened on Walruscan. Then a PDF pasted into the web chat, read, filed, and its bytes shown on Walrus. Also [on YouTube](https://youtu.be/tU6CjMPRauw), and the file itself is [on Walrus](https://walruscan.com/testnet/blob/BZChq60laZX2o8OCtlrCCIRS1wWmCOLCycNGtUk7hlA), because an article about storing files on Walrus ought to store its own.*
 
 **533** writes on Walrus mainnet · **3** surfaces, one memory · **5** bugs filed on MemWal · **741** checks guarding all of it
 
@@ -81,7 +81,7 @@ Walrus Memory stores text. Every write method takes a string, and for two weeks 
 
 Then I added photos. The bytes of a photograph can never be a memory. What *can* be a memory is a description, and the description turns out to be the valuable half, because it is the part recall can search. "Me ice skating" matches a sentence about a person on ice. It does not match pixels.
 
-So an attachment became two halves: the description to Walrus Memory, the bytes to a volume on the server. That worked, and a redeploy showed me what was wrong with it. A description of a lease is durable because it is a memory. The lease itself sat on a disk that a deploy wipes.
+So an attachment became two halves: the description to Walrus Memory, the bytes to a volume on the server. That worked, and a redeploy showed me what was wrong with it. A description of a lease is durable; it's a memory. The lease itself sat on a disk that a deploy wipes.
 
 > **The memory outlived the file it described. That is exactly backwards.**
 
@@ -94,7 +94,7 @@ months from 1 November…
 [file:d86524ec-….pdf][walrus:nMxaSHx54ESfmruT6HCCOnVl…]
 ```
 
-*one sentence, two pointers — the local copy and the one that outlives it*
+*one sentence, two pointers: the local copy and the one that outlives it*
 
 That single line is the whole design. The pointer to a file comes back from the same read that finds the file, so there is no second database to keep in sync and no index sitting on the very disk whose loss this is meant to survive. The volume became a cache.
 
@@ -107,7 +107,7 @@ Three days before the deadline I read the storage documentation properly instead
 > "Both blob contents and their metadata are public. Blob IDs, blob attributes, and the onchain blob registration are all discoverable by anyone, so an attacker can enumerate and read everything you store. **Never store secrets or private data unencrypted.**"
 
 > 
-> — *docs.sui.io — Data Storage Using Walrus*
+> *docs.sui.io · Data Storage Using Walrus*
 
 I had been doing exactly that for two days, and it did not even require enumeration, because my own memory page prints the blob id next to the file.
 
@@ -123,9 +123,9 @@ This section used to be a table of numbers I had typed, which is the weakest kin
 
 **The same sentence, to anyone holding the blob id**
 
-- **was** — Readable. Straight off the public aggregator, no key, no auth.
+- **was:** Readable. Straight off the public aggregator, no key, no auth.
 
-- **now** — 179 bytes: an 8-byte header, a 12-byte nonce, a 16-byte auth tag, and 143 bytes that are not the sentence.
+- **now:** 179 bytes: an 8-byte header, a 12-byte nonce, a 16-byte auth tag, and 143 bytes that are not the sentence.
 
 *check it:*
 
@@ -143,9 +143,9 @@ $ curl -s https://aggregator.walrus-testnet.walrus.space/v1/blobs/Z5PMU1ExNXSeE6
 
 **The same file, to the person it belongs to**
 
-- **was** — Gone after a redeploy. "File no longer on this server."
+- **was:** Gone after a redeploy. "File no longer on this server."
 
-- **now** — 143 bytes back, byte-identical to what went in, read out of Walrus and opened.
+- **now:** 143 bytes back, byte-identical to what went in, read out of Walrus and opened.
 
 *check it:*
 
@@ -158,13 +158,13 @@ Continuity proof-of-encryption, written 2026-10-06T14:25:…
 
 **The second message anyone ever sends**
 
-- **was** — "I can't read my memory back right now — the storage service is blank this turn."
+- **was:** "I can't read my memory back right now — the storage service is blank this turn."
 
-- **now** — "You're Priya, you've got a backend interview coming up next Tuesday, the 13th. And the Result bit of STAR is where you tend to lose your footing."
+- **now:** "You're Priya, you've got a backend interview coming up next Tuesday, the 13th. And the Result bit of STAR is where you tend to lose your footing."
 
 *check it:*
 
-A fresh person id, two messages, no pause between them. The write has not landed yet when the second one arrives — that is the whole difficulty.
+A fresh person id, two messages, no pause between them. The write has not landed yet when the second one arrives. That is the whole difficulty.
 
 ```
 $ curl -s continuity…/api/chat -H 'content-type: application/json' \
@@ -176,9 +176,9 @@ $ curl -s continuity…/api/chat -H 'content-type: application/json' \
 
 **The memory dashboard, twelve reads at once**
 
-- **was** — 503, blank page.
+- **was:** 503, blank page.
 
-- **now** — 200 twelve times over, in 1.9 seconds.
+- **now:** 200 twelve times over, in 1.9 seconds.
 
 *check it:*
 
@@ -190,9 +190,9 @@ $ for i in $(seq 12); do curl -so /dev/null -w '%{http_code} ' \
 
 **Recall latency, and the number I am not going to dress up**
 
-- **was** — Three round trips to confirm a new account was new, before a first-time visitor saw a word.
+- **was:** Three round trips to confirm a new account was new, before a first-time visitor saw a word.
 
-- **now** — One. Recall p50 1.4s, p95 2.9s. First replies still land anywhere from 2.4s to 13.7s, because that is the model's time, not the memory's.
+- **now:** One. Recall p50 1.4s, p95 2.9s. First replies still land anywhere from 2.4s to 13.7s, because that is the model's time, not the memory's.
 
 *check it:*
 
@@ -209,7 +209,7 @@ Two decisions did the rest. Identity lives at a derived key, `ws8::id::::`, neve
 
 > **“Trust me, it's on Walrus” is a claim. A blob id per sentence is evidence.**
 
-![The memory dashboard: Everything it knows about Danny, sorted into collections — Photos, Your setup, About you, Everything else — each with counts and a search field.](dashboard.jpg)
+![The memory dashboard: Everything it knows about Danny, sorted into collections (Photos, Your setup, About you, Everything else), each with counts and a search field.](dashboard.jpg)
 
 *Everything it knows, sorted, each fact carrying the blob that holds it. You can open any of them on Walruscan without asking me anything.*
 
@@ -262,7 +262,7 @@ $ … {"name":"recall","arguments":{"user":"alice",
   walrus: XPp81H4XPE-CdB0N4GI-DIOVR7F2jnWGzcc4i-XBrUY
 ```
 
-*a real round trip against the live deployment — [that blob id opens on mainnet](https://walruscan.com/mainnet/blob/XPp81H4XPE-CdB0N4GI-DIOVR7F2jnWGzcc4i-XBrUY)*
+*a real round trip against the live deployment; [that blob id opens on mainnet](https://walruscan.com/mainnet/blob/XPp81H4XPE-CdB0N4GI-DIOVR7F2jnWGzcc4i-XBrUY)*
 
 Both of those are live. [GET the same URL](https://continuity-production-6084.up.railway.app/mcp) and it describes itself rather than returning a protocol error, because the first thing anybody does with an endpoint is open it in a browser.
 
@@ -270,7 +270,7 @@ The identity model already had the bones for this. A person is an id and an acco
 
 Two things are deliberately missing, and they are the difference between this and the thing you are probably imagining.
 
-**Continuity cannot yet use *your* tools.** This is the server half: your agent calls into my memory. The reverse — Continuity connecting to a Walrus app's MCP server, discovering its tools and operating it for you — needs a tool-calling loop the agent does not have, because `llm.mjs` sends a prompt and gets prose back. That is the interesting half and it is not built. I would rather write that sentence than let the word "MCP" imply it.
+**Continuity cannot yet use *your* tools.** This is the server half: your agent calls into my memory. The reverse needs a tool-calling loop the agent does not have: Continuity connecting to a Walrus app's MCP server, discovering its tools, operating it for you. It has no such loop because `llm.mjs` sends a prompt and gets prose back. That is the interesting half and it is not built. I would rather write that sentence than let the word "MCP" imply it.
 
 **And the ceiling is not the protocol, it is the rate limit.** Roughly 1000 weighted requests an hour and 60 a minute, shared across every surface, with a chat turn costing about eight. "Any Walrus app can plug in" is true of the interface and false of the budget. Scoped consent is the other gap: a tap-a-number sign-in proves you are holding two devices, and it cannot express *this app may read my files but not my facts*.
 

@@ -195,7 +195,9 @@ for (const m of body.matchAll(BLOCK)) {
     const pairs = [...inner.matchAll(/<span class="tag">([\s\S]*?)<\/span><span class="(was|now)">([\s\S]*?)<\/span>/g)];
     const verify = inner.match(/<div class="verify">([\s\S]*?)<\/div>/)?.[1] ?? "";
     push(`**${strip(what)}**`);
-    for (const p of pairs) push(`- **${strip(p[1])}** — ${para(p[3])}`);
+    /* A colon, not an em dash. These are label/value rows and the dash was
+       spending the piece's whole em-dash budget on punctuation nobody reads. */
+    for (const p of pairs) push(`- **${strip(p[1])}:** ${para(p[3])}`);
     const label = verify.match(/<b>([\s\S]*?)<\/b>/)?.[1];
     const rest = verify.replace(/<b>[\s\S]*?<\/b>/, "");
     /* The prose that precedes a command, if any, reads as a sentence and
@@ -218,7 +220,7 @@ for (const m of body.matchAll(BLOCK)) {
   /* The capability grid: each cell is a small titled paragraph. */
   if (/^<x-does/.test(whole)) {
     for (const cell of held.does[Number(g[3])].matchAll(/<h3>([\s\S]*?)<\/h3>\s*<p>([\s\S]*?)<\/p>/g)) {
-      push(`**${para(cell[1])}** — ${para(cell[2])}`);
+      push(`**${para(cell[1])}.** ${para(cell[2])}`);
     }
     continue;
   }
@@ -259,7 +261,7 @@ for (const m of body.matchAll(BLOCK)) {
     const inner = g[6];
     for (const p of inner.matchAll(/<p>([\s\S]*?)<\/p>/g)) push(`> ${para(p[1])}`);
     const src = inner.match(/<span class="src">([\s\S]*?)<\/span>/)?.[1];
-    if (src) push(`> \n> — *${strip(src)}*`);
+    if (src) push(`> \n> *${strip(src)}*`);
     continue;
   }
 
