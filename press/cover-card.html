@@ -1,15 +1,14 @@
 <!doctype html>
 <meta charset="utf8">
-<title>Continuity promo card</title>
+<title>Continuity title card</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,200;9..144,300;9..144,400;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root{
-    --void:#07090D; --paper:#0D1218;
-    --ink:#F3F7FB; --body:#9FB0C2; --dim:#76808F; --faint:#4A535F;
-    --edge:rgba(255,255,255,.10);
-    --live:#5AA9FF; --wal:#7FE3D4; --amber:#F0C068;
+    --void:#05070A;
+    --ink:#F4F8FC; --body:#8C9AAB; --dim:#5E6977; --faint:#3C4551;
+    --live:#5AA9FF; --amber:#F0C068;
     --display:'Fraunces',Georgia,serif;
     --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
   }
@@ -18,138 +17,89 @@
 
   .card{
     position:relative; width:1200px; height:675px; overflow:hidden;
-    background:var(--void); color:var(--body);
-    font-family:var(--display); isolation:isolate;
+    background:var(--void); isolation:isolate;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; padding-bottom:26px;
   }
 
-  /* a faint engineering grid, the way graph paper sits under a drawing */
-  .card::before{
-    content:""; position:absolute; inset:0; z-index:0;
-    background-image:
-      linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px);
-    background-size:48px 48px;
-    mask-image:radial-gradient(130% 110% at 10% 0%, #000 0%, #000 42%, transparent 78%);
-  }
+  /* One soft light behind the mark, and nothing else competing with it. */
+  .glow{position:absolute; z-index:0; left:50%; top:30%; transform:translate(-50%,-50%);
+    width:900px; height:620px;
+    background:radial-gradient(closest-side,
+      rgba(90,169,255,.16), rgba(90,169,255,.055) 44%, transparent 70%);
+    filter:blur(14px)}
 
-  /* the light source, top left, same cool blue as the mark */
-  .card::after{
-    content:""; position:absolute; z-index:0;
-    left:-220px; top:-300px; width:1100px; height:760px;
-    background:radial-gradient(closest-side, rgba(90,169,255,.19), rgba(90,169,255,.05) 55%, transparent 72%);
-    filter:blur(10px);
-  }
+  /* A vignette, so the frame reads as a lit space rather than a flat fill. */
+  .vig{position:absolute; z-index:1; inset:0; pointer-events:none;
+    background:radial-gradient(135% 115% at 50% 38%, transparent 42%, rgba(0,0,0,.62) 100%)}
 
-  /* A scrim that guarantees the words never sit on the screenshot, whatever
-     the screenshot does. The first attempt let the headline run straight over
-     the product and both became unreadable. */
-  .scrim{position:absolute; inset:0; z-index:2; pointer-events:none;
-    background:linear-gradient(90deg, var(--void) 0%, var(--void) 36%,
-      rgba(7,9,13,.92) 46%, rgba(7,9,13,.55) 56%, transparent 68%)}
+  /* Grain. Without it a near-black gradient bands visibly on most screens,
+     and the card looks cheap at exactly the size people will view it. */
+  .grain{position:absolute; z-index:2; inset:0; pointer-events:none; opacity:.42;
+    mix-blend-mode:overlay}
 
-  .inner{position:relative; z-index:3; height:100%; width:612px;
-    padding:50px 0 44px 56px; display:flex; flex-direction:column}
+  .stack{position:relative; z-index:3; text-align:center; padding:0 70px;
+    display:flex; flex-direction:column; align-items:center}
 
-  /* ── kicker ── */
-  .kicker{display:flex; align-items:center; gap:11px;
-    font-family:var(--mono); font-size:13px; font-weight:500; letter-spacing:.22em;
-    text-transform:uppercase; color:var(--amber); margin-bottom:34px}
-  .kicker i{width:7px; height:7px; border-radius:50%; background:var(--amber);
-    box-shadow:0 0 12px rgba(240,192,104,.85); flex:none}
+  .mark{width:72px; height:72px; margin-bottom:46px; display:block;
+    filter:drop-shadow(0 0 30px rgba(90,169,255,.5)) drop-shadow(0 0 8px rgba(155,208,255,.35))}
 
-  /* ── headline ── */
-  h1{font-family:var(--display); font-weight:400;
-    font-variation-settings:'SOFT' 0,'WONK' 1;
-    font-size:49px; line-height:1.06; letter-spacing:-.025em; color:var(--ink)}
-  h1 .hit{color:var(--amber); font-weight:600; display:block}
+  h1{font-family:var(--display); font-variation-settings:'SOFT' 0,'WONK' 1;
+    font-size:67px; line-height:1.12; letter-spacing:-.03em; max-width:16em}
+  h1 .a{display:block; font-weight:200; color:var(--body)}
+  h1 .b{display:block; font-weight:400; color:var(--ink); margin-top:2px}
 
-  .sub{margin-top:23px; max-width:29rem;
-    font-family:var(--display); font-weight:300; font-size:18px; line-height:1.58;
-    color:var(--body); letter-spacing:-.003em}
-  .sub b{color:#D6E2EE; font-weight:600}
+  .sub{margin-top:36px; font-family:var(--display); font-weight:300;
+    font-size:19px; line-height:1.6; color:var(--dim); letter-spacing:.004em}
+  .sub b{color:#A9B8C8; font-weight:400}
 
-  /* ── chips ── */
-  .chips{display:flex; gap:9px; margin-top:30px; flex-wrap:wrap; max-width:560px}
-  .chip{font-family:var(--mono); font-size:12px; letter-spacing:.02em; color:#A9B7C6;
-    border:1px solid var(--edge); border-radius:999px; padding:8px 14px; white-space:nowrap;
-    background:rgba(255,255,255,.028)}
-  .chip b{color:var(--ink); font-weight:500}
+  /* A hairline, the width of the type above it, instead of a box or a button. */
+  .rule{width:92px; height:1px; margin-top:38px;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent)}
 
-  /* ── the product, set back in space ── */
-  .stage{position:absolute; z-index:1; right:-120px; top:150px;
-    width:720px; perspective:1800px}
-  .screen{
-    transform:rotateY(-19deg) rotateX(5deg) rotateZ(-1.2deg);
-    transform-origin:left center;
-    border-radius:14px; overflow:hidden;
-    border:1px solid rgba(255,255,255,.14);
-    box-shadow:
-      0 60px 120px rgba(0,0,0,.75),
-      0 0 0 1px rgba(255,255,255,.035),
-      0 0 90px rgba(90,169,255,.10);
-  }
-  .screen img{display:block; width:100%; height:auto}
-  /* the right edge falls away into the background rather than stopping dead */
-  .stage::after{content:""; position:absolute; inset:0;
-    background:linear-gradient(100deg, rgba(7,9,13,.55) 0%, transparent 26%,
-      transparent 60%, rgba(7,9,13,.6) 88%, var(--void) 99%);
-    pointer-events:none}
-
-  /* ── the floating proof card ──
-     A direct child of the card, not of .stage. Inside .stage it inherited a
-     stacking context from that element's own z-index and could not paint
-     above the scrim, so the one piece of evidence on the card came out
-     dimmed to the point of being unreadable. */
-  .callout{position:absolute; z-index:5; left:574px; bottom:196px;
-    background:rgba(11,15,21,.93);
-    border:1px solid rgba(255,255,255,.14);
-    border-radius:13px; padding:15px 22px 17px;
-    box-shadow:0 30px 70px rgba(0,0,0,.72), 0 0 0 1px rgba(0,0,0,.4);
-    backdrop-filter:blur(9px)}
-  .callout .lbl{font-family:var(--mono); font-size:11.5px; letter-spacing:.17em;
-    text-transform:uppercase; color:var(--dim); margin-bottom:9px}
-  .callout .val{font-family:var(--display); font-weight:600; font-size:24px;
-    letter-spacing:-.018em; color:var(--ink); white-space:nowrap}
-  .callout .val span{font-family:var(--mono); font-weight:500; font-size:21px; color:var(--live)}
-
-  /* ── footer ── */
-  .foot{margin-top:auto; display:flex; align-items:center; gap:15px}
-  .foot img{width:46px; height:46px; border-radius:11px; flex:none}
-  .foot .url{font-family:var(--mono); font-size:16px; color:var(--ink); letter-spacing:-.005em}
-  .foot .tag{font-family:var(--mono); font-size:13px; color:var(--faint); margin-top:4px; letter-spacing:.04em}
+  .foot{position:absolute; z-index:3; bottom:44px; left:0; right:0;
+    display:flex; align-items:center; justify-content:center; gap:12px;
+    font-family:var(--mono); font-size:11.5px; font-weight:500; letter-spacing:.3em;
+    text-transform:uppercase; color:var(--faint)}
+  .foot i{width:5px; height:5px; border-radius:50%; background:var(--amber);
+    box-shadow:0 0 10px rgba(240,192,104,.8); flex:none}
 </style>
 
 <div class="card">
-  <div class="stage">
-    <div class="screen"><img src="img/dashboard.jpg" alt=""></div>
+  <div class="glow"></div>
+
+  <div class="stack">
+    <svg class="mark" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-label="Continuity">
+        <defs>
+          <radialGradient id="ct-core" cx="35%" cy="30%" r="74%">
+            <stop offset="0" stop-color="#FFFFFF"/>
+            <stop offset="44%" stop-color="#9BD0FF"/>
+            <stop offset="100%" stop-color="#2E7ACB"/>
+          </radialGradient>
+          <linearGradient id="ct-arc" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#5AA9FF"/>
+          </linearGradient>
+        </defs>
+        <circle cx="16" cy="16" r="11" fill="none" stroke="#5AA9FF" stroke-width="1.5" opacity=".22"/>
+        <path d="M16 5a11 11 0 0 1 11 11" fill="none" stroke="url(#ct-arc)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 27A11 11 0 0 1 5 16" fill="none" stroke="url(#ct-arc)" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4.1" fill="url(#ct-core)"/>
+      </svg>
+    <h1>
+      <span class="a">Most chatbots forget you.</span>
+      <span class="b">This one can't.</span>
+    </h1>
+    <p class="sub">One memory on <b>Walrus mainnet</b>.<br>Web, Telegram and Discord.</p>
+    <div class="rule"></div>
   </div>
 
-  <div class="scrim"></div>
+  <div class="vig"></div>
 
-  <div class="callout">
-    <div class="lbl">Every fact · Walrus mainnet</div>
-    <div class="val">blob <span>GO_RrBxG2Ioo…</span></div>
-  </div>
+  <svg class="grain" xmlns="http://www.w3.org/2000/svg">
+    <filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/></filter>
+    <rect width="100%" height="100%" filter="url(#n)" opacity="0.5"/>
+  </svg>
 
-  <div class="inner">
-    <div class="kicker"><i></i>Continuity · Walrus Sessions 8</div>
-
-    <h1>Every assistant says it remembers you.<span class="hit">This one can prove it.</span></h1>
-
-    <p class="sub">One memory on <b>Walrus mainnet</b>, read and written by a web chat, a Telegram bot and a Discord bot. Every fact carries the blob id that holds it — open any of them yourself.</p>
-
-    <div class="chips">
-      <div class="chip"><b>3</b> surfaces, one memory</div>
-      <div class="chip"><b>533</b> mainnet writes</div>
-      <div class="chip"><b>6</b> agent tools</div>
-    </div>
-
-    <div class="foot">
-      <img src="img/orb.png" alt="">
-      <div>
-        <div class="url">continuity-production-6084.up.railway.app</div>
-        <div class="tag">#WalrusSessions8 · @walrusmemory_bot</div>
-      </div>
-    </div>
-  </div>
+  <div class="foot"><i></i>Continuity · Walrus Sessions 8</div>
 </div>
