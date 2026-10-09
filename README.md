@@ -1,11 +1,20 @@
 # One memory, three chat surfaces
 
-A support chatbot that remembers you on the web, on Telegram and on Discord —
-because all three read and write the same memory on **Walrus mainnet**.
+An assistant that remembers you on the web, on Telegram and on Discord, because
+all three read and write the same memory on **Walrus mainnet**. Every fact it
+stores carries the blob id that holds it, so you can open any of them yourself.
 
 Built for **Walrus Sessions 8: Chatbots That Remember** (Sept 18 – Oct 9, 2026).
-Runs on open-weight models via OpenRouter (Kimi K2.5, DeepSeek v3.2 fallback) — no
-Claude, no GPT.
+Runs on open-weight models via OpenRouter (Kimi K2.5, DeepSeek v3.2 fallback):
+no Claude, no GPT.
+
+**[Read the write-up](https://medium.com/@makindedaniel45/the-day-my-chatbot-quietly-replaced-its-user-ca5c4c578178)**
+· **[Watch the 76-second demo](https://youtu.be/tU6CjMPRauw)**
+· **[Open the chat](https://continuity-production-6084.up.railway.app)**
+
+It is also an **MCP server**, so any agent can use the same memory:
+`POST /mcp` gives you `recall`, `remember`, `list_files`, `find_file`,
+`get_file` and `list_photos`. See `src/mcp.mjs`.
 
 ## The idea
 
@@ -22,9 +31,9 @@ copied between them; the namespaces are simply read together.
 
 | Surface | Where |
 | --- | --- |
-| Web chat | _(deploy URL)_ |
-| Telegram | _(@bot)_ |
-| Discord | _(invite)_ |
+| Web chat | <https://continuity-production-6084.up.railway.app> |
+| Telegram | [@walrusmemory_bot](https://t.me/walrusmemory_bot) |
+| Discord | [add to a server](https://discord.com/oauth2/authorize?client_id=1551524988354306069&permissions=84992&scope=bot%20applications.commands) |
 
 Then: tell it something on one surface, `/link` to another, and ask it there.
 

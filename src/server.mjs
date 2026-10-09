@@ -167,6 +167,20 @@ function sniff(b) {
   if (b.length > 6 && b.subarray(0, 6).toString("latin1").startsWith("GIF8")) return "image/gif";
   if (b.length > 12 && b.subarray(0, 4).toString("latin1") === "RIFF"
       && b.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  /**
+   * MP4 and friends: an ISO base-media file announces itself with "ftyp" at
+   * byte 4, after a length word.
+   *
+   * Here because the demo video went onto Walrus and would not play back. The
+   * aggregator sends no content-type at all and sets `nosniff`, so a browser
+   * refuses to guess and a <video> pointed straight at it fails silently. This
+   * route is the half of the pair that can say what the bytes are — and a
+   * video a reader cannot play is the same as no video.
+   */
+  if (b.length > 12 && b.subarray(4, 8).toString("latin1") === "ftyp") {
+    const brand = b.subarray(8, 12).toString("latin1");
+    return brand.startsWith("qt") ? "video/quicktime" : "video/mp4";
+  }
   // Text, if every byte in a decent sample is one a person could have typed.
   const head = b.subarray(0, 2048);
   const printable = head.every((c) => c === 9 || c === 10 || c === 13 || (c >= 32 && c < 127) || c >= 128);
